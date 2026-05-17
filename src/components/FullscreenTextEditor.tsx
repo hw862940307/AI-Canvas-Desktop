@@ -119,7 +119,7 @@ export const FullscreenTextEditor = ({
         <div className="flex items-center gap-4">
           <button 
             onClick={onClose}
-            className="px-6 py-2.5 text-xs font-bold text-[var(--text-secondary)] hover:text-white transition-all"
+            className="px-6 py-2.5 text-base font-bold text-[var(--text-secondary)] hover:text-white transition-all"
           >
             取消
           </button>
@@ -152,7 +152,7 @@ export const FullscreenTextEditor = ({
           autoFocus
         />
         
-        <div className="mt-8 flex items-center justify-between text-[10px] text-[var(--text-secondary)] font-mono uppercase tracking-[0.2em] border-t border-[var(--border)] pt-6">
+        <div className="mt-8 flex items-center justify-between text-sm text-[var(--text-secondary)] font-mono uppercase tracking-[0.2em] border-t border-[var(--border)] pt-6">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />

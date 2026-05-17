@@ -321,8 +321,8 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
             
             <div className="flex flex-col gap-1 min-w-[200px]">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-wider">大小</span>
-                <span className="text-[10px] font-mono text-blue-500 font-bold">{size}px</span>
+                <span className="text-sm text-[var(--text-secondary)] font-bold uppercase tracking-wider">大小</span>
+                <span className="text-sm font-mono text-blue-500 font-bold">{size}px</span>
               </div>
               <input 
                 type="range"
@@ -338,8 +338,8 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
 
             <div className="flex flex-col gap-1 min-w-[140px]">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] text-[var(--text-secondary)] font-bold uppercase tracking-wider">不透明度</span>
-                <span className="text-[10px] font-mono text-blue-500 font-bold">{Math.round(opacity * 100)}%</span>
+                <span className="text-sm text-[var(--text-secondary)] font-bold uppercase tracking-wider">不透明度</span>
+                <span className="text-sm font-mono text-blue-500 font-bold">{Math.round(opacity * 100)}%</span>
               </div>
               <input 
                 type="range"
@@ -403,8 +403,8 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
               onKeyDown={(e) => e.key === 'Enter' && handleTextSubmit()}
             />
             <div className="flex justify-end gap-2">
-              <button onClick={() => setTextInput({ show: false, x: 0, y: 0, val: '' })} className="p-1 px-3 text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]">取消</button>
-              <button onClick={handleTextSubmit} className="p-1 px-3 text-[10px] bg-blue-600 text-white rounded-lg">确定</button>
+              <button onClick={() => setTextInput({ show: false, x: 0, y: 0, val: '' })} className="p-1 px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">取消</button>
+              <button onClick={handleTextSubmit} className="p-1 px-3 text-sm bg-blue-600 text-white rounded-lg">确定</button>
             </div>
           </div>
         )}

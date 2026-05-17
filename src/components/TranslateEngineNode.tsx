@@ -47,7 +47,7 @@ export const TranslateEngineNode = ({ id, data }: { id: string; data: any }) => 
       <div className={`flex items-center justify-between px-4 py-3 border-b border-[var(--border)] transition-all react-flow__node-draghandle ${
         settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-emerald-500/10'
       }`}>
-        <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-widest">
+        <div className="flex items-center gap-2 text-base font-bold text-emerald-400 uppercase tracking-widest">
           <Languages size={14} />
           <span>翻译引擎</span>
         </div>
@@ -61,13 +61,13 @@ export const TranslateEngineNode = ({ id, data }: { id: string; data: any }) => 
 
       <div className="p-4 flex flex-col gap-4 nodrag">
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
+          <label className="text-sm uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
             <Globe2 size={10} /> 目标语言
           </label>
           <select 
             value={data.targetLang || 'en'}
             onChange={(e) => updateNodeData(id, { targetLang: e.target.value })}
-            className="bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-[11px] text-gray-300 focus:outline-none focus:border-emerald-500/50 transition-all appearance-none cursor-pointer"
+            className="bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-base text-gray-300 focus:outline-none focus:border-emerald-500/50 transition-all appearance-none cursor-pointer"
           >
             {LANGUAGES.map(lang => (
               <option key={lang.id} value={lang.id} className="bg-[#0a0a0c]">{lang.name}</option>
@@ -76,14 +76,14 @@ export const TranslateEngineNode = ({ id, data }: { id: string; data: any }) => 
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
+          <label className="text-sm uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
             <Sparkles size={10} /> 翻译结果
           </label>
-          <div className="bg-black/60 border border-white/5 rounded-xl p-3 text-[11px] text-gray-300 min-h-[100px] max-h-[180px] overflow-y-auto whitespace-pre-wrap font-sans leading-relaxed custom-scrollbar">
+          <div className="bg-black/60 border border-white/5 rounded-xl p-3 text-base text-gray-300 min-h-[100px] max-h-[180px] overflow-y-auto whitespace-pre-wrap font-sans leading-relaxed custom-scrollbar">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-2 text-emerald-500/50 italic">
                 <Loader2 size={20} className="animate-spin" />
-                <span className="text-[9px] uppercase tracking-widest font-bold">正在翻译...</span>
+                <span className="text-sm uppercase tracking-widest font-bold">正在翻译...</span>
               </div>
             ) : data.output || '结果将在此显示...'}
           </div>

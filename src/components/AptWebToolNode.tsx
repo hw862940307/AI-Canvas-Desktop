@@ -218,7 +218,7 @@ const BrowserFrame = React.memo(({
         <div className="flex-1 flex items-center gap-3 bg-white/5 border border-white/5 rounded-xl px-4 py-1.5 min-w-0 group hover:bg-white/10 transition-all">
           <Search size={14} className="text-gray-600 group-hover:text-gray-400" />
           <input 
-            className="flex-1 bg-transparent text-[11px] text-gray-300 outline-none truncate font-mono"
+            className="flex-1 bg-transparent text-base text-gray-300 outline-none truncate font-mono"
             value={pageUrl || ''}
             onChange={(e) => setPageUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onNavigate()}
@@ -283,7 +283,7 @@ const BrowserFrame = React.memo(({
           <div key={url} className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all shrink-0 ${iframeUrl === url ? 'bg-blue-600/20 border-blue-500/30 text-blue-400' : 'bg-white/2 border-white/5 text-gray-500 hover:bg-white/5'}`}>
             <button 
               onClick={() => onBookmarkClick(url)}
-              className="text-[10px] font-black uppercase tracking-tight truncate max-w-[140px]"
+              className="text-sm font-black uppercase tracking-tight truncate max-w-[140px]"
             >
               {tryGetHostname(url)}
             </button>
@@ -310,7 +310,7 @@ const BrowserFrame = React.memo(({
                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[60]">
                   <button 
                     onClick={() => window.open(iframeUrl, '_blank')}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl text-[10px] font-black shadow-2xl flex items-center gap-3 animate-bounce border border-white/20"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-2xl flex items-center gap-3 animate-bounce border border-white/20"
                   >
                     <ExternalLink size={14} /> 
                     如果您看到 Localtunnel 的黑屏提示，请点击此处并在新窗口点击 "Bypass" 以启用预览
@@ -321,7 +321,7 @@ const BrowserFrame = React.memo(({
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c1016] text-gray-700 gap-3 opacity-30 select-none font-sans">
              <Globe2 size={48} strokeWidth={1} />
-             <span className="text-[10px] font-black uppercase tracking-[0.4em]">Awaiting Data Stream</span>
+             <span className="text-sm font-black uppercase tracking-[0.4em]">Awaiting Data Stream</span>
           </div>
         )}
       </div>
@@ -344,7 +344,7 @@ const TabButton = ({ active, onClick, icon, label }: { active: boolean, onClick:
     className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-all ${active ? 'border-blue-500 text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
   >
     {icon}
-    <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
+    <span className="text-sm font-bold uppercase tracking-widest">{label}</span>
   </button>
 );
 
@@ -946,7 +946,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
            </div>
            <div>
              <h3 className="text-lg font-black text-white tracking-widest uppercase italic">ComfyUI Full Control</h3>
-             <span className="text-xs font-mono text-gray-600 tracking-widest">BRIDGE_TERMINAL_V1.3</span>
+             <span className="text-base font-mono text-gray-600 tracking-widest">BRIDGE_TERMINAL_V1.3</span>
            </div>
         </div>
         <div className="flex items-center gap-4">
@@ -955,7 +955,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
             className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-gray-400 hover:text-white transition-all flex items-center gap-3"
           >
             <RefreshCw size={20} />
-            <span className="text-[10px] font-black uppercase tracking-widest px-2">Refresh View</span>
+            <span className="text-sm font-black uppercase tracking-widest px-2">Refresh View</span>
           </button>
           <button 
             onClick={() => setIsOverlayOpen(false)}
@@ -1226,7 +1226,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                            type="text"
                            value={comfyUrl}
                            onChange={(e) => setComfyUrl(e.target.value)}
-                           className={`w-full bg-white/5 border rounded-[18px] pl-10 pr-24 py-2.5 text-[11px] transition-all font-mono ${
+                           className={`w-full bg-white/5 border rounded-[18px] pl-10 pr-24 py-2.5 text-base transition-all font-mono ${
                              comfyStatus === 'success' ? 'border-emerald-500/30 text-emerald-300' :
                              comfyStatus === 'error' ? 'border-red-500/30 text-red-300' :
                              'border-white/10 text-white/70 focus:border-blue-500/50'
@@ -1258,13 +1258,13 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                      <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
                        <button 
                          onClick={() => setComfyView('browser')}
-                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${comfyView === 'browser' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${comfyView === 'browser' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
                        >
                          <Globe2 size={10} /> 预览
                        </button>
                        <button 
                          onClick={() => setComfyView('source')}
-                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${comfyView === 'source' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${comfyView === 'source' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
                        >
                          <FileJson size={10} /> 源码
                        </button>
@@ -1277,14 +1277,14 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                       animate={{ height: 'auto', opacity: 1 }}
                       className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex flex-col gap-2 overflow-hidden"
                     >
-                      <div className="flex items-center gap-2 text-red-400 font-bold text-[10px]">
+                      <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
                         <AlertCircle size={14} />
                         <span>本地连接受阻：浏览器禁止跨域访问 HTTP (混合内容拦截)</span>
                       </div>
-                      <p className="text-[9px] text-gray-400 leading-relaxed">
+                      <p className="text-sm text-gray-400 leading-relaxed">
                         您正在通过 HTTPS 访问此应用，而 ComfyUI 运行在 HTTP。请按照以下步骤解决：
                       </p>
-                      <ul className="text-[9px] text-gray-500 space-y-1 list-decimal list-inside px-1">
+                      <ul className="text-sm text-gray-500 space-y-1 list-decimal list-inside px-1">
                         <li>点击浏览器地址栏左侧的 <span className="text-gray-300 font-bold">🔒 锁头图标</span></li>
                         <li>选择 <span className="text-gray-300 font-bold">“网站设置” (Site settings)</span></li>
                         <li>找到 <span className="text-gray-300 font-bold">“不安全内容” (Insecure content)</span></li>
@@ -1293,13 +1293,13 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                       <div className="flex gap-2 mt-1">
                         <button 
                           onClick={() => window.open('https://npx.is/localtunnel', '_blank')}
-                          className="text-[8px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-blue-400 font-mono"
+                          className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-blue-400 font-mono"
                         >
                           npx localtunnel --port 8188
                         </button>
                         <button 
                           onClick={() => setShowLocalHelp(false)}
-                          className="text-[8px] ml-auto text-gray-600 hover:text-white"
+                          className="text-[10px] ml-auto text-gray-600 hover:text-white"
                         >
                           [ 隐藏提示 ]
                         </button>
@@ -1325,7 +1325,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                           {isComfyIframeLoading && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c1016]">
                                <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
-                               <span className="text-[10px] font-black text-gray-700 uppercase tracking-[0.4em]">Establishing Link...</span>
+                               <span className="text-sm font-black text-gray-700 uppercase tracking-[0.4em]">Establishing Link...</span>
                             </div>
                           )}
                         </motion.div>
@@ -1333,10 +1333,10 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                         <motion.div key="workflow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 p-5 flex flex-col gap-4 bg-[#080a0f]">
                            <div className="flex items-center justify-between">
                               <div className="flex flex-col">
-                                 <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Workflow API JSON</span>
-                                 <span className="text-[8px] text-gray-600 mt-0.5">Enable "Dev Mode" to save API format</span>
+                                 <span className="text-sm font-black text-blue-500 uppercase tracking-widest">Workflow API JSON</span>
+                                 <span className="text-[10px] text-gray-600 mt-0.5">Enable "Dev Mode" to save API format</span>
                               </div>
-                              <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-blue-400 text-[10px] font-black hover:bg-white/10 transition-all cursor-pointer uppercase tracking-widest">
+                              <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-blue-400 text-sm font-black hover:bg-white/10 transition-all cursor-pointer uppercase tracking-widest">
                                  <Upload size={12} /> 导入配置
                                  <input type="file" accept=".json" onChange={handleJsonFileUpload} className="hidden" />
                               </label>
@@ -1344,7 +1344,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                            <textarea 
                              value={workflowText}
                              onChange={(e) => setWorkflowText(e.target.value)}
-                             className="flex-1 w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-[11px] font-mono text-emerald-500/80 focus:outline-none focus:border-emerald-500/20 resize-none custom-scrollbar"
+                             className="flex-1 w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-base font-mono text-emerald-500/80 focus:outline-none focus:border-emerald-500/20 resize-none custom-scrollbar"
                              placeholder="在此粘贴或导入 JSON 工作流..."
                            />
                         </motion.div>
@@ -1362,21 +1362,21 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                 <Database size={16} className="text-blue-500" />
                              </div>
                              <div className="flex flex-col">
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest"> 执行配置控制台 </span>
-                                <span className="text-[8px] text-gray-600">管理识别的输入输出与参数</span>
+                                <span className="text-sm font-black text-white uppercase tracking-widest"> 执行配置控制台 </span>
+                                <span className="text-[10px] text-gray-600">管理识别的输入输出与参数</span>
                              </div>
                           </div>
                           <div className="flex items-center gap-4">
-                             <span className="text-[9px] font-mono text-gray-700 bg-white/5 px-2 py-1 rounded-md">DETECTION_SCAN: {scanResult.exposedParams.length + scanResult.imageInputs.length + scanResult.imageOutputs.length}</span>
+                             <span className="text-sm font-mono text-gray-700 bg-white/5 px-2 py-1 rounded-md">DETECTION_SCAN: {scanResult.exposedParams.length + scanResult.imageInputs.length + scanResult.imageOutputs.length}</span>
                           </div>
                        </div>
                        <div className="p-8">
                          {scanResult.exposedParams.length === 0 && scanResult.imageInputs.length === 0 && scanResult.imageOutputs.length === 0 ? (
                            <div className="py-16 flex flex-col items-center justify-center text-gray-800 gap-4 opacity-40">
                               <Info size={32} />
-                              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-center max-w-[300px] leading-relaxed">
+                              <p className="text-sm font-black uppercase tracking-[0.2em] text-center max-w-[300px] leading-relaxed">
                                 未在工作流中检测到导出节点<br/>
-                                <span className="text-[8px] lowercase font-normal opacity-50 mt-2 block">提示：在 ComfyUI 中重命名节点，包含 #01, #02 等编号以暴露参数；图片节点 (LoadImage/SaveImage) 将被自动识别。</span>
+                                <span className="text-[10px] lowercase font-normal opacity-50 mt-2 block">提示：在 ComfyUI 中重命名节点，包含 #01, #02 等编号以暴露参数；图片节点 (LoadImage/SaveImage) 将被自动识别。</span>
                               </p>
                            </div>
                          ) : (
@@ -1385,7 +1385,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                               {scanResult.imageInputs.length > 0 && (
                                 <section className="space-y-6">
                                   <div className="flex items-center gap-3">
-                                    <div className="px-3 py-1 bg-indigo-600/20 rounded-lg text-indigo-400 text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">
+                                    <div className="px-3 py-1 bg-indigo-600/20 rounded-lg text-indigo-400 text-sm font-black uppercase tracking-widest border border-indigo-500/20">
                                       自动图像输入
                                     </div>
                                     <div className="flex-1 h-px bg-indigo-500/10" />
@@ -1394,23 +1394,23 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                     {scanResult.imageInputs.map((input, idx) => (
                                       <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 group/input transition-all hover:bg-white/[0.04]">
                                         <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{input.title}</span>
-                                          <span className="text-[8px] font-mono text-gray-700 italic">#{input.comfyNodeId}</span>
+                                          <span className="text-sm font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{input.title}</span>
+                                          <span className="text-[10px] font-mono text-gray-700 italic">#{input.comfyNodeId}</span>
                                         </div>
                                         <div className="aspect-square bg-black/40 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-700 gap-2 relative overflow-hidden">
                                            {input.currentValue ? (
                                               <div className="absolute inset-0 flex flex-col items-center justify-center">
                                                 <ImageIcon size={24} className="opacity-20" />
-                                                <span className="text-[9px] mt-2 opacity-30 truncate px-2 w-full text-center">{input.currentValue}</span>
+                                                <span className="text-sm mt-2 opacity-30 truncate px-2 w-full text-center">{input.currentValue}</span>
                                               </div>
                                            ) : (
                                               <>
                                                 <Upload size={20} strokeWidth={1} />
-                                                <span className="text-[8px] uppercase tracking-widest">Awaiting Input</span>
+                                                <span className="text-[10px] uppercase tracking-widest">Awaiting Input</span>
                                               </>
                                            )}
                                         </div>
-                                        <div className="text-[8px] text-gray-600 font-medium lowercase italic leading-relaxed">
+                                        <div className="text-[10px] text-gray-600 font-medium lowercase italic leading-relaxed">
                                           * 当 AI Canvas 在此输入端连接图片节点时，执行引擎会自动代入。
                                         </div>
                                       </div>
@@ -1422,7 +1422,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                               {scanResult.imageOutputs.length > 0 && (
                                 <section className="space-y-6">
                                   <div className="flex items-center gap-3">
-                                    <div className="px-3 py-1 bg-emerald-600/20 rounded-lg text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
+                                    <div className="px-3 py-1 bg-emerald-600/20 rounded-lg text-emerald-400 text-sm font-black uppercase tracking-widest border border-emerald-500/20">
                                       自动图像输出
                                     </div>
                                     <div className="flex-1 h-px bg-emerald-500/10" />
@@ -1431,14 +1431,14 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                     {scanResult.imageOutputs.map((output, idx) => (
                                       <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 group/output transition-all hover:bg-white/[0.04]">
                                         <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{output.title}</span>
-                                          <span className="text-[8px] font-mono text-gray-700 italic">#{output.comfyNodeId}</span>
+                                          <span className="text-sm font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{output.title}</span>
+                                          <span className="text-[10px] font-mono text-gray-700 italic">#{output.comfyNodeId}</span>
                                         </div>
                                         <div className="aspect-square bg-black/40 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-700 gap-2">
                                            <CheckCircle2 size={24} strokeWidth={1} />
-                                           <span className="text-[8px] uppercase tracking-widest">Image Destination</span>
+                                           <span className="text-[10px] uppercase tracking-widest">Image Destination</span>
                                         </div>
-                                        <div className="text-[8px] text-gray-600 font-medium lowercase italic leading-relaxed">
+                                        <div className="text-[10px] text-gray-600 font-medium lowercase italic leading-relaxed">
                                           * 任务完成后，由此节点产出的结果将自动同步回 AI Canvas。
                                         </div>
                                       </div>
@@ -1450,7 +1450,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                               {scanResult.exposedParams.length > 0 && (
                                 <section className="space-y-6">
                                   <div className="flex items-center gap-3">
-                                    <div className="px-3 py-1 bg-blue-600/20 rounded-lg text-blue-400 text-[10px] font-black uppercase tracking-widest border border-blue-500/20">
+                                    <div className="px-3 py-1 bg-blue-600/20 rounded-lg text-blue-400 text-sm font-black uppercase tracking-widest border border-blue-500/20">
                                       # 标记参数控制
                                     </div>
                                     <div className="flex-1 h-px bg-blue-500/10" />
@@ -1461,22 +1461,22 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                           <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-2 h-2 rounded-full bg-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.6)]" />
-                                                <span className="text-[11px] font-black text-white uppercase tracking-widest">{param.title}</span>
+                                                <span className="text-base font-black text-white uppercase tracking-widest">{param.title}</span>
                                             </div>
-                                            <span className="text-[8px] font-mono text-gray-700 italic">ID:{param.comfyNodeId}</span>
+                                            <span className="text-[10px] font-mono text-gray-700 italic">ID:{param.comfyNodeId}</span>
                                           </div>
                                           <div className="space-y-5 pl-4 border-l-2 border-blue-500/10 group-hover/param:border-blue-500/40 transition-colors">
                                             {param.editableFields.map((field, fIdx) => (
                                               <div key={fIdx} className="space-y-2">
                                                   <div className="flex items-center justify-between">
-                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{field.label}</label>
+                                                    <label className="text-sm font-black text-gray-500 uppercase tracking-widest">{field.label}</label>
                                                     <span className="px-1.5 py-0.5 rounded-md bg-white/5 text-[7px] font-mono text-gray-700">{field.fieldType}</span>
                                                   </div>
                                                   {field.fieldType === 'textarea' ? (
                                                     <textarea 
                                                       value={field.value} 
                                                       onChange={(e) => handleComfyFieldChange(param.comfyNodeId, field.name, e.target.value)} 
-                                                      className="w-full bg-black/40 border border-white/5 hover:border-white/20 rounded-xl p-4 text-[11px] text-blue-100/90 focus:outline-none focus:border-blue-500/40 transition-all min-h-[100px] resize-none font-sans leading-relaxed custom-scrollbar"
+                                                      className="w-full bg-black/40 border border-white/5 hover:border-white/20 rounded-xl p-4 text-base text-blue-100/90 focus:outline-none focus:border-blue-500/40 transition-all min-h-[100px] resize-none font-sans leading-relaxed custom-scrollbar"
                                                       placeholder={`输入 ${field.label}...`}
                                                     />
                                                   ) : (
@@ -1484,7 +1484,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                                       type={field.fieldType === 'number' ? 'number' : 'text'} 
                                                       value={field.value} 
                                                       onChange={(e) => handleComfyFieldChange(param.comfyNodeId, field.name, field.fieldType === 'number' ? Number(e.target.value) : e.target.value)} 
-                                                      className="w-full bg-black/40 border border-white/5 hover:border-white/20 rounded-xl px-4 py-3 text-[11px] text-white/90 focus:outline-none focus:border-blue-500/40 transition-all font-sans"
+                                                      className="w-full bg-black/40 border border-white/5 hover:border-white/20 rounded-xl px-4 py-3 text-base text-white/90 focus:outline-none focus:border-blue-500/40 transition-all font-sans"
                                                       placeholder={`设置 ${field.label}...`}
                                                     />
                                                   )}
@@ -1538,7 +1538,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                   </div>
 
                                   <div className="flex flex-col">
-                                     <span className={`text-[12px] font-black uppercase tracking-[0.2em] ${
+                                     <span className={`text-base font-black uppercase tracking-[0.2em] ${
                                        comfyStatus === 'success' ? 'text-emerald-400' : 
                                        comfyStatus === 'error' ? 'text-red-400' : 
                                        'text-blue-400'
@@ -1547,7 +1547,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                         comfyStatus === 'error' ? '任务执行中断' : 
                                         comfyStatus === 'uploading' ? '正在上传资源' : '引擎运行中'}
                                      </span>
-                                     <span className="text-[10px] text-white/40 font-medium lowercase">
+                                     <span className="text-sm text-white/40 font-medium lowercase">
                                        {comfyStatus === 'success' ? '数据已同步至输出面板' : 
                                         comfyStatus === 'error' ? '检测到运行错误，请检查日志' : 
                                         '保持连接状态，请勿刷新'}
@@ -1579,8 +1579,8 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                 <ImageIcon size={16} className="text-emerald-500" />
                              </div>
                              <div className="flex flex-col">
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest"> 执行历史与实时输出 </span>
-                                <span className="text-[8px] text-gray-600">查看生成的图像和系统日志</span>
+                                <span className="text-sm font-black text-white uppercase tracking-widest"> 执行历史与实时输出 </span>
+                                <span className="text-[10px] text-gray-600">查看生成的图像和系统日志</span>
                              </div>
                           </div>
                           <div className="flex items-center gap-3">
@@ -1603,10 +1603,10 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                              updateStore({ images: nextImages });
                                              setViewMode('scraper');
                                              setStatus(`已将工作流结果导出至采集箱。`);
-                                          }} className="flex items-center gap-3 px-6 py-3 bg-indigo-600 rounded-2xl text-white text-[11px] font-black uppercase hover:bg-indigo-500 transition-all active:scale-95 shadow-xl">
+                                          }} className="flex items-center gap-3 px-6 py-3 bg-indigo-600 rounded-2xl text-white text-base font-black uppercase hover:bg-indigo-500 transition-all active:scale-95 shadow-xl">
                                              <Star size={14} fill="currentColor" /> 收藏结果
                                           </button>
-                                          <a href={img.url} target="_blank" rel="noreferrer" className="text-[10px] font-black text-white/40 hover:text-white uppercase tracking-widest flex items-center gap-2 transition-colors">
+                                          <a href={img.url} target="_blank" rel="noreferrer" className="text-sm font-black text-white/40 hover:text-white uppercase tracking-widest flex items-center gap-2 transition-colors">
                                              <ExternalLink size={12} /> 查看原图
                                           </a>
                                        </div>
@@ -1618,7 +1618,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                   <div className="p-5 border-2 border-dashed border-gray-800 rounded-full">
                                     <Play size={40} strokeWidth={1} />
                                   </div>
-                                  <span className="text-[11px] font-black uppercase tracking-[0.4em]">Awaiting execution</span>
+                                  <span className="text-base font-black uppercase tracking-[0.4em]">Awaiting execution</span>
                                </div>
                              )}
                           </div>
@@ -1628,13 +1628,13 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                              <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                    <Terminal size={14} className="text-blue-400" />
-                                   <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">System Engine</span>
+                                   <span className="text-sm font-black text-gray-500 uppercase tracking-widest">System Engine</span>
                                 </div>
-                                <button onClick={() => setLogs([])} className="text-[8px] font-black text-gray-700 hover:text-white uppercase tracking-widest transition-colors">Clear</button>
+                                <button onClick={() => setLogs([])} className="text-[10px] font-black text-gray-700 hover:text-white uppercase tracking-widest transition-colors">Clear</button>
                              </div>
-                             <div className="font-mono text-[9px] text-gray-500/80 leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar space-y-2">
+                             <div className="font-mono text-sm text-gray-500/80 leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar space-y-2">
                                 {logs.length === 0 ? (
-                                  <div className="text-[8px] italic opacity-30 mt-10 text-center">No logs generated yet</div>
+                                  <div className="text-[10px] italic opacity-30 mt-10 text-center">No logs generated yet</div>
                                 ) : (
                                   logs.map((log, idx) => (
                                     <div key={idx} className="break-all border-l border-white/10 pl-3 py-1 hover:bg-white/[0.02] transition-all rounded-r">

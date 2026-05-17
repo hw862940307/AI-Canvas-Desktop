@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Sparkles, Loader2, X, Maximize2, ChevronDown, Plus, ArrowUp } from 'lucide-react';
+import { Sparkles, Loader2, X, Maximize2, ChevronDown, Plus, ArrowUp, Download } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { getGenAI } from '../lib/gemini';
+import { downloadImage } from '../lib/download';
 
 export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
   const [loading, setLoading] = useState(false);
@@ -267,9 +268,9 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
   };
   const getFontSizeClass = () => {
     if (typeof settings.inputFontSize === 'number') return '';
-    if (settings.inputFontSize === 'small') return 'text-[10px]';
-    if (settings.inputFontSize === 'large') return 'text-sm';
-    return 'text-xs';
+    if (settings.inputFontSize === 'small') return 'text-base';
+    if (settings.inputFontSize === 'large') return 'text-lg';
+    return 'text-lg';
   };
 
   return (
@@ -290,11 +291,14 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
       }`}>
         <div className="flex items-center gap-2.5 text-[var(--text-primary)]">
           <Sparkles size={18} className="text-blue-400" />
-          <span className="text-xs font-bold tracking-wider">生成图像</span>
+          <span className="text-base font-bold tracking-wider">生成图像</span>
         </div>
         <div className="flex items-center gap-2">
-           <button className="p-1.5 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors">
-              <Maximize2 size={14} />
+           <button 
+             onClick={(e) => { e.stopPropagation(); data.imageUrl && downloadImage(data.imageUrl, `generated-image-\${id}.png`); }}
+             className="p-1.5 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors hover:text-blue-400"
+           >
+              <Download size={14} />
            </button>
            <button 
              onClick={() => removeNode(id)}
@@ -359,17 +363,17 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors group">
-                 <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase group-hover:text-[var(--text-primary)]">MDL</span>
-                 <span className="text-[10px] font-bold text-[var(--text-primary)] uppercase tracking-widest max-w-[100px] truncate">{settings.apiSettings.imageEngine === 'comfyui' ? 'ComfyUI' : settings.apiSettings.imageModel}</span>
+                 <span className="text-sm font-bold text-[var(--text-secondary)] uppercase group-hover:text-[var(--text-primary)]">MDL</span>
+                 <span className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest max-w-[100px] truncate">{settings.apiSettings.imageEngine === 'comfyui' ? 'ComfyUI' : settings.apiSettings.imageModel}</span>
                  <ChevronDown size={10} className="text-[var(--text-secondary)] shrink-0" />
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors group">
-                 <span className="text-[10px] font-bold text-[var(--text-primary)] uppercase tracking-widest">{resolution}</span>
+                 <span className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest">{resolution}</span>
                  <ChevronDown size={10} className="text-[var(--text-secondary)]" />
               </div>
            </div>
            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors group">
-              <span className="text-[10px] font-bold text-[var(--text-primary)] uppercase tracking-widest">{batchSize}</span>
+              <span className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest">{batchSize}</span>
               <ChevronDown size={10} className="text-[var(--text-secondary)]" />
            </div>
         </div>

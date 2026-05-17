@@ -64,9 +64,9 @@ export function MsGenNode({ id, data, selected }: NodeProps) {
             />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white tracking-tight uppercase italic">ModelScope</h3>
+            <h3 className="text-lg font-bold text-white tracking-tight uppercase italic">ModelScope</h3>
             <div className="flex items-center gap-2">
-              <span className="text-[9px] font-mono text-gray-500 tracking-[0.2em] uppercase">Cloud Generator</span>
+              <span className="text-sm font-mono text-gray-500 tracking-[0.2em] uppercase">Cloud Generator</span>
               {running && <div className="w-1 h-1 rounded-full bg-yellow-500 animate-ping" />}
             </div>
           </div>
@@ -76,7 +76,7 @@ export function MsGenNode({ id, data, selected }: NodeProps) {
       <div className="p-4 space-y-4 nodrag">
         {/* Model Selector */}
         <div className="flex flex-col gap-2">
-           <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest px-1 flex items-center gap-2">
+           <label className="text-sm font-black text-gray-600 uppercase tracking-widest px-1 flex items-center gap-2">
               <Layers size={10} /> Select Engine
            </label>
            <div className="grid grid-cols-1 gap-2">
@@ -91,8 +91,8 @@ export function MsGenNode({ id, data, selected }: NodeProps) {
                  }`}
                >
                  <div className="text-left">
-                    <p className={`text-[11px] font-black uppercase ${model === m.id ? 'text-yellow-500' : 'text-gray-400 group-hover:text-gray-200'}`}>{m.label}</p>
-                    <p className="text-[9px] text-gray-600 font-medium italic">{m.desc}</p>
+                    <p className={`text-base font-black uppercase ${model === m.id ? 'text-yellow-500' : 'text-gray-400 group-hover:text-gray-200'}`}>{m.label}</p>
+                    <p className="text-sm text-gray-600 font-medium italic">{m.desc}</p>
                  </div>
                  {model === m.id && <Sparkles size={12} className="text-yellow-500" />}
                </button>
@@ -103,21 +103,21 @@ export function MsGenNode({ id, data, selected }: NodeProps) {
         {/* Input Scope */}
         <div className="space-y-2">
           <div className="flex items-center justify-between px-1">
-             <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-2">
+             <label className="text-sm font-black text-gray-600 uppercase tracking-widest flex items-center gap-2">
                 <Zap size={10} /> Context
              </label>
-             <span className={`text-[9px] font-bold ${incomingPrompts.length ? 'text-green-500' : 'text-yellow-500/50'}`}>
+             <span className={`text-sm font-bold ${incomingPrompts.length ? 'text-green-500' : 'text-yellow-500/50'}`}>
                 {incomingPrompts.length ? 'SYNCED' : 'WAITING'}
              </span>
           </div>
           <div className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 min-h-[80px] flex items-center justify-center relative overflow-hidden group">
              {incomingPrompts.length > 0 ? (
-               <p className="text-[11px] text-gray-400 font-medium leading-relaxed line-clamp-3 text-center italic">
+               <p className="text-base text-gray-400 font-medium leading-relaxed line-clamp-3 text-center italic">
                  "{incomingPrompts[0]}"
                </p>
              ) : (
                <div className="flex flex-col items-center gap-2 opacity-30">
-                  <span className="text-[10px] font-mono tracking-widest uppercase">Null Input</span>
+                  <span className="text-sm font-mono tracking-widest uppercase">Null Input</span>
                </div>
              )}
              <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20 pointer-events-none" />
@@ -149,8 +149,8 @@ export function MsGenNode({ id, data, selected }: NodeProps) {
                 className="space-y-1.5"
               >
                  <div className="flex justify-between px-1">
-                    <span className="text-[9px] font-bold text-yellow-500/50 uppercase tracking-widest">Processing...</span>
-                    <span className="text-[9px] font-mono text-yellow-500">{Math.round(progress)}%</span>
+                    <span className="text-sm font-bold text-yellow-500/50 uppercase tracking-widest">Processing...</span>
+                    <span className="text-sm font-mono text-yellow-500">{Math.round(progress)}%</span>
                  </div>
                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
                     <motion.div 
@@ -167,11 +167,11 @@ export function MsGenNode({ id, data, selected }: NodeProps) {
       <div className="px-5 py-3 bg-black/40 border-t border-white/5 flex items-center justify-between shrink-0">
          <div className="flex items-center gap-2 text-gray-600">
             <Settings2 size={12} />
-            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Ready to Task</span>
+            <span className="text-sm font-black uppercase tracking-[0.2em]">Ready to Task</span>
          </div>
          <div className="flex items-center gap-3">
             {['S', 'M', 'L'].map(v => (
-              <span key={v} className="text-[9px] font-bold text-gray-700 hover:text-white cursor-pointer px-1">{v}</span>
+              <span key={v} className="text-sm font-bold text-gray-700 hover:text-white cursor-pointer px-1">{v}</span>
             ))}
          </div>
       </div>

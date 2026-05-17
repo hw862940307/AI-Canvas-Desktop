@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
 import { ScanSearch, Play, Loader2, Copy, Check, Info, Zap, Terminal, Maximize2, Minimize2, X } from 'lucide-react';
-import { useStore } from '../store/useStore';
+import { useStore, useNodeIncomingData } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { generateTextWithFallback } from '../lib/gemini';
@@ -10,18 +10,18 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
   const nodeData = data as any;
 
   const { updateNodeData, getIncomingData } = useStore();
+  const incomingData = useNodeIncomingData(id);
   const [running, setRunning] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   
   const incomingImages = useMemo(() => {
-    const incoming = getIncomingData(id);
-    const imgs = incoming.filter(d => d.imageUrl || d.url || d.images).flatMap(d => d.images || [d.imageUrl || d.url]);
+    const imgs = incomingData.filter(d => d && (d.imageUrl || d.url || d.images)).flatMap(d => d.images || [d.imageUrl || d.url]);
     if (nodeData.imageUrl) {
       imgs.unshift(nodeData.imageUrl);
     }
-    return imgs;
-  }, [id, getIncomingData, nodeData.imageUrl]);
+    return imgs.filter(img => typeof img === 'string') as string[];
+  }, [incomingData, nodeData.imageUrl]);
 
   const outputText = nodeData.outputText || '';
   const systemPrompt = nodeData.systemPrompt || '你是一个专业 AI 视觉反推提示词引擎。请严格根据输入图片与上游文本进行图像反推...';
@@ -76,9 +76,9 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
             />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white tracking-tight uppercase">提示词实验室 (LAB)</h3>
+            <h3 className="text-lg font-bold text-white tracking-tight uppercase">提示词实验室 (LAB)</h3>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">PROMPT REVERSE V2</span>
+              <span className="text-sm font-mono text-gray-500 tracking-widest uppercase">PROMPT REVERSE V2</span>
               <div className={`w-1 h-1 rounded-full ${running ? 'bg-cyan-400 animate-pulse' : 'bg-cyan-900'} shadow-[0_0_5px_cyan]`} />
             </div>
           </div>
@@ -99,22 +99,22 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
         <div className="space-y-4 flex flex-col">
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-2">
-              <label className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] flex items-center gap-1.5">
+              <label className="text-sm font-black text-gray-600 uppercase tracking-[0.2em] flex items-center gap-1.5">
                  <Terminal size={10} /> Logic Processor
               </label>
               <textarea 
-                className="w-full h-24 bg-black border border-white/5 rounded-xl px-4 py-3 text-[10px] text-gray-500 outline-none focus:border-cyan-500/30 resize-none font-mono custom-scrollbar"
+                className="w-full h-24 bg-black border border-white/5 rounded-xl px-4 py-3 text-sm text-gray-500 outline-none focus:border-cyan-500/30 resize-none font-mono custom-scrollbar"
                 value={systemPrompt}
                 onChange={(e) => updateNodeData(id, { systemPrompt: e.target.value })}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] flex items-center gap-1.5">
+              <label className="text-sm font-black text-gray-600 uppercase tracking-[0.2em] flex items-center gap-1.5">
                  <Zap size={10} /> Objective Path
               </label>
               <textarea 
-                className="w-full h-24 bg-black border border-white/5 rounded-xl px-4 py-3 text-[10px] text-white/80 outline-none focus:border-cyan-500/30 resize-none font-mono custom-scrollbar"
+                className="w-full h-24 bg-black border border-white/5 rounded-xl px-4 py-3 text-sm text-white/80 outline-none focus:border-cyan-500/30 resize-none font-mono custom-scrollbar"
                 value={instruction}
                 onChange={(e) => updateNodeData(id, { instruction: e.target.value })}
               />
@@ -131,7 +131,7 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
                />
              )}
              <div className="flex items-center justify-between z-10">
-                <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Active Data: {incomingImages.length} Layers</span>
+                <span className="text-sm text-gray-500 font-black uppercase tracking-widest">Active Data: {incomingImages.length} Layers</span>
                 {incomingImages.length > 0 && <div className="flex -space-x-3">
                   {incomingImages.slice(0, 8).map((img, i) => (
                     <motion.img 
@@ -145,13 +145,13 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
                   ))}
                 </div>}
              </div>
-             {!incomingImages.length && <p className="text-[10px] text-red-500/50 italic font-mono z-10 uppercase tracking-tighter">{'> awaiting image broadcast signal...'}</p>}
+             {!incomingImages.length && <p className="text-sm text-red-500/50 italic font-mono z-10 uppercase tracking-tighter">{'> awaiting image broadcast signal...'}</p>}
           </div>
 
           <button 
             onClick={handleRun}
             disabled={running || !incomingImages.length}
-            className={`w-full h-14 rounded-2xl font-black text-[11px] tracking-[0.4em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] border border-white/5 uppercase ${
+            className={`w-full h-14 rounded-2xl font-black text-base tracking-[0.4em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] border border-white/5 uppercase ${
               running 
                 ? 'bg-white/5 text-gray-600 cursor-not-allowed' 
                 : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20'
@@ -178,7 +178,7 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
              </div>
           )}
           <textarea 
-            className="w-full h-full bg-transparent p-5 text-[11px] text-cyan-400/90 font-mono leading-relaxed outline-none resize-none custom-scrollbar pr-10"
+            className="w-full h-full bg-transparent p-5 text-base text-cyan-400/90 font-mono leading-relaxed outline-none resize-none custom-scrollbar pr-10"
             value={outputText}
             readOnly
             placeholder="> Analysis engine standby..."
@@ -196,9 +196,9 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
       <div className="px-6 py-3 bg-black border-t border-white/5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
            <div className={`w-1.5 h-1.5 rounded-full ${incomingImages.length ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)]' : 'bg-red-500'} animate-pulse`} />
-           <span className="text-[9px] text-gray-600 font-bold uppercase tracking-[0.3em]">Module Status: {incomingImages.length ? 'Online' : 'Disconnected'}</span>
+           <span className="text-sm text-gray-600 font-bold uppercase tracking-[0.3em]">Module Status: {incomingImages.length ? 'Online' : 'Disconnected'}</span>
         </div>
-        <span className="text-[9px] text-gray-700 font-mono italic tracking-widest uppercase opacity-40">RT_CORE_X.9</span>
+        <span className="text-sm text-gray-700 font-mono italic tracking-widest uppercase opacity-40">RT_CORE_X.9</span>
       </div>
     </div>
   );

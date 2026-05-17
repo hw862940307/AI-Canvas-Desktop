@@ -44,7 +44,7 @@ export const LogicEngineNode = ({ id, data }: { id: string; data: any }) => {
       <div className={`flex items-center justify-between px-4 py-3 border-b border-[var(--border)] transition-all react-flow__node-draghandle ${
         settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-blue-500/10'
       }`}>
-        <div className="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase tracking-widest">
+        <div className="flex items-center gap-2 text-base font-bold text-blue-400 uppercase tracking-widest">
           <Brain size={14} />
           <span>逻辑引擎</span>
         </div>
@@ -58,7 +58,7 @@ export const LogicEngineNode = ({ id, data }: { id: string; data: any }) => {
 
       <div className="p-4 flex flex-col gap-4 nodrag">
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
+          <label className="text-sm uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
             <Terminal size={10} /> 逻辑预设
           </label>
           <div className="flex flex-wrap gap-2">
@@ -66,7 +66,7 @@ export const LogicEngineNode = ({ id, data }: { id: string; data: any }) => {
               <button
                 key={preset.id}
                 onClick={() => updateNodeData(id, { preset: preset.id })}
-                className={`px-3 py-1.5 rounded-lg text-[10px] transition-all border ${
+                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
                   data.preset === preset.id 
                     ? 'bg-blue-600 border-blue-500 text-white font-bold' 
                     : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
@@ -79,14 +79,14 @@ export const LogicEngineNode = ({ id, data }: { id: string; data: any }) => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
+          <label className="text-sm uppercase font-bold text-gray-500 tracking-widest flex items-center gap-1.5">
             <Code2 size={10} /> 推理结果
           </label>
-          <div className="bg-black/60 border border-white/5 rounded-xl p-3 text-[11px] text-gray-300 min-h-[120px] max-h-[220px] overflow-y-auto whitespace-pre-wrap font-mono custom-scrollbar leading-relaxed">
+          <div className="bg-black/60 border border-white/5 rounded-xl p-3 text-base text-gray-300 min-h-[120px] max-h-[220px] overflow-y-auto whitespace-pre-wrap font-mono custom-scrollbar leading-relaxed">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[120px] gap-3 text-blue-500/50 italic">
                 <Loader2 size={24} className="animate-spin" />
-                <span className="text-[9px] uppercase tracking-[0.2em] font-bold">深度推理中...</span>
+                <span className="text-sm uppercase tracking-[0.2em] font-bold">深度推理中...</span>
               </div>
             ) : data.output || '等待输入并运行...'}
           </div>

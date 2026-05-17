@@ -273,8 +273,8 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
               <Images size={20} />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-white tracking-tight uppercase">IO_在线图像中心</h1>
-              <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500 tracking-widest">
+              <h1 className="text-lg font-bold text-white tracking-tight uppercase">IO_在线图像中心</h1>
+              <div className="flex items-center gap-2 text-sm font-mono text-gray-500 tracking-widest">
                 <span>V1.4 ULTIMATE</span>
                 <div className="w-1 h-1 rounded-full bg-purple-500" />
                 <span className="text-purple-500/80">HUB ENGINE</span>
@@ -286,19 +286,19 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
             <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 mr-2">
               <button 
                 onClick={() => { setActiveTab('library'); updateStore({ activeTab: 'library' }); }}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 ${activeTab === 'library' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${activeTab === 'library' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:text-white'}`}
               >
                 <Images size={14} /> 素材库
               </button>
               <button 
                 onClick={() => { setActiveTab('history'); updateStore({ activeTab: 'history' }); }}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 ${activeTab === 'history' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${activeTab === 'history' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:text-white'}`}
               >
                 <History size={14} /> 历史生成
               </button>
               <button 
                 onClick={() => { setActiveTab('materials'); updateStore({ activeTab: 'materials' }); }}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 ${activeTab === 'materials' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${activeTab === 'materials' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:text-white'}`}
               >
                 <Archive size={14} /> 本地资产
               </button>
@@ -338,7 +338,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                    <button 
                      key={cat}
                      onClick={() => setHistoryCategory(cat)}
-                     className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider transition-all ${historyCategory === cat ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
+                     className={`px-3 py-1 rounded-full text-sm font-black uppercase tracking-wider transition-all ${historyCategory === cat ? 'bg-purple-600 text-white' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
                    >
                      {cat === 'all' ? 'ALL' : cat === 'image' ? 'IMAGE' : cat === 'video' ? 'VIDEO' : 'AUDIO'}
                    </button>
@@ -349,7 +349,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                  <input 
                    type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                    placeholder="SEARCH RECORDS..."
-                   className="w-full bg-black/40 border border-white/5 rounded-xl py-1.5 pl-8 pr-4 text-[10px] text-white focus:outline-none focus:border-purple-500/40"
+                   className="w-full bg-black/40 border border-white/5 rounded-xl py-1.5 pl-8 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/40"
                  />
                </div>
             </div>
@@ -364,7 +364,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                         <ArrowLeft size={16} />
                      </button>
                    )}
-                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                   <span className="text-sm font-black text-gray-400 uppercase tracking-widest ml-1">
                      {selectedFolderId ? folders.find(f => f.id === selectedFolderId)?.name : 'DIRECTORIES'}
                    </span>
                 </div>
@@ -382,7 +382,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                      <input 
                        type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                        placeholder="FILTER ASSETS..."
-                       className="w-full bg-black/40 border border-white/5 rounded-xl py-1.5 pl-8 pr-4 text-[10px] text-white focus:outline-none focus:border-purple-500/40"
+                       className="w-full bg-black/40 border border-white/5 rounded-xl py-1.5 pl-8 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/40"
                      />
                    </div>
                 </div>
@@ -417,13 +417,13 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                           </div>
                         ) : (
                           <div className="flex-1 min-w-0">
-                             <p className="text-xs text-white truncate font-black tracking-tight">{img.name}</p>
-                             <p className="text-[10px] text-gray-500 truncate font-mono mt-1 opacity-50 uppercase tracking-tighter">{img.path}</p>
+                             <p className="text-base text-white truncate font-black tracking-tight">{img.name}</p>
+                             <p className="text-sm text-gray-500 truncate font-mono mt-1 opacity-50 uppercase tracking-tighter">{img.path}</p>
                           </div>
                         )}
                         {selectedIndices.includes(i) && <div className="absolute inset-0 bg-purple-500/10 pointer-events-none" />}
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center pointer-events-none">
-                           <span className="text-[9px] font-black text-white uppercase tracking-widest">DRAG TO USE</span>
+                           <span className="text-sm font-black text-white uppercase tracking-widest">DRAG TO USE</span>
                         </div>
                      </motion.div>
                    ))}
@@ -431,7 +431,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                  {images.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center opacity-30 text-gray-600">
                       <Images size={48} strokeWidth={1} />
-                      <p className="text-[10px] font-black mt-4 uppercase tracking-[0.3em]">No library images</p>
+                      <p className="text-sm font-black mt-4 uppercase tracking-[0.3em]">No library images</p>
                     </div>
                  )}
               </div>
@@ -457,7 +457,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
                         <button 
                           onClick={() => handleAddToCanvas(item.url)}
-                          className="px-4 py-1.5 bg-purple-600 text-white text-[9px] font-black rounded-lg hover:bg-purple-500 transition-all uppercase tracking-widest shadow-xl"
+                          className="px-4 py-1.5 bg-purple-600 text-white text-sm font-black rounded-lg hover:bg-purple-500 transition-all uppercase tracking-widest shadow-xl"
                         >
                           Send to Canvas
                         </button>
@@ -469,14 +469,14 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                         </button>
                      </div>
                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black to-transparent">
-                        <p className="text-[9px] text-white/60 truncate font-mono">{item.name}</p>
+                        <p className="text-sm text-white/60 truncate font-mono">{item.name}</p>
                      </div>
                    </div>
                  ))}
                  {filteredHistory.length === 0 && (
                     <div className="col-span-full h-full flex flex-col items-center justify-center opacity-30 text-gray-600">
                       <History size={48} strokeWidth={1} />
-                      <p className="text-[10px] font-black mt-4 uppercase tracking-[0.3em]">No history records</p>
+                      <p className="text-sm font-black mt-4 uppercase tracking-[0.3em]">No history records</p>
                     </div>
                  )}
               </div>
@@ -496,8 +496,8 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                               <Folder size={32} className="text-purple-500" />
                            </div>
                            <div className="text-center">
-                              <p className="text-xs font-black text-white tracking-tight">{folder.name}</p>
-                              <p className="text-[9px] text-gray-600 font-mono mt-1 uppercase tracking-tighter truncate max-w-[120px]">{folder.path}</p>
+                              <p className="text-base font-black text-white tracking-tight">{folder.name}</p>
+                              <p className="text-sm text-gray-600 font-mono mt-1 uppercase tracking-tighter truncate max-w-[120px]">{folder.path}</p>
                            </div>
                            <button 
                              onClick={(e) => { e.stopPropagation(); removeFolder(folder.id); }}
@@ -522,7 +522,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
                               <button 
                                 onClick={() => handleAddToCanvas(item.url)}
-                                className="px-4 py-1.5 bg-purple-600 text-white text-[9px] font-black rounded-lg hover:bg-purple-500 transition-all uppercase tracking-widest shadow-xl"
+                                className="px-4 py-1.5 bg-purple-600 text-white text-sm font-black rounded-lg hover:bg-purple-500 transition-all uppercase tracking-widest shadow-xl"
                               >
                                 Send to Canvas
                               </button>
@@ -534,14 +534,14 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                               </button>
                            </div>
                            <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black to-transparent">
-                              <p className="text-[9px] text-white/60 truncate font-mono">{item.name}</p>
+                              <p className="text-sm text-white/60 truncate font-mono">{item.name}</p>
                            </div>
                          </div>
                        ))}
                        {filteredMaterials.length === 0 && (
                           <div className="col-span-full h-full flex flex-col items-center justify-center opacity-30 text-gray-600 min-h-[300px]">
                             <Plus size={48} strokeWidth={1} />
-                            <p className="text-[10px] font-black mt-4 uppercase tracking-[0.3em]">Folder is Empty</p>
+                            <p className="text-sm font-black mt-4 uppercase tracking-[0.3em]">Folder is Empty</p>
                           </div>
                        )}
                     </div>
@@ -555,7 +555,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
             <div className="flex items-center gap-2">
               <button 
                 onClick={() => handleImportLocal(activeTab === 'materials' ? selectedFolderId || undefined : undefined)}
-                className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-[11px] font-black text-white transition-all shadow-xl shadow-purple-600/10 active:scale-95"
+                className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-base font-black text-white transition-all shadow-xl shadow-purple-600/10 active:scale-95"
               >
                 <FolderOpen size={16} /> {activeTab === 'materials' ? 'UPLOAD TO FOLDER' : 'BATCH IMPORT'}
               </button>
@@ -567,13 +567,13 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                     setSelectedIndices(all);
                     updateStore({ selectedIndices: all });
                   }}
-                  className="px-3 py-1.5 text-[10px] font-black text-gray-400 hover:text-white transition-colors"
+                  className="px-3 py-1.5 text-sm font-black text-gray-400 hover:text-white transition-colors"
                 >
                   ALL
                 </button>
                 <button 
                   onClick={() => { setSelectedIndices([]); updateStore({ selectedIndices: [] }); }}
-                  className="px-3 py-1.5 text-[10px] font-black text-gray-500 hover:text-white transition-colors"
+                  className="px-3 py-1.5 text-sm font-black text-gray-500 hover:text-white transition-colors"
                 >
                   RESET
                 </button>
@@ -581,7 +581,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
             </div>
 
             <div className="flex-1 flex items-center gap-4 max-w-[200px]">
-              <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest whitespace-nowrap">View Scale</span>
+              <span className="text-sm font-black text-gray-600 uppercase tracking-widest whitespace-nowrap">View Scale</span>
               <input 
                  type="range" min={60} max={300} step={10} value={thumbSize}
                  onChange={(e) => {
@@ -601,11 +601,11 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
         <div className="px-6 py-3 bg-black border-t border-white/5 flex items-center justify-between shrink-0">
            <div className="flex items-center gap-3">
              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-             <span className="text-[9px] text-gray-500 font-black uppercase tracking-[0.2em]">
+             <span className="text-sm text-gray-500 font-black uppercase tracking-[0.2em]">
                {activeTab === 'library' ? `Active Gallery: ${images.length}` : activeTab === 'history' ? `History Pool: ${filteredHistory.length}` : `Folder Asset Count: ${filteredMaterials.length}`}
              </span>
            </div>
-           <span className="text-[9px] text-purple-600 font-mono tracking-widest uppercase italic">HUB_PLATFORM_V1.4</span>
+           <span className="text-sm text-purple-600 font-mono tracking-widest uppercase italic">HUB_PLATFORM_V1.4</span>
         </div>
       </div>
     );

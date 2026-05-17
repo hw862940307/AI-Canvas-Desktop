@@ -127,7 +127,7 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
             <button
               key={size}
               onClick={() => update({ mouseSize: size })}
-              className={`flex-1 px-4 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
+              className={`flex-1 px-4 py-2 rounded-lg text-lg transition-all flex items-center gap-2 ${
                 settings.mouseSize === size ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -147,14 +147,14 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
             <button
               key={t}
               onClick={() => update({ theme: t })}
-              className={`flex-1 px-5 py-2.5 rounded-lg text-sm transition-all flex flex-col items-center gap-1 min-w-[70px] ${
+              className={`flex-1 px-5 py-2.5 rounded-lg text-lg transition-all flex flex-col items-center gap-1 min-w-[70px] ${
                 settings.theme === t ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
               }`}
             >
               {t === 'dark' && <Moon size={18} />}
               {t === 'mist' && <Cloud size={18} />}
               {t === 'light' && <Sun size={18} />}
-              <span className="text-[10px] mt-1">{t === 'dark' ? '暗夕' : t === 'mist' ? '晨雾' : '白昼'}</span>
+              <span className="text-sm mt-1">{t === 'dark' ? '暗夕' : t === 'mist' ? '晨雾' : '白昼'}</span>
             </button>
           ))}
         </div>
@@ -169,7 +169,7 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
             <button
               key={tex}
               onClick={() => update({ barTexture: tex })}
-              className={`px-6 py-2 rounded-xl text-sm border transition-all ${
+              className={`px-6 py-2 rounded-xl text-lg border transition-all ${
                 settings.barTexture === tex 
                   ? 'bg-blue-600/10 border-blue-600/50 text-blue-500' 
                   : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
@@ -186,7 +186,7 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
           {[true, false].map((v) => (
             <button 
               key={String(v)}
-              className={`px-6 py-1.5 rounded-lg text-sm flex-1 transition-all ${
+              className={`px-6 py-1.5 rounded-lg text-lg flex-1 transition-all ${
                 useStore.getState().isGridVisible === v 
                   ? 'bg-blue-600 text-white' 
                   : 'text-gray-400 hover:text-white'
@@ -207,7 +207,7 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
             max="100"
             value={typeof settings.inputFontSize === 'number' ? settings.inputFontSize : (settings.inputFontSize === 'small' ? 10 : settings.inputFontSize === 'large' ? 16 : 14)}
             onChange={(e) => update({ inputFontSize: parseInt(e.target.value) || 14 })}
-            className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none px-4 py-2 text-center"
+            className="w-full bg-transparent text-lg text-[var(--text-primary)] outline-none px-4 py-2 text-center"
           />
         </div>
       </SettingRow>
@@ -218,7 +218,7 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
             <button
               key={q}
               onClick={() => update({ uploadQuality: q })}
-              className={`px-4 py-2 rounded-lg text-sm transition-all ${
+              className={`px-4 py-2 rounded-lg text-lg transition-all ${
                 settings.uploadQuality === q 
                   ? 'bg-blue-600/10 text-blue-500 border border-blue-600/30' 
                   : 'text-gray-400 hover:text-white'
@@ -241,7 +241,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
           {[true, false].map((v) => (
             <button 
               key={String(v)}
-              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+              className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.highlightAssociated === v 
                   ? 'bg-blue-600 text-white' 
                   : 'text-gray-400 hover:text-white'
@@ -258,8 +258,8 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
         <div className="ml-8 -mt-6">
           <div className="flex items-center gap-6">
             <div className="flex flex-col gap-1">
-              <span className="text-sm text-white font-medium">高亮颜色</span>
-              <span className="text-xs text-gray-500">设置关联节点边框与光晕颜色</span>
+              <span className="text-lg text-white font-medium">高亮颜色</span>
+              <span className="text-base text-gray-500">设置关联节点边框与光晕颜色</span>
             </div>
             <div className="flex gap-2">
               {['#ffffff', '#3b82f6', '#10b981', '#06b6d4', '#8b5cf6', '#ef4444', '#f59e0b'].map(c => (
@@ -280,7 +280,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
           {[true, false].map((v) => (
             <button 
               key={String(v)}
-              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+              className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.showConnections === v 
                   ? 'bg-blue-600 text-white' 
                   : 'text-gray-400 hover:text-white'
@@ -298,7 +298,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
           {[true, false].map((v) => (
             <button 
               key={String(v)}
-              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+              className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.snapToGuidelines === v 
                   ? 'bg-blue-600 text-white' 
                   : 'text-gray-400 hover:text-white'
@@ -316,7 +316,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
           {[true, false].map((v) => (
             <button 
               key={String(v)}
-              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+              className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.snapToGrid === v 
                   ? 'bg-blue-600 text-white' 
                   : 'text-gray-400 hover:text-white'
@@ -335,7 +335,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
             <button
               key={mode}
               onClick={() => update({ multiSelectAlignmentMode: mode })}
-              className={`px-5 py-2 rounded-lg text-sm transition-all ${
+              className={`px-5 py-2 rounded-lg text-lg transition-all ${
                 settings.multiSelectAlignmentMode === mode ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -348,8 +348,8 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
       <div className="ml-8 -mt-6 flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-1">
-            <span className="text-sm text-white font-medium">对齐间距</span>
-            <span className="text-xs text-gray-500">分布时固定首节点，后续节点按该间距顺排</span>
+            <span className="text-lg text-white font-medium">对齐间距</span>
+            <span className="text-base text-gray-500">分布时固定首节点，后续节点按该间距顺排</span>
           </div>
           <div className="flex items-center gap-4 min-w-[240px]">
             <input 
@@ -360,7 +360,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
               onChange={(e) => update({ alignmentSpacing: parseInt(e.target.value) })}
               className="flex-1 accent-blue-600 h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
             />
-            <span className="text-sm font-mono text-white/50 w-8">{settings.alignmentSpacing}</span>
+            <span className="text-lg font-mono text-white/50 w-8">{settings.alignmentSpacing}</span>
           </div>
         </div>
       </div>
@@ -371,7 +371,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
 const FileSettings = ({ settings, update }: { settings: AppSettings, update: (s: Partial<AppSettings>) => void }) => {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm text-gray-500 mb-6 font-medium">配置项目、素材数据和生成输出的本地保存目录。授权、API Key 和用户设置固定保存在应用数据目录。</p>
+      <p className="text-lg text-gray-500 mb-6 font-medium">配置项目、素材数据和生成输出的本地保存目录。授权、API Key 和用户设置固定保存在应用数据目录。</p>
       
       <div className="flex flex-col gap-4 p-6 bg-white/[0.02] border border-white/10 rounded-[24px]">
         <PathInput 
@@ -400,12 +400,12 @@ const FileSettings = ({ settings, update }: { settings: AppSettings, update: (s:
 const PathInput = ({ label, desc, value, onChange }: { label: string; desc: string; value: string; onChange: (v: string) => void }) => (
   <div className="flex items-center justify-between gap-8 py-2">
     <div className="flex flex-col gap-1">
-      <span className="text-sm text-[var(--text-primary)] font-bold">{label}</span>
-      <span className="text-xs text-[var(--text-secondary)]">{desc}</span>
+      <span className="text-lg text-[var(--text-primary)] font-bold">{label}</span>
+      <span className="text-base text-[var(--text-secondary)]">{desc}</span>
     </div>
     <div className="flex-1 flex items-center bg-white/5 border border-white/5 rounded-xl px-4 py-3 group hover:border-white/10 transition-all">
       <input 
-        className="w-full bg-transparent text-sm text-[var(--text-secondary)] outline-none"
+        className="w-full bg-transparent text-lg text-[var(--text-secondary)] outline-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -445,7 +445,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
       <div className="flex items-center justify-center p-1 bg-white/5 rounded-2xl border border-white/10 w-fit mx-auto mb-4">
         <button
           onClick={() => updateApi({ isCustom: false })}
-          className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`px-8 py-2.5 rounded-xl text-lg font-bold transition-all ${
             !api.isCustom ? 'bg-white text-black shadow-xl' : 'text-gray-500 hover:text-gray-300'
           }`}
         >
@@ -453,7 +453,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         </button>
         <button
           onClick={() => updateApi({ isCustom: true })}
-          className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`px-8 py-2.5 rounded-xl text-lg font-bold transition-all ${
             api.isCustom ? 'bg-white text-black shadow-xl' : 'text-gray-500 hover:text-gray-300'
           }`}
         >
@@ -463,13 +463,13 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
 
       <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Engine</label>
+          <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Engine</label>
           <div className="relative group">
             <select
               value={api.engine}
               onChange={(e) => updateApi({ engine: e.target.value as any })}
               disabled={!api.isCustom}
-              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold disabled:opacity-50"
+              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold disabled:opacity-50"
             >
               <option value="gemini">Gemini API</option>
               <option value="openai">OpenAI API</option>
@@ -486,7 +486,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         </div>
 
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Base URL</label>
+          <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Base URL</label>
           <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
             <input
               type="text"
@@ -494,34 +494,34 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
               onChange={(e) => updateApi({ baseUrl: e.target.value })}
               disabled={!api.isCustom}
               placeholder="https://api.example.com"
-              className="flex-1 bg-transparent text-sm text-white font-mono outline-none disabled:opacity-50"
+              className="flex-1 bg-transparent text-lg text-white font-mono outline-none disabled:opacity-50"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Key</label>
+            <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Key</label>
             <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
               <input
                 type="password"
                 value={api.apiKey}
                 onChange={(e) => updateApi({ apiKey: e.target.value })}
                 placeholder="........"
-                className="flex-1 bg-transparent text-sm text-white outline-none"
+                className="flex-1 bg-transparent text-lg text-white outline-none"
               />
               <Key size={14} className="text-gray-500" />
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Model ID</label>
+            <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Model ID</label>
             <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
               <input
                 type="text"
                 value={api.modelId}
                 onChange={(e) => updateApi({ modelId: e.target.value })}
                 placeholder="gemini-1.5-pro"
-                className="flex-1 bg-transparent text-sm text-white outline-none"
+                className="flex-1 bg-transparent text-lg text-white outline-none"
               />
             </div>
           </div>
@@ -529,14 +529,14 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
       </div>
 
       <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
-        <h3 className="text-sm font-bold text-white mb-4">Picture Generation Settings</h3>
+        <h3 className="text-lg font-bold text-white mb-4">Picture Generation Settings</h3>
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Image Engine</label>
+          <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Image Engine</label>
           <div className="relative group">
             <select
               value={api.imageEngine}
               onChange={(e) => updateApi({ imageEngine: e.target.value as any })}
-              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
+              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
             >
               <option value="online">Online (在线文生图)</option>
               <option value="comfyui">ComfyUI (本地生图)</option>
@@ -546,12 +546,12 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
 
         {api.imageEngine === 'online' && (
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Image Model</label>
+            <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Image Model</label>
             <div className="relative group">
               <select
                 value={api.imageModel}
                 onChange={(e) => updateApi({ imageModel: e.target.value as any })}
-                className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
+                className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
               >
                 <option value="Nano Banana Pro">Nano Banana Pro</option>
                 <option value="Nano Banana 2">Nano Banana 2</option>
@@ -565,14 +565,14 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
 
         {api.imageEngine === 'comfyui' && (
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">ComfyUI URL</label>
+            <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">ComfyUI URL</label>
             <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
               <input
                 type="text"
                 value={api.comfyUrl}
                 onChange={(e) => updateApi({ comfyUrl: e.target.value })}
                 placeholder="http://127.0.0.1:8188"
-                className="flex-1 bg-transparent text-sm text-white font-mono outline-none"
+                className="flex-1 bg-transparent text-lg text-white font-mono outline-none"
               />
             </div>
           </div>
@@ -583,7 +583,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         <button
           onClick={testConnection}
           disabled={testStatus === 'testing'}
-          className={`w-full py-6 rounded-3xl border transition-all flex items-center justify-center gap-3 font-bold text-sm tracking-widest uppercase ${
+          className={`w-full py-6 rounded-3xl border transition-all flex items-center justify-center gap-3 font-bold text-lg tracking-widest uppercase ${
             testStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500' :
             testStatus === 'error' ? 'bg-red-500/10 border-red-500/40 text-red-500' :
             'bg-white/[0.02] border-white/5 text-gray-500 hover:bg-white/[0.05] hover:text-white'
@@ -620,12 +620,12 @@ const SettingRow = ({ title, desc, children, shortcut }: { title: string; desc: 
       <div className="flex items-center gap-3">
         <h4 className="text-[17px] font-bold text-[var(--text-primary)]">{title}</h4>
         {shortcut && (
-          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-[var(--text-secondary)] font-mono">
+          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--text-secondary)] font-mono">
             {shortcut}
           </span>
         )}
       </div>
-      <p className="text-sm text-[var(--text-secondary)] leading-relaxed font-medium">{desc}</p>
+      <p className="text-lg text-[var(--text-secondary)] leading-relaxed font-medium">{desc}</p>
     </div>
     {children}
   </div>

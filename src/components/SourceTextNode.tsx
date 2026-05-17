@@ -40,9 +40,9 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
   };
   const getFontSizeClass = () => {
     if (typeof settings.inputFontSize === 'number') return '';
-    if (settings.inputFontSize === 'small') return 'text-[10px]';
-    if (settings.inputFontSize === 'large') return 'text-sm';
-    return 'text-xs';
+    if (settings.inputFontSize === 'small') return 'text-base';
+    if (settings.inputFontSize === 'large') return 'text-lg';
+    return 'text-lg';
   };
 
   const clearText = () => {
@@ -126,7 +126,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
           <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
             <Type size={18} />
           </div>
-          <span className="text-xs font-bold tracking-wider text-[var(--text-primary)]">源文本</span>
+          <span className="text-base font-bold tracking-wider text-[var(--text-primary)]">源文本</span>
         </div>
         <div className="flex items-center gap-2">
            <button 
@@ -158,7 +158,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         />
         
         <div className="mt-4 pt-4 border-t border-[var(--border)] flex justify-end shrink-0">
-           <div className="text-[10px] text-[var(--text-secondary)]/50 font-mono">
+           <div className="text-sm text-[var(--text-secondary)]/50 font-mono">
               {data.text?.length || 0} 字
            </div>
         </div>

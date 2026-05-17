@@ -205,22 +205,22 @@ function SubjectPreview({ imageUrl }: { imageUrl?: string }) {
         )}
       </group>
       <Html position={[0, 1.2, 0]} center style={{ pointerEvents: 'none' }}>
-        <div className="text-[12px] font-black text-white/40 uppercase tracking-widest whitespace-nowrap select-none">上 (TOP)</div>
+        <div className="text-base font-black text-white/40 uppercase tracking-widest whitespace-nowrap select-none">上 (TOP)</div>
       </Html>
       <Html position={[0, -1.2, 0]} center style={{ pointerEvents: 'none' }}>
-        <div className="text-[12px] font-black text-white/40 uppercase tracking-widest whitespace-nowrap select-none">下 (BOTTOM)</div>
+        <div className="text-base font-black text-white/40 uppercase tracking-widest whitespace-nowrap select-none">下 (BOTTOM)</div>
       </Html>
       <Html position={[-1.1, 0, 0]} center style={{ pointerEvents: 'none' }}>
-        <div className="text-[12px] font-black text-white/60 uppercase tracking-widest whitespace-nowrap -rotate-90 select-none">左 (LEFT)</div>
+        <div className="text-base font-black text-white/60 uppercase tracking-widest whitespace-nowrap -rotate-90 select-none">左 (LEFT)</div>
       </Html>
       <Html position={[1.1, 0, 0]} center style={{ pointerEvents: 'none' }}>
-        <div className="text-[12px] font-black text-white/60 uppercase tracking-widest whitespace-nowrap rotate-90 select-none">右 (RIGHT)</div>
+        <div className="text-base font-black text-white/60 uppercase tracking-widest whitespace-nowrap rotate-90 select-none">右 (RIGHT)</div>
       </Html>
       <Html position={[0, 0, 1.0]} center style={{ pointerEvents: 'none' }}>
         <div className="text-[14px] font-black text-white/80 uppercase tracking-widest whitespace-nowrap bg-black/20 px-2 py-0.5 rounded shadow-sm">正面 (FRONT)</div>
       </Html>
       <Html position={[0, 0, -1.0]} center style={{ pointerEvents: 'none' }}>
-        <div className="text-[12px] font-black text-white/40 uppercase tracking-widest whitespace-nowrap select-none">背面 (BACK)</div>
+        <div className="text-base font-black text-white/40 uppercase tracking-widest whitespace-nowrap select-none">背面 (BACK)</div>
       </Html>
     </Float>
   );
@@ -307,10 +307,10 @@ function ControlSlider({ label, min, max, step = 1, value, onChange, unit = '', 
   return (
     <div className="space-y-3 group">
       <div className="flex items-center justify-between">
-        <label className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors font-bold uppercase tracking-widest">{label}</label>
+        <label className="text-sm text-gray-500 group-hover:text-gray-300 transition-colors font-bold uppercase tracking-widest">{label}</label>
         <div className="flex items-center gap-1">
-          <span className="text-xs font-mono font-bold text-white group-hover:text-blue-500 transition-colors">{prefix}{value}{unit}</span>
-          {suffix && <span className="text-[9px] text-gray-600 font-mono italic ml-1">({suffix})</span>}
+          <span className="text-base font-mono font-bold text-white group-hover:text-blue-500 transition-colors">{prefix}{value}{unit}</span>
+          {suffix && <span className="text-sm text-gray-600 font-mono italic ml-1">({suffix})</span>}
         </div>
       </div>
       <div className="relative h-6 flex items-center cursor-pointer">
@@ -385,11 +385,11 @@ const NodeUI = ({
             <Move3d size={20} className="text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white tracking-tight uppercase">3D 空间视角控制器</h3>
+            <h3 className="text-lg font-bold text-white tracking-tight uppercase">3D 空间视角控制器</h3>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-gray-500 tracking-widest">V1.0 SPATIAL VIEW</span>
+              <span className="text-sm font-mono text-gray-500 tracking-widest">V1.0 SPATIAL VIEW</span>
               <div className="w-1 h-1 rounded-full bg-blue-500" />
-              <span className="text-[10px] font-mono text-blue-500/80">DYNAMIC PROMPT</span>
+              <span className="text-sm font-mono text-blue-500/80">DYNAMIC PROMPT</span>
             </div>
           </div>
         </div>
@@ -399,7 +399,7 @@ const NodeUI = ({
               <button 
                 id="btn-subject-product"
                 onClick={() => setParams((p: any) => ({ ...p, subjectType: 'product' }))}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${params.subjectType === 'product' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-white'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${params.subjectType === 'product' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-white'}`}
               >
                 <Box size={14} />
                 产品 (PRODUCT)
@@ -407,7 +407,7 @@ const NodeUI = ({
               <button 
                 id="btn-subject-person"
                 onClick={() => setParams((p: any) => ({ ...p, subjectType: 'person' }))}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${params.subjectType === 'person' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-white'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${params.subjectType === 'person' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-white'}`}
               >
                 <User size={14} />
                 人物 (PERSON)
@@ -434,8 +434,8 @@ const NodeUI = ({
       </div>
 
       <div className="flex flex-1 min-h-0 bg-[#0c0e12] overflow-hidden h-full">
-        <div className="flex-1 bg-[#0c0e12] relative nodrag overflow-hidden group h-full nowheel">
-          <div className="absolute inset-0 w-full h-full">
+        <div className="flex-1 bg-[#0c0e12] relative nodrag overflow-hidden group nowheel w-full h-full">
+          <div className="absolute inset-0 w-full h-full flex">
              {isActive && (
                <Canvas 
                 shadows 
@@ -447,7 +447,7 @@ const NodeUI = ({
                   toneMapping: THREE.NoToneMapping,
                   outputColorSpace: THREE.SRGBColorSpace
                 }}
-                style={{ width: '100%', height: '100%', display: 'block' }}
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', display: 'block' }}
                 camera={{ fov: 45 }}
                >
                   <PerspectiveCamera makeDefault position={[0, 0, 4]} />
@@ -459,7 +459,7 @@ const NodeUI = ({
                     <Html center>
                       <div className="flex flex-col items-center gap-2">
                         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">Loading 3D View...</span>
+                        <span className="text-sm text-blue-500 font-bold uppercase tracking-widest">Loading 3D View...</span>
                       </div>
                     </Html>
                   }>
@@ -478,16 +478,16 @@ const NodeUI = ({
           </div>
           
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3 w-full pointer-events-none">
-             <div className="text-white/40 font-bold text-[10px] tracking-widest drop-shadow-md select-none bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm uppercase">拖拽正方体改变角度</div>
+             <div className="text-white/40 font-bold text-sm tracking-widest drop-shadow-md select-none bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm uppercase">拖拽正方体改变角度</div>
              <div className="flex items-center gap-2 pointer-events-auto">
                 <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 flex items-center gap-2 shadow-2xl">
                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                   <span className="text-[9px] font-bold text-gray-300 uppercase tracking-tighter">View Locked</span>
+                   <span className="text-sm font-bold text-gray-300 uppercase tracking-tighter">View Locked</span>
                 </div>
                 <button 
                   id="btn-toggle-grid"
                   onClick={() => setShowGrid(!showGrid)}
-                  className={`px-3 py-1 backdrop-blur-md border border-white/10 rounded-lg transition-all text-[9px] font-bold shadow-2xl flex items-center gap-1.5 uppercase ${showGrid ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' : 'bg-white/10 text-white/60 hover:text-white'}`}
+                  className={`px-3 py-1 backdrop-blur-md border border-white/10 rounded-lg transition-all text-sm font-bold shadow-2xl flex items-center gap-1.5 uppercase ${showGrid ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' : 'bg-white/10 text-white/60 hover:text-white'}`}
                 >
                   <Box size={10} />
                   Grid: {showGrid ? 'ON' : 'OFF'}
@@ -495,7 +495,7 @@ const NodeUI = ({
                 <button 
                   id="btn-reset-view"
                   onClick={handleReset}
-                  className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-lg text-white/80 hover:text-white transition-all text-[9px] font-bold hover:bg-white/20 active:scale-95 shadow-2xl flex items-center gap-1.5 uppercase"
+                  className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-lg text-white/80 hover:text-white transition-all text-sm font-bold hover:bg-white/20 active:scale-95 shadow-2xl flex items-center gap-1.5 uppercase"
                 >
                   <RotateCcw size={10} />
                   Reset
@@ -505,14 +505,14 @@ const NodeUI = ({
 
           <div className={`absolute bottom-6 left-6 right-6 z-10 flex items-end justify-between pointer-events-none`}>
              <div className="space-y-1">
-                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest bg-black/60 px-2 py-0.5 rounded inline-block">Current Angle</div>
+                <div className="text-sm font-bold text-gray-500 uppercase tracking-widest bg-black/60 px-2 py-0.5 rounded inline-block">Current Angle</div>
                 <div className={`font-mono font-black text-white italic drop-shadow-lg ${isInPortal ? 'text-5xl' : 'text-xl'}`}>
                    {params.horizontalAngle}° H / {params.verticalAngle}° V
                 </div>
              </div>
              <div className="flex flex-col items-end gap-1">
-                <span className={`font-bold text-blue-500 uppercase drop-shadow-lg ${isInPortal ? 'text-lg' : 'text-[10px]'}`}>{vData?.name}</span>
-                <span className={`font-mono text-gray-400 drop-shadow-lg ${isInPortal ? 'text-sm' : 'text-[8px]'}`}>{hData?.name}</span>
+                <span className={`font-bold text-blue-500 uppercase drop-shadow-lg ${isInPortal ? 'text-lg' : 'text-sm'}`}>{vData?.name}</span>
+                <span className={`font-mono text-gray-400 drop-shadow-lg ${isInPortal ? 'text-lg' : 'text-[10px]'}`}>{hData?.name}</span>
              </div>
           </div>
         </div>
@@ -558,7 +558,7 @@ const NodeUI = ({
 
             <div className={`space-y-4 pt-2 border-t border-white/5`}>
                <div className="flex items-center justify-between">
-                 <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                 <label className="text-base font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
                     <Camera size={14} />
                     镜头设定 (Lens Config)
                  </label>
@@ -566,7 +566,7 @@ const NodeUI = ({
                    <button 
                     id="btn-show-presets"
                     onClick={() => setShowPresets(!showPresets)}
-                    className="text-[11px] text-blue-500 hover:text-blue-400 flex items-center gap-1 font-bold"
+                    className="text-base text-blue-500 hover:text-blue-400 flex items-center gap-1 font-bold"
                    >
                      PRESET <ChevronDown size={12} />
                    </button>
@@ -582,7 +582,7 @@ const NodeUI = ({
                            <button 
                             key={preset.id}
                             onClick={() => applyPreset(preset)}
-                            className="w-full px-4 py-2 text-left text-[11px] text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                            className="w-full px-4 py-2 text-left text-base text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
                            >
                               {preset.name}
                            </button>
@@ -595,7 +595,7 @@ const NodeUI = ({
                
                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                     <span className="text-[11px] text-gray-600 font-bold flex items-center gap-1"><RotateCcw size={12} /> 起始视角</span>
+                     <span className="text-base text-gray-600 font-bold flex items-center gap-1"><RotateCcw size={12} /> 起始视角</span>
                      <div className="relative group/select">
                        <select 
                         id="select-viewpoint"
@@ -615,7 +615,7 @@ const NodeUI = ({
                           
                           setParams((p: any) => ({ ...p, ...updates }));
                         }}
-                        className="w-full h-10 bg-[#151515] hover:bg-[#1a1a1a] border border-white/5 rounded-xl px-3 text-[11px] text-white font-mono focus:outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all pr-8"
+                        className="w-full h-10 bg-[#151515] hover:bg-[#1a1a1a] border border-white/5 rounded-xl px-3 text-base text-white font-mono focus:outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all pr-8"
                        >
                          <option value="front_view">正面平视</option>
                          <option value="left_front_45">左前45°</option>
@@ -633,13 +633,13 @@ const NodeUI = ({
                      </div>
                   </div>
                   <div className="space-y-2">
-                     <span className="text-[11px] text-gray-600 font-bold flex items-center gap-1"><Focus size={12} /> 观察焦点</span>
+                     <span className="text-base text-gray-600 font-bold flex items-center gap-1"><Focus size={12} /> 观察焦点</span>
                      <div className="relative group/select">
                        <select 
                         id="select-focus"
                         value={params.focusAnchor}
                         onChange={(e) => setParams((p: any) => ({ ...p, focusAnchor: e.target.value }))}
-                        className="w-full h-10 bg-[#151515] hover:bg-[#1a1a1a] border border-white/5 rounded-xl px-3 text-[11px] text-white font-mono focus:outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all pr-8"
+                        className="w-full h-10 bg-[#151515] hover:bg-[#1a1a1a] border border-white/5 rounded-xl px-3 text-base text-white font-mono focus:outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all pr-8"
                        >
                          <option value="主体中心">主体中心</option>
                          <option value="画面中心">画面中心</option>
@@ -657,29 +657,29 @@ const NodeUI = ({
 
                <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-2">
-                    <span className="text-[11px] text-gray-600 font-bold flex items-center gap-1"><Focus size={12} /> Focal</span>
+                    <span className="text-base text-gray-600 font-bold flex items-center gap-1"><Focus size={12} /> Focal</span>
                     <div className="h-10 bg-white/2 border border-white/5 rounded-xl flex items-center px-3 justify-between group-hover:border-white/10 transition-all">
                        <input 
                         id="input-focal-length"
                         type="number" 
                         value={params.focalLength} 
                         onChange={(e) => setParams((p: any) => ({ ...p, focalLength: Number(e.target.value) }))}
-                        className="bg-transparent text-sm text-white font-mono w-16 focus:outline-none"
+                        className="bg-transparent text-lg text-white font-mono w-16 focus:outline-none"
                        />
-                       <span className="text-[10px] text-gray-500 italic">mm</span>
+                       <span className="text-sm text-gray-500 italic">mm</span>
                     </div>
                  </div>
                  <div className="space-y-2">
-                    <span className="text-[11px] text-gray-600 font-bold flex items-center gap-1"><ApertureIcon size={12} /> Aperture</span>
+                    <span className="text-base text-gray-600 font-bold flex items-center gap-1"><ApertureIcon size={12} /> Aperture</span>
                     <div className="h-10 bg-white/2 border border-white/5 rounded-xl flex items-center px-3 justify-between group-hover:border-white/10 transition-all">
-                       <span className="text-[10px] text-gray-500 italic">f/</span>
+                       <span className="text-sm text-gray-500 italic">f/</span>
                        <input 
                         id="input-aperture"
                         type="number" 
                         step="0.1"
                         value={params.aperture} 
                         onChange={(e) => setParams((p: any) => ({ ...p, aperture: Number(e.target.value) }))}
-                        className="bg-transparent text-sm text-white font-mono w-16 focus:outline-none text-right"
+                        className="bg-transparent text-lg text-white font-mono w-16 focus:outline-none text-right"
                        />
                     </div>
                  </div>
@@ -692,13 +692,13 @@ const NodeUI = ({
       <div className={`p-6 bg-black/40 border-t border-white/5 space-y-4 shrink-0`}>
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-black text-blue-500 uppercase tracking-widest text-shadow-glow">Output Prompt</span>
-              <div className="px-2 py-0.5 bg-blue-500/10 rounded border border-blue-500/20 text-[8px] font-bold text-blue-500 italic">DYNAMIC GENERATED</div>
+              <span className="text-base font-black text-blue-500 uppercase tracking-widest text-shadow-glow">Output Prompt</span>
+              <div className="px-2 py-0.5 bg-blue-500/10 rounded border border-blue-500/20 text-[10px] font-bold text-blue-500 italic">DYNAMIC GENERATED</div>
            </div>
            <button 
              id="btn-copy-prompt"
              onClick={() => handleCopy(generatedPrompts.full)}
-             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-black transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-base font-black transition-all shadow-lg shadow-blue-600/20 active:scale-95"
            >
              {copied ? <Check size={16} /> : <Copy size={16} />}
              {copied ? 'COPIED' : 'COPY PROMPT'}
@@ -707,14 +707,14 @@ const NodeUI = ({
         
         <div className="grid grid-cols-2 gap-4">
            <div className="space-y-2">
-              <span className="text-[11px] text-gray-600 font-bold uppercase tracking-widest">Full Narrative Description</span>
-              <div className={`bg-white/2 border border-white/5 rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto text-[12px] text-gray-400 font-sans leading-relaxed custom-scrollbar italic`}>
+              <span className="text-base text-gray-600 font-bold uppercase tracking-widest">Full Narrative Description</span>
+              <div className={`bg-white/2 border border-white/5 rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto text-base text-gray-400 font-sans leading-relaxed custom-scrollbar italic`}>
                  {generatedPrompts.full}
               </div>
            </div>
            <div className="space-y-2">
-              <span className="text-[11px] text-gray-600 font-bold uppercase tracking-widest">Compact Tag List</span>
-              <div className={`bg-white/2 border border-white/5 rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto font-mono text-[11px] text-blue-500/70 leading-relaxed custom-scrollbar`}>
+              <span className="text-base text-gray-600 font-bold uppercase tracking-widest">Compact Tag List</span>
+              <div className={`bg-white/2 border border-white/5 rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto font-mono text-base text-blue-500/70 leading-relaxed custom-scrollbar`}>
                  {generatedPrompts.compact}
               </div>
            </div>
@@ -725,17 +725,17 @@ const NodeUI = ({
          <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
                <Info size={14} className="text-gray-500" />
-               <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Subject DNA:</span>
-               <span className="text-[11px] text-blue-500/80 font-mono italic">ACTIVE PROTECT</span>
+               <span className="text-sm text-gray-500 font-bold uppercase tracking-widest">Subject DNA:</span>
+               <span className="text-base text-blue-500/80 font-mono italic">ACTIVE PROTECT</span>
             </div>
             <div className="w-px h-3 bg-white/10" />
             <div className="flex items-center gap-1.5">
-               <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Perspective:</span>
-               <span className="text-[11px] text-gray-400 font-mono">{fData?.name} ({fData?.effect})</span>
+               <span className="text-sm text-gray-500 font-bold uppercase tracking-widest">Perspective:</span>
+               <span className="text-base text-gray-400 font-mono">{fData?.name} ({fData?.effect})</span>
             </div>
          </div>
          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-600 font-mono">NEXT VISION CORE 5.0</span>
+            <span className="text-base text-gray-600 font-mono">NEXT VISION CORE 5.0</span>
          </div>
       </div>
     </div>

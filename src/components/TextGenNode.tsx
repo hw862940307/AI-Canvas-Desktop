@@ -37,9 +37,9 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
   };
   const getFontSizeClass = () => {
     if (typeof settings.inputFontSize === 'number') return '';
-    if (settings.inputFontSize === 'small') return 'text-[10px]';
-    if (settings.inputFontSize === 'large') return 'text-sm';
-    return 'text-xs';
+    if (settings.inputFontSize === 'small') return 'text-base';
+    if (settings.inputFontSize === 'large') return 'text-lg';
+    return 'text-lg';
   };
 
   const handleGenerate = async () => {
@@ -144,7 +144,7 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
           <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
             <Type size={18} />
           </div>
-          <span className="text-xs font-bold tracking-wider text-[var(--text-primary)]">生成文本</span>
+          <span className="text-base font-bold tracking-wider text-[var(--text-primary)]">生成文本</span>
         </div>
         <div className="flex items-center gap-2">
            <button 
@@ -177,7 +177,7 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
         />
         
         <div className="p-3 border-t border-[var(--border)] flex justify-end shrink-0 bg-[var(--bg-secondary)]/30">
-          <div className="text-[10px] text-[var(--text-secondary)]/50 font-mono">
+          <div className="text-sm text-[var(--text-secondary)]/50 font-mono">
              {result.length} 字
           </div>
         </div>
@@ -214,10 +214,10 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
 
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors">
-              <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">{selectedModel}</span>
+              <span className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-widest">{selectedModel}</span>
               <ChevronDown size={10} className="text-[var(--text-secondary)]" />
            </div>
-           <div className="text-[10px] text-[var(--text-secondary)] italic">
+           <div className="text-sm text-[var(--text-secondary)] italic">
               (Enter 生成)
            </div>
         </div>

@@ -37,9 +37,9 @@ const FusionMasterNode = ({ id, data, selected }: { id: string; data: any; selec
   };
   const getFontSizeClass = () => {
     if (typeof settings.inputFontSize === 'number') return '';
-    if (settings.inputFontSize === 'small') return 'text-[10px]';
-    if (settings.inputFontSize === 'large') return 'text-sm';
-    return 'text-xs';
+    if (settings.inputFontSize === 'small') return 'text-base';
+    if (settings.inputFontSize === 'large') return 'text-lg';
+    return 'text-lg';
   };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const frameworkInputRef = useRef<HTMLInputElement>(null);
@@ -327,8 +327,8 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
           <Layers size={inFullscreen ? 24 : 20} className="text-white" />
         </div>
         <div>
-          <h2 className={`${inFullscreen ? 'text-lg' : 'text-xs'} font-black text-white tracking-[0.2em] uppercase`}>Fusion Master <span className="ml-2 px-1.5 py-0.5 bg-orange-500/10 text-orange-500 rounded text-[9px] border border-orange-500/20">V5.9.1</span></h2>
-          <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-wider">AI Product Fusion & Reverse Engineering</p>
+          <h2 className={`${inFullscreen ? 'text-lg' : 'text-base'} font-black text-white tracking-[0.2em] uppercase`}>Fusion Master <span className="ml-2 px-1.5 py-0.5 bg-orange-500/10 text-orange-500 rounded text-sm border border-orange-500/20">V5.9.1</span></h2>
+          <p className="text-sm text-gray-500 font-bold mt-1 uppercase tracking-wider">AI Product Fusion & Reverse Engineering</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -375,15 +375,15 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                     <button onClick={() => triggerUpload('productMaster')} className="p-2.5 bg-blue-600 rounded-xl text-white pointer-events-auto"><ImageIcon size={18} /></button>
                     <button onClick={() => setMainSlots(prev => ({ ...prev, productMaster: null }))} className="p-2.5 bg-red-500 rounded-xl text-white pointer-events-auto"><X size={18} /></button>
                   </div>
-                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 text-[8px] font-black text-white/70 uppercase tracking-widest">PRODUCT MASTER</div>
+                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 text-[10px] font-black text-white/70 uppercase tracking-widest">PRODUCT MASTER</div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center cursor-pointer p-6 text-center" onClick={() => triggerUpload('productMaster')}>
                   <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                     <Upload size={24} className="text-gray-500 group-hover:text-blue-500" />
                   </div>
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Product Master</span>
-                  <p className="text-[8px] text-gray-700 mt-2 font-bold uppercase">Click, Drag or Paste</p>
+                  <span className="text-sm font-black text-gray-500 uppercase tracking-widest">Product Master</span>
+                  <p className="text-[10px] text-gray-700 mt-2 font-bold uppercase">Click, Drag or Paste</p>
                 </div>
               )}
             </div>
@@ -418,7 +418,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                   <button onClick={() => triggerUpload('sceneReference')} className="p-2.5 bg-blue-600 rounded-xl text-white pointer-events-auto"><ImageIcon size={18} /></button>
                   <button onClick={() => setMainSlots(prev => ({ ...prev, sceneReference: null }))} className="p-2.5 bg-red-500 rounded-xl text-white pointer-events-auto"><X size={18} /></button>
                 </div>
-                <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 text-[8px] font-black text-white/70 uppercase tracking-widest">
+                <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 text-[10px] font-black text-white/70 uppercase tracking-widest">
                   {mode === 'Mode C' ? 'REVERSE TARGET' : 'SCENE REFERENCE'}
                 </div>
               </div>
@@ -427,10 +427,10 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                 <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <Upload size={24} className="text-gray-500 group-hover:text-blue-500" />
                 </div>
-                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                <span className="text-sm font-black text-gray-500 uppercase tracking-widest">
                   {mode === 'Mode C' ? 'REVERSE TARGET' : 'SCENE REFERENCE'}
                 </span>
-                <p className="text-[8px] text-gray-700 mt-2 font-bold uppercase">Click, Drag or Paste</p>
+                <p className="text-[10px] text-gray-700 mt-2 font-bold uppercase">Click, Drag or Paste</p>
               </div>
             )}
           </div>
@@ -450,13 +450,13 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
       <div className="space-y-6">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Fusion Engine Modes</span>
+            <span className="text-sm font-black text-gray-500 uppercase tracking-widest">Fusion Engine Modes</span>
             <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 overflow-hidden">
               {['Mode A', 'Mode B', 'Mode C'].map((m) => (
                 <button 
                   key={m}
                   onClick={() => setMode(m as any)}
-                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${mode === m ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-black transition-all ${mode === m ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
                 >
                   {m.split(' ')[1]}
                 </button>
@@ -470,8 +470,8 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                 <Scan size={14} className="text-blue-500" />
               </div>
               <div>
-                <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest">视觉逻辑</p>
-                <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                <p className="text-sm text-blue-500 font-black uppercase tracking-widest">视觉逻辑</p>
+                <p className="text-base text-gray-400 mt-1 leading-relaxed">
                   {mode === 'Mode A' ? '保持产品角度不变，生成适配产品的背景。' : (mode === 'Mode B' ? '基于参考图进行创意性融合，允许光效调整。' : '深度分析单张图片色调、构图和提示词逻辑。')}
                 </p>
               </div>
@@ -481,14 +481,14 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
 
         <div className="space-y-3">
            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Standard Commands</span>
+              <span className="text-sm font-black text-gray-500 uppercase tracking-widest">Standard Commands</span>
               <Plus size={14} className="text-blue-500 cursor-pointer hover:scale-125 transition-transform" onClick={(e) => { e.stopPropagation(); addCommand(); }} />
            </div>
            {commands[mode].map((cmd, i) => (
              <div 
                key={i} 
                onClick={() => applyCommand(cmd)}
-               className="p-3.5 bg-black/40 border border-white/5 rounded-2xl text-[10px] text-gray-500 font-medium leading-relaxed hover:border-blue-500/30 transition-all group cursor-pointer active:scale-95 relative"
+               className="p-3.5 bg-black/40 border border-white/5 rounded-2xl text-sm text-gray-500 font-medium leading-relaxed hover:border-blue-500/30 transition-all group cursor-pointer active:scale-95 relative"
              >
                <div className="flex gap-3">
                  <Command size={12} className="text-gray-700 shrink-0 mt-0.5 group-hover:text-blue-500" />
@@ -511,7 +511,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
         </div>
 
         <div className="space-y-3">
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Iterative Prompt Refinement</span>
+          <span className="text-sm font-black text-gray-500 uppercase tracking-widest">Iterative Prompt Refinement</span>
           <textarea 
             value={userPrompt}
             onChange={(e) => setUserPrompt(e.target.value)}
@@ -524,7 +524,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
       <button 
         onClick={runAnalysis}
         disabled={isProcessing || (mode !== 'Mode C' && (!mainSlots.productMaster || !mainSlots.sceneReference)) || (mode === 'Mode C' && !mainSlots.sceneReference)}
-        className={`w-full py-5 rounded-[24px] flex items-center justify-center gap-3 transition-all font-black text-[11px] uppercase tracking-[0.25em] ${isProcessing ? 'bg-white/5 text-gray-700' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-2xl shadow-blue-600/30 active:scale-[0.98]'}`}
+        className={`w-full py-5 rounded-[24px] flex items-center justify-center gap-3 transition-all font-black text-base uppercase tracking-[0.25em] ${isProcessing ? 'bg-white/5 text-gray-700' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-2xl shadow-blue-600/30 active:scale-[0.98]'}`}
       >
         {isProcessing ? <RefreshCw size={18} className="animate-spin" /> : <Sparkles size={18} />}
         {isProcessing ? 'Analyzing Core Logic...' : 'Run Core Analysis'}
@@ -536,20 +536,20 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
     <div className="flex-1 flex flex-col p-6 h-full">
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Core Instruction Framework</span>
-          <button onClick={() => frameworkInputRef.current?.click()} className="px-3 py-1 bg-blue-600 text-white text-[9px] font-black rounded-lg uppercase flex items-center gap-2"><Upload size={12} /> Upload (.txt/.json)</button>
+          <span className="text-sm font-black text-gray-500 uppercase tracking-widest">Core Instruction Framework</span>
+          <button onClick={() => frameworkInputRef.current?.click()} className="px-3 py-1 bg-blue-600 text-white text-sm font-black rounded-lg uppercase flex items-center gap-2"><Upload size={12} /> Upload (.txt/.json)</button>
         </div>
         <div className="p-4 bg-black/60 rounded-2xl border border-white/5 max-h-[150px] overflow-y-auto scrollbar-hide">
-          <p className="text-[10px] text-gray-500 font-mono leading-relaxed">{framework}</p>
+          <p className="text-sm text-gray-500 font-mono leading-relaxed">{framework}</p>
         </div>
       </div>
       <div className="flex items-center gap-3 mb-4 bg-white/5 p-3 rounded-2xl border border-white/5">
         <Search size={16} className="text-gray-500" />
-        <input type="text" value={toolUrl} onChange={(e) => setToolUrl(e.target.value)} placeholder="Tool URL..." className="nodrag nopan bg-transparent border-none outline-none text-xs text-gray-300 w-full font-mono" />
+        <input type="text" value={toolUrl} onChange={(e) => setToolUrl(e.target.value)} placeholder="Tool URL..." className="nodrag nopan bg-transparent border-none outline-none text-base text-gray-300 w-full font-mono" />
       </div>
       <div className="flex-1 bg-black rounded-2xl border border-white/5 overflow-hidden relative shadow-2xl min-h-[300px]">
         <iframe src={toolUrl} className="w-full h-full border-none bg-white" title="Sandbox" />
-        <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-lg border border-white/10 text-[9px] font-black text-blue-400 uppercase tracking-widest underline decoration-blue-500/50">Standalone Engine</div>
+        <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-lg border border-white/10 text-sm font-black text-blue-400 uppercase tracking-widest underline decoration-blue-500/50">Standalone Engine</div>
       </div>
     </div>
   );
@@ -619,8 +619,8 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                       <Layers size={22} className="text-white" />
                     </div>
                     <div>
-                      <h1 className="text-sm font-black text-white tracking-[0.2em] uppercase">Fusion Master Pro <span className="ml-2 text-blue-500 font-mono text-[10px]">LATEST</span></h1>
-                      <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest flex items-center gap-2">
+                      <h1 className="text-lg font-black text-white tracking-[0.2em] uppercase">Fusion Master Pro <span className="ml-2 text-blue-500 font-mono text-sm">LATEST</span></h1>
+                      <p className="text-sm text-gray-600 font-bold uppercase tracking-widest flex items-center gap-2">
                         <Activity size={10} className="text-blue-500/50" /> Focus Mode Engine
                       </p>
                     </div>
@@ -629,21 +629,21 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/5">
                       <Terminal size={12} className="text-blue-500" />
-                      <span className="text-[10px] font-mono text-gray-500 uppercase tracking-tighter">Session: Active</span>
+                      <span className="text-sm font-mono text-gray-500 uppercase tracking-tighter">Session: Active</span>
                     </div>
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-xl border border-white/5">
                       <Cpu size={12} className="text-blue-500" />
-                      <span className="text-[10px] font-mono text-gray-500 uppercase tracking-tighter">Kern: AI_v3</span>
+                      <span className="text-sm font-mono text-gray-500 uppercase tracking-tighter">Kern: AI_v3</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <div className="flex bg-white/2 p-1 rounded-2xl border border-white/5">
-                    <button className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
+                    <button className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black uppercase tracking-widest flex items-center gap-2 transition-all">
                       <Monitor size={14} /> Full Studio
                     </button>
-                    <button className="px-5 py-2.5 text-gray-500 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all">
+                    <button className="px-5 py-2.5 text-gray-500 hover:text-white rounded-xl text-sm font-black uppercase tracking-widest flex items-center gap-2 transition-all">
                       <Grid size={14} /> Layout Grid
                     </button>
                   </div>
@@ -671,10 +671,10 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                       {mode !== 'Mode C' && (
                         <div className="space-y-6 group">
                            <div className="flex items-center justify-between px-2">
-                             <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                             <span className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                                <Zap size={10} className="text-blue-500" /> Product Origin
                              </span>
-                             <span className="text-[9px] font-mono text-gray-700 tracking-tighter">SRC_7392_MASTER</span>
+                             <span className="text-sm font-mono text-gray-700 tracking-tighter">SRC_7392_MASTER</span>
                            </div>
                            <div 
                              onDragOver={(e) => handleDragOver(e, 'productMaster')}
@@ -700,7 +700,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                                    <div className="w-24 h-24 bg-white/2 rounded-[32px] flex items-center justify-center border border-white/5 group-hover:border-blue-500/30 transition-all">
                                      <Upload size={40} className="text-gray-700 group-hover:text-blue-500" />
                                    </div>
-                                   <span className="text-[12px] font-black text-gray-700 uppercase tracking-[0.3em] group-hover:text-blue-500 transition-colors text-center">Deploy<br/>Master Asset</span>
+                                   <span className="text-base font-black text-gray-700 uppercase tracking-[0.3em] group-hover:text-blue-500 transition-colors text-center">Deploy<br/>Master Asset</span>
                                  </div>
                                )}
                              </div>
@@ -710,10 +710,10 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
 
                       <div className="space-y-6 group">
                          <div className="flex items-center justify-between px-2">
-                           <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                           <span className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                              <Zap size={10} className="text-blue-500" /> {mode === 'Mode C' ? 'Reverse Target' : 'Visual Context'}
                            </span>
-                           <span className="text-[9px] font-mono text-gray-700 tracking-tighter">REF_1029_STUDIO</span>
+                           <span className="text-sm font-mono text-gray-700 tracking-tighter">REF_1029_STUDIO</span>
                          </div>
                          <div 
                            onDragOver={(e) => handleDragOver(e, 'sceneReference')}
@@ -739,7 +739,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                                    <div className="w-24 h-24 bg-white/2 rounded-[32px] flex items-center justify-center border border-white/5 group-hover:border-blue-500/30 transition-all">
                                      <Upload size={40} className="text-gray-700 group-hover:text-blue-500" />
                                    </div>
-                                   <span className="text-[12px] font-black text-gray-700 uppercase tracking-[0.3em] group-hover:text-blue-500 transition-colors text-center">Deploy<br/>Reference Asset</span>
+                                   <span className="text-base font-black text-gray-700 uppercase tracking-[0.3em] group-hover:text-blue-500 transition-colors text-center">Deploy<br/>Reference Asset</span>
                                  </div>
                                )}
                             </div>
@@ -755,7 +755,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                         <div>
                           <div className="flex items-center gap-3 mb-8">
                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(37,99,235,0.8)]" />
-                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em]">Engine Directives</h3>
+                             <h3 className="text-sm font-black text-gray-400 uppercase tracking-[0.4em]">Engine Directives</h3>
                           </div>
                           <ControlPanel inFullscreen={true} />
                         </div>
@@ -763,7 +763,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                     </div>
                     {/* Fullscreen Tool Access Toggle */}
                     <div className="p-8 border-t border-white/5 bg-[#080808]">
-                       <button onClick={() => setShowTools(!showTools)} className="w-full py-5 bg-white/2 hover:bg-blue-600/10 rounded-[24px] border border-white/5 hover:border-blue-500/30 text-[10px] font-black text-gray-500 hover:text-blue-400 uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4">
+                       <button onClick={() => setShowTools(!showTools)} className="w-full py-5 bg-white/2 hover:bg-blue-600/10 rounded-[24px] border border-white/5 hover:border-blue-500/30 text-sm font-black text-gray-500 hover:text-blue-400 uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4">
                          {showTools ? <Zap size={16} className="text-blue-500" /> : <Settings2 size={16} />}
                          {showTools ? 'Back to Fusion Core' : 'Analyze Base Code'}
                        </button>
@@ -788,8 +788,8 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                                 <Search size={20} className="text-blue-500" />
                              </div>
                              <div>
-                                <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Logic Sandbox</h3>
-                                <p className="text-[8px] text-gray-600 font-bold uppercase tracking-tighter font-mono">Stand-alone Env</p>
+                                <h3 className="text-sm font-black text-white uppercase tracking-widest">Logic Sandbox</h3>
+                                <p className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter font-mono">Stand-alone Env</p>
                              </div>
                           </div>
                           <button onClick={() => setShowTools(false)} className="w-10 h-10 flex items-center justify-center hover:bg-white/5 rounded-full text-gray-500 transition-all"><X size={20} /></button>

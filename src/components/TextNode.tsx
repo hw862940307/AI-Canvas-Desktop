@@ -13,9 +13,9 @@ export const TextNode = ({ id, data }: { id: string; data: any }) => {
   };
   const getFontSizeClass = () => {
     if (typeof settings.inputFontSize === 'number') return '';
-    if (settings.inputFontSize === 'small') return 'text-[10px]';
-    if (settings.inputFontSize === 'large') return 'text-sm';
-    return 'text-xs';
+    if (settings.inputFontSize === 'small') return 'text-base';
+    if (settings.inputFontSize === 'large') return 'text-lg';
+    return 'text-lg';
   };
 
   return (
@@ -25,7 +25,7 @@ export const TextNode = ({ id, data }: { id: string; data: any }) => {
       <div className={`flex items-center justify-between px-4 py-3 border-b border-[var(--border)] transition-all react-flow__node-draghandle ${
         settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-black/40'
       }`}>
-        <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+        <div className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
           <Type size={16} className="text-emerald-400" />
           <span>文本节点</span>
         </div>
@@ -46,8 +46,8 @@ export const TextNode = ({ id, data }: { id: string; data: any }) => {
           onChange={(e) => updateNodeData(id, { text: e.target.value })}
         />
         <div className="mt-2 flex justify-between items-center px-1">
-          <span className="text-[10px] text-[var(--text-secondary)] uppercase font-bold tracking-widest">Type Input</span>
-          <span className="text-[10px] text-[var(--text-secondary)]">{(data.text || '').length} 字符</span>
+          <span className="text-sm text-[var(--text-secondary)] uppercase font-bold tracking-widest">Type Input</span>
+          <span className="text-sm text-[var(--text-secondary)]">{(data.text || '').length} 字符</span>
         </div>
       </div>
 

@@ -40,7 +40,7 @@ export const PromptEngineNode = ({ id, data }: { id: string; data: any }) => {
       <div className={`flex items-center justify-between px-4 py-3 border-b border-[var(--border)] transition-all react-flow__node-draghandle ${
         settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-purple-500/10'
       }`}>
-        <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
+        <div className="flex items-center gap-2 text-base font-bold text-purple-400 uppercase tracking-wider">
           <Cpu size={14} />
           <span>提示词引擎</span>
         </div>
@@ -54,13 +54,13 @@ export const PromptEngineNode = ({ id, data }: { id: string; data: any }) => {
 
       <div className="p-4 flex flex-col gap-4 nodrag">
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] uppercase font-bold text-[var(--text-secondary)] tracking-widest">框架 / 预设</label>
+          <label className="text-sm uppercase font-bold text-[var(--text-secondary)] tracking-widest">框架 / 预设</label>
           <div className="grid grid-cols-1 gap-1.5">
             {PRESETS.map((preset) => (
               <button
                 key={preset.id}
                 onClick={() => updateNodeData(id, { preset: preset.id })}
-                className={`text-left px-3 py-2 rounded-xl text-[11px] transition-all ${
+                className={`text-left px-3 py-2 rounded-xl text-base transition-all ${
                   data.preset === preset.id 
                     ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' 
                     : 'bg-black/40 text-[var(--text-secondary)] hover:bg-black/60 border border-transparent hover:border-purple-500/30'
@@ -76,12 +76,12 @@ export const PromptEngineNode = ({ id, data }: { id: string; data: any }) => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-[10px] uppercase font-bold text-[var(--text-secondary)] tracking-widest">引擎输出结果</label>
-          <div className="bg-black/40 border border-[var(--border)] rounded-xl p-3 text-[11px] text-[var(--text-primary)] min-h-[100px] max-h-[180px] overflow-y-auto whitespace-pre-wrap font-mono custom-scrollbar">
+          <label className="text-sm uppercase font-bold text-[var(--text-secondary)] tracking-widest">引擎输出结果</label>
+          <div className="bg-black/40 border border-[var(--border)] rounded-xl p-3 text-base text-[var(--text-primary)] min-h-[100px] max-h-[180px] overflow-y-auto whitespace-pre-wrap font-mono custom-scrollbar">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-2 text-[var(--text-secondary)] italic">
                 <Loader2 size={20} className="animate-spin text-purple-500" />
-                <span className="text-[10px] uppercase tracking-widest font-bold">处理中...</span>
+                <span className="text-sm uppercase tracking-widest font-bold">处理中...</span>
               </div>
             ) : data.output || '结果将在此显示...'}
           </div>

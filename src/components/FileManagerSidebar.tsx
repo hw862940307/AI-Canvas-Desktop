@@ -149,7 +149,7 @@ export const FileManagerSidebar = () => {
         <div className="flex gap-2 p-1 bg-black/20 rounded-xl">
           <button 
             onClick={() => setActiveTab('history')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex-1 py-2 text-base font-bold rounded-lg transition-all ${
               activeTab === 'history' ? 'bg-[var(--bg-tertiary)] text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -157,7 +157,7 @@ export const FileManagerSidebar = () => {
           </button>
           <button 
             onClick={() => setActiveTab('materials')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex-1 py-2 text-base font-bold rounded-lg transition-all ${
               activeTab === 'materials' ? 'bg-[var(--bg-tertiary)] text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -165,7 +165,7 @@ export const FileManagerSidebar = () => {
           </button>
           <button 
             onClick={() => setActiveTab('output')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex-1 py-2 text-base font-bold rounded-lg transition-all ${
               activeTab === 'output' ? 'bg-[var(--bg-tertiary)] text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -224,7 +224,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
   return (
     <div className="flex-1 flex flex-col bg-[var(--bg-primary)]/50">
       <div className="p-6 pb-0 space-y-4">
-        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none">
+        <p className="text-sm text-gray-500 font-bold uppercase tracking-widest leading-none">
           当前项目生成媒体历史
         </p>
         
@@ -233,7 +233,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
             <button
               key={cat}
               onClick={() => setCategory(cat)}
-              className={`px-4 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${
+              className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-all border ${
                 category === cat 
                   ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
                   : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
@@ -251,7 +251,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索历史文件..."
-            className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50"
+            className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50"
           />
         </div>
       </div>
@@ -260,7 +260,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
         {files.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50 select-none">
             <ImageIcon size={48} strokeWidth={1} />
-            <p className="text-[10px] font-bold mt-4 tracking-widest uppercase">暂无生成媒体历史</p>
+            <p className="text-sm font-bold mt-4 tracking-widest uppercase">暂无生成媒体历史</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
@@ -293,7 +293,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
                   </button>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-                  <p className="text-[10px] text-white truncate px-1 opacity-80">{file.name}</p>
+                  <p className="text-sm text-white truncate px-1 opacity-80">{file.name}</p>
                 </div>
               </div>
             ))}
@@ -394,14 +394,14 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                   <ArrowLeft size={16} />
                 </button>
               )}
-              <h3 className="text-sm font-bold text-gray-300">
+              <h3 className="text-lg font-bold text-gray-300">
                 {selectedFolderId ? selectedFolder?.name : '素材库'}
               </h3>
             </div>
             <div className="flex items-center gap-2">
                <button className="flex items-center gap-1.5 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">
                   <Plus size={14} className="text-gray-400" />
-                  <span className="text-[10px] font-bold text-gray-400">AI 角色</span>
+                  <span className="text-sm font-bold text-gray-400">AI 角色</span>
                </button>
                <button 
                  onClick={handleAddLocalPath}
@@ -416,13 +416,13 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
           {selectedFolderId && (
            <div className="flex flex-col gap-3 p-4 bg-black/30 rounded-2xl border border-white/5 shadow-inner">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
                   <div className="w-1 h-1 bg-blue-500 rounded-full" />
                   物理路径
                 </span>
                 <button 
                   onClick={handleToggleEdit}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  className={`px-2 py-0.5 rounded text-sm font-bold transition-all ${
                     isEditingPath 
                       ? 'bg-blue-600 text-white hover:bg-blue-500' 
                       : 'text-blue-500 hover:bg-blue-500/10'
@@ -439,13 +439,13 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                     value={tempPath}
                     onChange={(e) => setTempPath(e.target.value)}
                     placeholder="输入文件夹路径..."
-                    className="w-full bg-black/40 border border-blue-500/50 rounded-xl px-3 py-2 text-[11px] text-white focus:outline-none focus:ring-1 ring-blue-500/30 transition-all font-mono"
+                    className="w-full bg-black/40 border border-blue-500/50 rounded-xl px-3 py-2 text-base text-white focus:outline-none focus:ring-1 ring-blue-500/30 transition-all font-mono"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleToggleEdit()}
                   />
                 </div>
               ) : (
-                <p className="text-[11px] font-mono text-gray-400 break-all select-all leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5">
+                <p className="text-base font-mono text-gray-400 break-all select-all leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5">
                   {selectedFolder?.path || '未设置路径'}
                 </p>
               )}
@@ -454,7 +454,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
 
          {!selectedFolderId && (
            <div className="flex gap-2">
-              <button className="flex-1 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-white shadow-sm">
+              <button className="flex-1 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm font-bold text-white shadow-sm">
                 个人素材
               </button>
            </div>
@@ -467,7 +467,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索素材..."
-              className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50"
+              className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50"
             />
          </div>
       </div>
@@ -476,7 +476,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
         {!selectedFolderId ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">文件夹</span>
+              <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">文件夹</span>
               <button 
                 onClick={() => addFolder(prompt('文件夹名称:') || '新文件夹')}
                 className="text-gray-500 hover:text-blue-500 transition-colors"
@@ -495,8 +495,8 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                     <Folder size={20} className="text-blue-500/60" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-gray-200 truncate">{folder.name}</p>
-                    <p className="text-[10px] text-gray-500 truncate mt-0.5 font-mono opacity-60 underline underline-offset-2">{folder.path}</p>
+                    <p className="text-base font-bold text-gray-200 truncate">{folder.name}</p>
+                    <p className="text-sm text-gray-500 truncate mt-0.5 font-mono opacity-60 underline underline-offset-2">{folder.path}</p>
                   </div>
                   <button 
                     onClick={(e) => { e.stopPropagation(); removeFolder(folder.id); }}
@@ -511,18 +511,18 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
         ) : (
           <div className="space-y-4">
              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">预览资产 ({filteredMaterials.length})</span>
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">预览资产 ({filteredMaterials.length})</span>
                 <div className="flex items-center gap-2">
-                  <button className="text-[10px] font-bold text-gray-500 hover:text-white uppercase transition-colors">尺寸</button>
+                  <button className="text-sm font-bold text-gray-500 hover:text-white uppercase transition-colors">尺寸</button>
                   <div className="w-px h-3 bg-white/10" />
-                  <button className="text-[10px] font-bold text-gray-500 hover:text-white uppercase transition-colors">顺序</button>
+                  <button className="text-sm font-bold text-gray-500 hover:text-white uppercase transition-colors">顺序</button>
                 </div>
              </div>
              {filteredMaterials.length === 0 ? (
                <div className="h-64 flex flex-col items-center justify-center bg-black/10 border border-dashed border-white/5 rounded-2xl text-gray-600 opacity-50 select-none px-6 text-center">
                   <FolderOpen size={48} strokeWidth={1} className="mb-4" />
-                  <p className="text-[10px] font-bold tracking-widest uppercase">物理目录扫描中...</p>
-                  <p className="text-[9px] mt-2 leading-relaxed">请确保本地后端服务已启动并连接至此路径以同步预览数据。</p>
+                  <p className="text-sm font-bold tracking-widest uppercase">物理目录扫描中...</p>
+                  <p className="text-sm mt-2 leading-relaxed">请确保本地后端服务已启动并连接至此路径以同步预览数据。</p>
                </div>
              ) : (
                <div className="grid grid-cols-2 gap-4 pb-12">
@@ -549,7 +549,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                         </button>
                       </div>
                       <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 to-transparent">
-                        <p className="text-[9px] text-white/70 truncate font-mono">{file.name}</p>
+                        <p className="text-sm text-white/70 truncate font-mono">{file.name}</p>
                       </div>
                     </div>
                   ))}
@@ -564,7 +564,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
           <button 
             onClick={handleSync}
             disabled={isSyncing}
-            className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white rounded-xl text-[10px] font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+            className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
           >
             {isSyncing ? (
               <>
@@ -610,11 +610,11 @@ const OutputView = ({ onAdd, onDragStart }: any) => {
   return (
     <div className="flex-1 flex flex-col bg-[var(--bg-primary)]/50 overflow-hidden">
       <div className="p-6 pb-4 border-b border-[var(--border)] space-y-4">
-        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none">
+        <p className="text-sm text-gray-500 font-bold uppercase tracking-widest leading-none">
           浏览 output 输出目录
         </p>
         <div className="flex items-center gap-2">
-          <button className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-gray-400">
+          <button className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm font-bold text-gray-400">
             output
           </button>
         </div>
@@ -627,7 +627,7 @@ const OutputView = ({ onAdd, onDragStart }: any) => {
               <div className="p-3 bg-blue-500/10 rounded-xl group-hover:scale-110 transition-transform">
                 <Folder size={24} className="text-blue-500" />
               </div>
-              <span className="text-[10px] font-bold text-gray-400 text-center line-clamp-1">{folder.name}</span>
+              <span className="text-sm font-bold text-gray-400 text-center line-clamp-1">{folder.name}</span>
             </div>
           ))}
           {files.map(file => (

@@ -24,6 +24,7 @@ import { useStore } from '../store/useStore';
 import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnnotationModal } from './AnnotationModal';
+import { downloadImage } from '../lib/download';
 
 const CROP_ASPECTS = [
   { label: '自由比例', value: undefined },
@@ -61,6 +62,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
   // Resize when original dimensions are provided (e.g. from global paste)
   useEffect(() => {
     if (data.originalWidth && data.originalHeight && data.imageUrl) {
+      console.log('ImageNode: Resizing due to original dimensions');
       const maxWidth = 800; // Increased max width for better "original" feel
       const ratio = data.originalWidth / data.originalHeight;
       const width = Math.min(data.originalWidth, maxWidth);
@@ -387,7 +389,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
             <ToolbarIconButton icon={<LayoutGrid size={16} />} onClick={() => setIsGridCropping(true)} title="宫格裁剪" />
             <ToolbarIconButton icon={<CropIcon size={16} />} onClick={() => { setIsCropping(true); setCropMode('rect'); }} title="裁剪" />
             <ToolbarIconButton icon={<Maximize2 size={16} />} onClick={() => setIsFullScreen(true)} title="全屏显示" />
-            <ToolbarIconButton icon={<Download size={16} />} title="下载" />
+            <ToolbarIconButton icon={<Download size={16} />} onClick={() => data.imageUrl && downloadImage(data.imageUrl, `image-\${id}.png`)} title="下载" />
           </motion.div>
         )}
       </AnimatePresence>
@@ -399,7 +401,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
           <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
             <ImageIcon size={18} />
           </div>
-          <span className="text-xs font-bold tracking-wider text-[var(--text-primary)]">图像节点</span>
+          <span className="text-base font-bold tracking-wider text-[var(--text-primary)]">图像节点</span>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -454,8 +456,8 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
               <ImageIcon size={32} className="text-gray-600" />
             </div>
             <div className="flex flex-col items-center">
-              <span className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">添加上传图片</span>
-              <span className="text-[10px] text-gray-600 mt-1">PNG, JPG, WEBP</span>
+              <span className="text-base font-bold text-gray-300 uppercase tracking-widest">添加上传图片</span>
+              <span className="text-sm text-gray-600 mt-1">PNG, JPG, WEBP</span>
             </div>
 
             {/* Drop Overlay */}
@@ -511,8 +513,8 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                         <LayoutGrid size={20} />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-white tracking-widest uppercase">宫格裁剪</h3>
-                        <p className="text-[10px] text-gray-500 mt-0.5">将图像均匀切割为多个子节点</p>
+                        <h3 className="text-lg font-bold text-white tracking-widest uppercase">宫格裁剪</h3>
+                        <p className="text-sm text-gray-500 mt-0.5">将图像均匀切割为多个子节点</p>
                       </div>
                     </div>
                     <button 
@@ -533,8 +535,8 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                         <div className="flex items-center gap-3 relative z-10">
                           <LayoutGrid size={22} className="text-gray-700 group-hover:text-blue-400 transition-colors" />
                           <div className="flex flex-col items-start">
-                            <span className="text-sm font-bold">{count} 宫格</span>
-                            <span className="text-[10px] text-gray-600 font-mono tracking-tighter">{Math.sqrt(count)}×{Math.sqrt(count)} 网格</span>
+                            <span className="text-lg font-bold">{count} 宫格</span>
+                            <span className="text-sm text-gray-600 font-mono tracking-tighter">{Math.sqrt(count)}×{Math.sqrt(count)} 网格</span>
                           </div>
                         </div>
                         <div className="p-1.5 bg-blue-600/10 text-blue-500 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all z-10">
@@ -548,7 +550,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                   <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
                     <button 
                       onClick={() => setIsGridCropping(false)}
-                      className="px-6 py-2.5 text-xs font-bold text-gray-500 hover:text-white transition-all"
+                      className="px-6 py-2.5 text-base font-bold text-gray-500 hover:text-white transition-all"
                     >
                        取消
                     </button>
@@ -573,14 +575,14 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                     <div className="flex p-1 bg-white/5 rounded-2xl border border-white/10">
                       <button 
                         onClick={() => { setCropMode('rect'); setPathPoints([]); }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${cropMode === 'rect' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${cropMode === 'rect' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
                       >
                         <CropIcon size={14} />
                         <span>矩形裁切</span>
                       </button>
                       <button 
                         onClick={() => { setCropMode('path'); setCrop(undefined); setPathPoints([]); }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${cropMode === 'path' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${cropMode === 'path' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
                       >
                         <Pen size={14} />
                         <span>套索工具</span>
@@ -599,7 +601,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                          className="w-32 accent-blue-600"
                        />
                        <ZoomIn size={14} className="text-gray-500" />
-                       <span className="text-[10px] font-mono text-blue-500 font-bold">{Math.round(zoom * 100)}%</span>
+                       <span className="text-sm font-mono text-blue-500 font-bold">{Math.round(zoom * 100)}%</span>
                     </div>
                   </div>
                   <button 
@@ -663,7 +665,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                           ))}
                         </svg>
                         {pathPoints.length > 0 && (
-                          <div className="absolute top-4 left-4 bg-blue-600 px-3 py-1.5 rounded-xl text-[10px] font-bold text-white shadow-xl pointer-events-none">
+                          <div className="absolute top-4 left-4 bg-blue-600 px-3 py-1.5 rounded-xl text-sm font-bold text-white shadow-xl pointer-events-none">
                             按住并拖动进行手动绘制 ({pathPoints.length})
                           </div>
                         )}
@@ -703,7 +705,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                             setAspect(opt.value as any);
                           }
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${aspect === (opt.value === 'original' ? aspect : opt.value) ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${aspect === (opt.value === 'original' ? aspect : opt.value) ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
                       >
                         {opt.label}
                       </button>
@@ -711,7 +713,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                     {cropMode === 'path' && (
                       <button 
                         onClick={() => setPathPoints([])}
-                        className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white rounded-xl text-[10px] font-bold transition-all border border-white/5"
+                        className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white rounded-xl text-sm font-bold transition-all border border-white/5"
                       >
                         重置点
                       </button>
@@ -721,7 +723,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                   <div className="flex items-center gap-4">
                     <button 
                       onClick={() => setIsCropping(false)} 
-                      className="px-6 py-2 text-xs font-bold text-gray-500 hover:text-white transition-all"
+                      className="px-6 py-2 text-base font-bold text-gray-500 hover:text-white transition-all"
                     >
                       取消
                     </button>
@@ -759,7 +761,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                   className="relative max-w-full max-h-full flex flex-col items-center gap-4"
                 >
                   <div className="absolute -top-16 right-0 flex items-center gap-4">
-                    <div className="px-4 py-2 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl text-[10px] font-bold text-white/50 tracking-widest uppercase">全屏预览</div>
+                    <div className="px-4 py-2 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl text-sm font-bold text-white/50 tracking-widest uppercase">全屏预览</div>
                     <button onClick={() => setIsFullScreen(false)} className="w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-red-500 text-white rounded-full transition-all border border-white/10 shadow-2xl">
                       <X size={20} />
                     </button>
@@ -768,9 +770,9 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                   <div className="flex items-center gap-3 px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[24px]">
                      <div className="flex items-center gap-2 pr-4 border-r border-white/10">
                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                       <span className="text-[10px] font-bold text-white/40 tracking-wider">IMAGE NODE</span>
+                       <span className="text-sm font-bold text-white/40 tracking-wider">IMAGE NODE</span>
                      </div>
-                     <span className="text-[10px] font-mono text-white/60">
+                     <span className="text-sm font-mono text-white/60">
                        {dimensions ? `${dimensions.width} × ${dimensions.height}` : '...'} PX
                      </span>
                   </div>
