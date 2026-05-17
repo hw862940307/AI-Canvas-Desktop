@@ -272,7 +272,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
                 className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer"
               >
                 {file.type === 'image' ? (
-                  <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+                  <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-500">
                     {file.type === 'video' ? <Video size={24} /> : <Music size={24} />}
@@ -533,7 +533,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                       onDragStart={(e) => onDragStart(e, file)}
                       className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer shadow-lg active:scale-95"
                     >
-                      <img src={file.url} alt={file.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                      <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <button 
                           onClick={(e) => { e.stopPropagation(); onAdd(file); }}
@@ -637,7 +637,7 @@ const OutputView = ({ onAdd, onDragStart }: any) => {
               onDragStart={(e) => onDragStart(e, file)}
               className="group relative aspect-[3/4] bg-black/20 rounded-2xl overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer"
             >
-              <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
+              <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                  <button 
                     onClick={(e) => { e.stopPropagation(); onAdd(file); }}

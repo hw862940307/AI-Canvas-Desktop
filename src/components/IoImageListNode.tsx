@@ -410,7 +410,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                           : `flex items-center gap-4 p-3 rounded-xl ${selectedIndices.includes(i) ? 'border-purple-500 bg-purple-500/10' : 'border-transparent bg-white/2 hover:bg-white/5'}`
                        }`}
                      >
-                        <img src={img.url} className={`object-cover transition-transform group-hover:scale-110 ${viewMode === 'grid' ? 'w-full h-full' : 'w-16 h-16 rounded-lg'}`} alt="" />
+                        <img draggable={false} src={img.url} className={`object-cover transition-transform group-hover:scale-110 ${viewMode === 'grid' ? 'w-full h-full' : 'w-16 h-16 rounded-lg'}`} alt="" />
                         {viewMode === 'grid' ? (
                           <div className={`absolute top-3 left-3 ${selectedIndices.includes(i) ? 'text-purple-500' : 'text-white/20'}`}>
                              {selectedIndices.includes(i) ? <CheckCircle2 size={18} fill="white" className="text-purple-600" /> : <Circle size={18} />}
@@ -448,7 +448,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                      className="group relative aspect-square bg-black/40 rounded-[20px] border border-white/5 hover:border-purple-500/50 transition-all cursor-pointer overflow-hidden shadow-lg"
                    >
                      {item.type === 'image' ? (
-                       <img src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                       <img draggable={false} src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                      ) : (
                        <div className="w-full h-full flex items-center justify-center bg-purple-600/10">
                           <History size={32} className="text-purple-600 opacity-40" />
@@ -518,7 +518,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                            onDragStart={(e: any) => handleItemDragStart(e, item.url)}
                            className="group relative aspect-square bg-black/40 rounded-[20px] border border-white/5 hover:border-purple-500/50 transition-all cursor-pointer overflow-hidden shadow-lg"
                          >
-                           <img src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                           <img draggable={false} src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
                               <button 
                                 onClick={() => handleAddToCanvas(item.url)}
@@ -615,8 +615,8 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
     <>
       <NodeResizer minWidth={300} minHeight={400} isVisible={selected} lineClassName="border-purple-500/50" handleClassName="h-3 w-3 bg-white border-2 border-purple-500 rounded-sm" />
       <div className={`flex flex-col w-full h-full bg-[#0c1016] rounded-3xl border-2 border-white/10 overflow-hidden shadow-2xl transition-all ${selected ? 'border-purple-500 ring-8 ring-purple-500/10' : ''}`}>
-        <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-purple-500" />
-        <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-purple-500" />
+        <Handle type="target" position={Position.Left} className="!bg-purple-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+        <Handle type="source" position={Position.Right} className="!bg-purple-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
 
         {ListContent(false)}
       </div>

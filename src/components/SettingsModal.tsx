@@ -20,10 +20,12 @@ import {
   MousePointer,
   Compass,
   Zap,
-  AlignJustify
+  AlignJustify,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, AppSettings, MouseSize, AppTheme, BarTexture, FontSize, UploadQuality, MultiSelectMode } from '../store/useStore';
+import { generateTextWithFallback } from '../lib/gemini';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -99,7 +101,8 @@ export const SettingsModal = ({ onClose }: SettingsModalProps) => {
             {activeTab === 'general' && <GeneralSettings settings={settings} update={updateSettings} />}
             {activeTab === 'canvas' && <CanvasSettings settings={settings} update={updateSettings} />}
             {activeTab === 'file' && <FileSettings settings={settings} update={updateSettings} />}
-            {['node', 'api', 'subscription', 'keyboard'].includes(activeTab) && (
+            {activeTab === 'api' && <ApiSettingsComponent settings={settings} update={updateSettings} onClose={onClose} />}
+            {['node', 'subscription', 'keyboard'].includes(activeTab) && (
               <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
                 <Zap size={48} className="opacity-20" />
                 <p>该功能正在开发中...</p>
@@ -196,19 +199,16 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
         </div>
       </SettingRow>
 
-      <SettingRow title="输入字体大小" desc="调整节点提示词输入框的字体大小">
-        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
-          {(['small', 'medium', 'large'] as FontSize[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => update({ inputFontSize: f })}
-              className={`flex-1 px-6 py-2 rounded-lg text-sm transition-all ${
-                settings.inputFontSize === f ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {f === 'small' ? '小' : f === 'medium' ? '中' : '大'}
-            </button>
-          ))}
+      <SettingRow title="输入字体大小 (px)" desc="手动设置节点提示词输入框的字体大小">
+        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+          <input
+            type="number"
+            min="10"
+            max="100"
+            value={typeof settings.inputFontSize === 'number' ? settings.inputFontSize : (settings.inputFontSize === 'small' ? 10 : settings.inputFontSize === 'large' ? 16 : 14)}
+            onChange={(e) => update({ inputFontSize: parseInt(e.target.value) || 14 })}
+            className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none px-4 py-2 text-center"
+          />
         </div>
       </SettingRow>
 
@@ -412,6 +412,207 @@ const PathInput = ({ label, desc, value, onChange }: { label: string; desc: stri
     </div>
   </div>
 );
+
+const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSettings, update: (s: Partial<AppSettings>) => void, onClose: () => void }) => {
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const api = settings.apiSettings;
+
+  const updateApi = (newApi: Partial<typeof api>) => {
+    update({ apiSettings: { ...api, ...newApi } });
+  };
+
+  const testConnection = async () => {
+    setTestStatus('testing');
+    try {
+      // Simulate API test or implement a real one if needed
+      const result = await generateTextWithFallback("Hello, testing connection. Reply with exactly 'OK'.");
+      if (!result || typeof result !== 'string' || result.trim() === '') {
+        throw new Error("Received empty response from the language model.");
+      }
+      setTestStatus('success');
+      setTimeout(() => setTestStatus('idle'), 3000);
+    } catch (e: any) {
+      console.error("Test connection failed:", e);
+      setTestStatus('error');
+      // Set to idle after error but maybe show it somehow. For now just reset after 3s
+      setTimeout(() => setTestStatus('idle'), 3000);
+      alert("API Connection Failed: " + (e.message || String(e)));
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-8 max-w-2xl mx-auto">
+      <div className="flex items-center justify-center p-1 bg-white/5 rounded-2xl border border-white/10 w-fit mx-auto mb-4">
+        <button
+          onClick={() => updateApi({ isCustom: false })}
+          className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            !api.isCustom ? 'bg-white text-black shadow-xl' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          内置 (Core)
+        </button>
+        <button
+          onClick={() => updateApi({ isCustom: true })}
+          className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            api.isCustom ? 'bg-white text-black shadow-xl' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          自定义 (Custom)
+        </button>
+      </div>
+
+      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Engine</label>
+          <div className="relative group">
+            <select
+              value={api.engine}
+              onChange={(e) => updateApi({ engine: e.target.value as any })}
+              disabled={!api.isCustom}
+              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold disabled:opacity-50"
+            >
+              <option value="gemini">Gemini API</option>
+              <option value="openai">OpenAI API</option>
+              <option value="claude">Claude API</option>
+              <option value="doubao">豆包 (Doubao)</option>
+              <option value="qianwen">千问 (Qianwen)</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="custom">Custom Engine</option>
+            </select>
+            <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+              <Link size={14} />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Base URL</label>
+          <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+            <input
+              type="text"
+              value={api.baseUrl}
+              onChange={(e) => updateApi({ baseUrl: e.target.value })}
+              disabled={!api.isCustom}
+              placeholder="https://api.example.com"
+              className="flex-1 bg-transparent text-sm text-white font-mono outline-none disabled:opacity-50"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Key</label>
+            <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+              <input
+                type="password"
+                value={api.apiKey}
+                onChange={(e) => updateApi({ apiKey: e.target.value })}
+                placeholder="........"
+                className="flex-1 bg-transparent text-sm text-white outline-none"
+              />
+              <Key size={14} className="text-gray-500" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Model ID</label>
+            <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+              <input
+                type="text"
+                value={api.modelId}
+                onChange={(e) => updateApi({ modelId: e.target.value })}
+                placeholder="gemini-1.5-pro"
+                className="flex-1 bg-transparent text-sm text-white outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
+        <h3 className="text-sm font-bold text-white mb-4">Picture Generation Settings</h3>
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Image Engine</label>
+          <div className="relative group">
+            <select
+              value={api.imageEngine}
+              onChange={(e) => updateApi({ imageEngine: e.target.value as any })}
+              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
+            >
+              <option value="online">Online (在线文生图)</option>
+              <option value="comfyui">ComfyUI (本地生图)</option>
+            </select>
+          </div>
+        </div>
+
+        {api.imageEngine === 'online' && (
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Image Model</label>
+            <div className="relative group">
+              <select
+                value={api.imageModel}
+                onChange={(e) => updateApi({ imageModel: e.target.value as any })}
+                className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
+              >
+                <option value="Nano Banana Pro">Nano Banana Pro</option>
+                <option value="Nano Banana 2">Nano Banana 2</option>
+                <option value="chatgptimage2">chatgptimage2</option>
+                <option value="SDXL">SDXL</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {api.imageEngine === 'comfyui' && (
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-4">ComfyUI URL</label>
+            <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+              <input
+                type="text"
+                value={api.comfyUrl}
+                onChange={(e) => updateApi({ comfyUrl: e.target.value })}
+                placeholder="http://127.0.0.1:8188"
+                className="flex-1 bg-transparent text-sm text-white font-mono outline-none"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
+        <button
+          onClick={testConnection}
+          disabled={testStatus === 'testing'}
+          className={`w-full py-6 rounded-3xl border transition-all flex items-center justify-center gap-3 font-bold text-sm tracking-widest uppercase ${
+            testStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500' :
+            testStatus === 'error' ? 'bg-red-500/10 border-red-500/40 text-red-500' :
+            'bg-white/[0.02] border-white/5 text-gray-500 hover:bg-white/[0.05] hover:text-white'
+          }`}
+        >
+          {testStatus === 'testing' ? (
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+              <Zap size={18} />
+            </motion.div>
+          ) : testStatus === 'success' ? (
+            <Check size={18} />
+          ) : testStatus === 'error' ? (
+            <X size={18} />
+          ) : <Zap size={18} />}
+          {testStatus === 'testing' ? 'Testing Connection...' : 
+           testStatus === 'success' ? 'Connection Successful' :
+           testStatus === 'error' ? 'Connection Failed' : 'Click to Test API Connection'}
+        </button>
+      </div>
+
+      <button
+        onClick={onClose}
+        className="w-full bg-[#f94e10] hover:bg-[#ff5f20] text-white py-6 rounded-[24px] font-black text-lg transition-all shadow-xl shadow-[#f94e10]/20 active:scale-[0.98]"
+      >
+        Save Settings
+      </button>
+    </div>
+  );
+};
 
 const SettingRow = ({ title, desc, children, shortcut }: { title: string; desc: string; children: React.ReactNode; shortcut?: string }) => (
   <div className="flex items-center justify-between">

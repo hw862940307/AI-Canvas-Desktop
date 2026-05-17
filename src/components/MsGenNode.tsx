@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps } from '@xyflow/react';
 import { CloudLightning, Zap, Loader2, Maximize2, Settings2, Sparkles, Layers } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
+import { generateTextWithFallback } from '../lib/gemini';
 
 const MS_MODELS = [
   { id: 'zimage', label: 'ZImage Turbo', desc: 'Real-time 1step SDXL' },
@@ -20,26 +21,36 @@ export function MsGenNode({ id, data, selected }: NodeProps) {
     return getIncomingData(id).filter(d => d.text || d.prompt || d.outputText).map(d => d.text || d.prompt || d.outputText);
   }, [id, getIncomingData]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (running || !incomingPrompts.length) return;
     setRunning(true);
-    let p = 0;
-    const interval = setInterval(() => {
-      p += Math.random() * 15;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(interval);
+    setProgress(10);
+    
+    try {
+      setProgress(40);
+      const prompt = `[ModelScope ${model} Engine]\nInstruction: Generate a visual intent breakdown and enhanced generation prompt based on the following input.\n\nInput Context: ${incomingPrompts[0]}`;
+      
+      const text = await generateTextWithFallback(prompt);
+      setProgress(85);
+      
+      updateNodeData(id, { output: text, lastResult: text });
+      setProgress(100);
+      setTimeout(() => {
         setRunning(false);
         setProgress(0);
-      }
-      setProgress(p);
-    }, 200);
+      }, 500);
+    } catch (error) {
+      console.error('MsGen failed:', error);
+      updateNodeData(id, { output: '执行失败' });
+      setRunning(false);
+      setProgress(0);
+    }
   };
 
   return (
     <div className={`flex flex-col w-[380px] bg-[#0c1016] rounded-3xl border-2 border-white/10 overflow-hidden shadow-2xl transition-all ${selected ? 'border-yellow-500 ring-8 ring-yellow-500/10 scale-[1.01]' : ''}`}>
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-yellow-500" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-yellow-500" />
+      <Handle type="target" position={Position.Left} className="!bg-yellow-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="source" position={Position.Right} className="!bg-yellow-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
 
       {/* Header */}
       <div className={`p-4 border-b border-white/5 flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle`}>

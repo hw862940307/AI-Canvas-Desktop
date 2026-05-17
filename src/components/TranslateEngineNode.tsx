@@ -2,16 +2,7 @@ import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Languages, Play, Loader2, X, Globe2, Sparkles } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { GoogleGenAI } from '@google/genai';
-
-let ai: any = null;
-try {
-  if (process.env.GEMINI_API_KEY) {
-    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
-} catch (e) {
-  console.error("Failed to initialize GoogleGenAI in TranslateEngineNode:", e);
-}
+import { generateTextWithFallback } from '../lib/gemini';
 
 const LANGUAGES = [
   { id: 'en', name: '英文 - English' },
@@ -37,18 +28,10 @@ export const TranslateEngineNode = ({ id, data }: { id: string; data: any }) => 
 
     setLoading(true);
     try {
-      if (!ai) {
-        updateNodeData(id, { output: 'Gemini API not configured.' });
-        return;
-      }
       const targetLang = LANGUAGES.find(l => l.id === (data.targetLang || 'en'))?.name || 'English';
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Translate the following text into ${targetLang}. Preserve tokens for image generation if present.\n\nText:\n${content || data.input}`,
-      });
-
-      updateNodeData(id, { output: response.text });
+      const text = await generateTextWithFallback(`Translate the following text into ${targetLang}. Preserve tokens for image generation if present.\n\nText:\n${content || data.input}`);
+      updateNodeData(id, { output: text });
     } catch (error) {
       console.error('Translation failed:', error);
       updateNodeData(id, { output: '翻译失败' });
@@ -116,8 +99,8 @@ export const TranslateEngineNode = ({ id, data }: { id: string; data: any }) => 
         </button>
       </div>
 
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-[#0a0a0c]" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-[#0a0a0c]" />
+      <Handle type="target" position={Position.Left} className="!bg-emerald-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="source" position={Position.Right} className="!bg-emerald-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
     </div>
   );
 };

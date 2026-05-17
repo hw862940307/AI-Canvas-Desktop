@@ -6,10 +6,16 @@ import { useStore } from '../store/useStore';
 export const TextNode = ({ id, data }: { id: string; data: any }) => {
   const { updateNodeData, removeNode, settings } = useStore();
 
+  const getFontSizeStyle = () => {
+    return typeof settings.inputFontSize === 'number' 
+      ? { fontSize: `${settings.inputFontSize}px` } 
+      : {};
+  };
   const getFontSizeClass = () => {
+    if (typeof settings.inputFontSize === 'number') return '';
     if (settings.inputFontSize === 'small') return 'text-[10px]';
-    if (settings.inputFontSize === 'large') return 'text-base';
-    return 'text-sm';
+    if (settings.inputFontSize === 'large') return 'text-sm';
+    return 'text-xs';
   };
 
   return (
@@ -33,6 +39,7 @@ export const TextNode = ({ id, data }: { id: string; data: any }) => {
 
       <div className="p-4 nodrag">
         <textarea
+          style={getFontSizeStyle()}
           className={`w-full min-h-[140px] bg-black/40 border border-[var(--border)] rounded-xl p-3 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500/50 transition-all resize-y font-mono placeholder:text-[var(--text-secondary)]/50 ${getFontSizeClass()}`}
           placeholder="在此输入文本..."
           value={data.text || ''}
@@ -44,8 +51,8 @@ export const TextNode = ({ id, data }: { id: string; data: any }) => {
         </div>
       </div>
 
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-[var(--bg-secondary)]" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-[var(--bg-secondary)]" />
+      <Handle type="target" position={Position.Left} className="!bg-emerald-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="source" position={Position.Right} className="!bg-emerald-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
     </div>
   );
 };

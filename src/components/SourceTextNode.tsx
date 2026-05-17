@@ -33,10 +33,16 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
     updateNodeData(id, { text: val });
   };
 
+  const getFontSizeStyle = () => {
+    return typeof settings.inputFontSize === 'number' 
+      ? { fontSize: `${settings.inputFontSize}px` } 
+      : {};
+  };
   const getFontSizeClass = () => {
+    if (typeof settings.inputFontSize === 'number') return '';
     if (settings.inputFontSize === 'small') return 'text-[10px]';
-    if (settings.inputFontSize === 'large') return 'text-base';
-    return 'text-sm';
+    if (settings.inputFontSize === 'large') return 'text-sm';
+    return 'text-xs';
   };
 
   const clearText = () => {
@@ -55,10 +61,9 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
 
   return (
     <div 
-      className={`relative border ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl shadow-2xl overflow-visible group/node transition-all flex flex-col ${
+      className={`relative border w-full h-full ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl shadow-2xl overflow-visible group/node transition-all flex flex-col ${
         settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-secondary)]'
       }`}
-      style={{ width: data.width || 320, height: data.height || 260 }}
     >
       <NodeResizer 
         color="var(--accent)" 
@@ -66,9 +71,6 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         minWidth={200}
         minHeight={150}
         handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid var(--accent)' }}
-        onResize={(_, { width, height }) => {
-          updateNodeData(id, { width, height });
-        }}
       />
 
       {/* Floating Toolbar */}
@@ -146,6 +148,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-[var(--bg-primary)]'
       }`}>
         <textarea
+          style={getFontSizeStyle()}
           value={localText}
           onChange={(e) => handleTextChange(e.target.value)}
           className={`nodrag nowheel w-full flex-1 bg-transparent text-[var(--text-primary)] outline-none resize-none placeholder:text-[var(--text-secondary)]/30 font-sans transition-all ${getFontSizeClass()} ${
@@ -179,7 +182,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         document.body
       )}
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-blue-500 border-2 border-[var(--bg-secondary)]" />
+      <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
     </div>
   );
 };

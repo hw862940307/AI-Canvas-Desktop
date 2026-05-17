@@ -412,25 +412,15 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
 
   return (
     <div 
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('application/reactflow', JSON.stringify({ 
-          type: 'image-source',
-          url: data.url,
-          id: id 
-        }));
-        e.dataTransfer.effectAllowed = 'copyMove';
-      }}
       onDragEnter={(e) => handleDragEnter(e)}
       onDragOver={(e) => handleDragOver(e)}
       onDragLeave={(e) => handleDragLeave(e)}
       onDrop={(e) => handleDrop(e)}
-      className={`relative border ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl overflow-visible shadow-2xl transition-all flex flex-col pointer-events-auto ${
+      className={`relative border w-full h-full ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl overflow-visible shadow-2xl transition-all flex flex-col pointer-events-auto ${
         isDragOver ? 'border-blue-500 ring-4 ring-blue-500/10' : ''
       } ${
         settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-secondary)]'
       }`}
-      style={{ width: data.width || 400, height: data.height || 400 }}
     >
       <NodeResizer 
         color="var(--accent)" 
@@ -439,9 +429,6 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
         minHeight={200}
         keepAspectRatio={true}
         handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid #3b82f6' }}
-        onResize={(_, { width, height }) => {
-          updateNodeData(id, { width, height });
-        }}
       />
       {/* Floating Toolbar */}
       <AnimatePresence>
@@ -497,7 +484,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
         >
           {data.url ? (
             <>
-              <img src={data.url} alt="Source" className="w-full h-full object-contain" />
+              <img draggable={false} src={data.url} alt="Source" className="w-full h-full object-contain" />
               <button 
                 onClick={(e) => { e.stopPropagation(); clearImage(); }}
                 className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/80 text-white rounded-lg opacity-0 group-hover/node:opacity-100 transition-all backdrop-blur-sm"
@@ -750,7 +737,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                         aspect={aspect}
                         className="max-h-[70vh]"
                       >
-                        <img 
+                        <img draggable={false} 
                           ref={imgRef}
                           src={data.url} 
                           alt="Crop Source" 
@@ -877,7 +864,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                     className="relative max-w-full max-h-full flex items-center justify-center"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <img 
+                    <img draggable={false} 
                       src={data.url} 
                       alt="Fullscreen" 
                       className="max-w-[90vw] max-h-[85vh] object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-3xl border border-white/5 select-none pointer-events-none" 
@@ -901,7 +888,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
         document.body
       )}
 
-      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-green-500 border-2 border-[#111]" />
+      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
     </div>
   );
 };

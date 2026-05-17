@@ -977,15 +977,15 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <NodeResizer minWidth={400} minHeight={400} isVisible={selected} lineClassName="border-blue-500/50" handleClassName="h-3 w-3 bg-white border-2 border-blue-500 rounded-sm" onResize={(_, { width, height }) => updateNodeData(id, { width, height })} />
+      <NodeResizer minWidth={400} minHeight={400} isVisible={selected} lineClassName="border-blue-500/50" handleClassName="h-3 w-3 bg-white border-2 border-blue-500 rounded-sm" />
       <div 
         className={`flex flex-col w-full h-full bg-[#0c1016] rounded-[32px] border-2 border-white/10 overflow-hidden shadow-2xl transition-all ${selected ? 'border-blue-500 ring-8 ring-blue-500/10' : ''}`}
         style={{ 
           ['--node-zoom' as any]: zoomScale
         }}
       >
-        <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-blue-500" />
-        <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-blue-500" />
+        <Handle type="target" position={Position.Left} className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+        <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
 
         {/* Header */}
         <div 
@@ -1184,7 +1184,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                         className={`group relative aspect-square border-2 overflow-hidden cursor-pointer transition-all ${selectedIndices.includes(i) ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)]' : 'border-white/5 hover:border-white/20'}`}
                         style={{ borderRadius: 14 * zoomScale }}
                       >
-                        <img src={img.url} className="w-full h-full object-cover" alt="" />
+                        <img draggable={false} src={img.url} className="w-full h-full object-cover" alt="" />
                         <div className={`absolute inset-0 bg-blue-500/20 transition-opacity ${selectedIndices.includes(i) ? 'opacity-100' : 'opacity-0'}`} />
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleRemoveImage(i); }}
@@ -1595,7 +1595,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                                   {outputImages.map((img, idx) => (
                                     <div key={idx} className="group relative aspect-square rounded-[24px] overflow-hidden border border-white/5 hover:border-emerald-500/50 shadow-2xl transition-all hover:-translate-y-1">
-                                       <img src={img.url} className="w-full h-full object-cover" alt="Output" />
+                                       <img draggable={false} src={img.url} className="w-full h-full object-cover" alt="Output" />
                                        <div className="absolute inset-0 bg-black/90 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-4 backdrop-blur-xl">
                                           <button onClick={() => {
                                              const nextImages = [...images, { url: img.url, name: `comfy_${img.nodeId}`, source: 'comfy' }];

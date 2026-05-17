@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import {
   Connection,
   Edge,
@@ -23,9 +24,22 @@ export interface ChatMessage {
 export type MouseSize = 'small' | 'medium' | 'large';
 export type AppTheme = 'dark' | 'mist' | 'light';
 export type BarTexture = 'transparent' | 'frosted';
-export type FontSize = 'small' | 'medium' | 'large';
+export type FontSize = 'small' | 'medium' | 'large' | number;
 export type UploadQuality = 'standard' | 'high' | 'original';
 export type MultiSelectMode = 'longPress' | 'click' | 'disabled';
+
+export interface ApiSettings {
+  engine: 'gemini' | 'openai' | 'claude' | 'doubao' | 'qianwen' | 'deepseek' | 'custom';
+  baseUrl: string;
+  apiKey: string;
+  modelId: string;
+  isCustom: boolean;
+  
+  // Image generation
+  imageEngine: 'online' | 'comfyui';
+  imageModel: 'Nano Banana Pro' | 'Nano Banana 2' | 'chatgptimage2' | 'SDXL' | 'custom';
+  comfyUrl: string;
+}
 
 export interface AppSettings {
   // General
@@ -48,6 +62,9 @@ export interface AppSettings {
   projectPath: string;
   dataPath: string;
   outputPath: string;
+
+  // API
+  apiSettings: ApiSettings;
 }
 
 export interface FileItem {
@@ -116,7 +133,9 @@ const generateId = () => {
   return Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 };
 
-export const useStore = create<AppState>((set, get) => ({
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
   nodes: [],
   edges: [],
   chatHistory: [],
@@ -158,6 +177,16 @@ export const useStore = create<AppState>((set, get) => ({
     projectPath: 'F:\\BaiduNetdiskDownload\\无限画布\\AI CanvasPro\\Data\\projects',
     dataPath: 'F:\\BaiduNetdiskDownload\\无限画布\\AI CanvasPro\\Data\\data',
     outputPath: 'F:\\BaiduNetdiskDownload\\无限画布\\AI CanvasPro\\Data\\output',
+    apiSettings: {
+      engine: 'gemini',
+      baseUrl: 'https://generativelanguage.googleapis.com',
+      apiKey: '',
+      modelId: 'gemini-1.5-flash',
+      isCustom: false,
+      imageEngine: 'online',
+      imageModel: 'Nano Banana Pro',
+      comfyUrl: 'http://127.0.0.1:8188'
+    },
   },
   onNodesChange: (changes: NodeChange[]) => {
     set({
@@ -313,4 +342,14 @@ export const useStore = create<AppState>((set, get) => ({
       folders: get().folders.map(f => f.id === id ? { ...f, ...updates } : f)
     });
   },
+}), {
+  name: 'fusion-flow-storage',
+  partialize: (state) => ({
+    nodes: state.nodes,
+    edges: state.edges,
+    settings: state.settings,
+    files: state.files,
+    materials: state.materials,
+    folders: state.folders
+  }),
 }));

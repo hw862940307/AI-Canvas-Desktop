@@ -20,7 +20,7 @@ import { SourceTextNode } from './components/SourceTextNode';
 import { SourceImageNode } from './components/SourceImageNode';
 import { PromptEngineNode } from './components/PromptEngineNode';
 import { FileManagerSidebar } from './components/FileManagerSidebar';
-import { GoogleGenAI } from '@google/genai';
+import { generateTextWithFallback } from './lib/gemini';
 import { 
   Plus, 
   Image as ImageIcon, 
@@ -77,15 +77,7 @@ import { DoubleBoxTransformNode } from './components/DoubleBoxTransformNode';
 import { ReverseNode } from './components/ReverseNode';
 import { MsGenNode } from './components/MsGenNode';
 
-let ai: any = null;
-try {
-  const apiKey = typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : (import.meta.env ? import.meta.env.VITE_GEMINI_API_KEY : null);
-  if (apiKey && apiKey !== 'undefined') {
-    ai = new GoogleGenAI({ apiKey });
-  }
-} catch (e) {
-  console.error("Failed to initialize GoogleGenAI:", e);
-}
+// Gemini initialization logic removed here, handled by getGenAI utility
 
 const nodeTypes = {
   image: ImageNode,
@@ -111,7 +103,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     nodes, edges, onNodesChange, onEdgesChange, onConnect, 
     addNode, clearCanvas, chatHistory, addChatMessage,
     isGridVisible, isMiniMapVisible, toggleGrid, toggleMiniMap,
-    showAssistant, toggleAssistant, showFileManager, toggleFileManager, fileManagerWidth, settings,
+    showAssistant, toggleAssistant, showFileManager, toggleFileManager, fileManagerWidth, settings, updateSettings,
     copySelectedNodes, pasteNodes, updateNodeData
   } = useStore();
   const { fitView, screenToFlowPosition, zoomIn, zoomOut, getZoom, setViewport, getViewport } = useReactFlow();
@@ -119,6 +111,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [menu, setMenu] = useState<{ x: number, y: number, screenX: number, screenY: number } | null>(null);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Filter edges based on showConnections setting
@@ -325,19 +318,11 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     setIsTyping(true);
 
     try {
-      if (!ai) {
-        addChatMessage({ role: 'assistant', content: "Gemini API key is not configured. please set GEMINI_API_KEY in environment." });
-        setIsTyping(false);
-        return;
-      }
-      const result = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: userMsg,
-      });
-      addChatMessage({ role: 'assistant', content: result.text || "我不太明白。" });
+      const resultText = await generateTextWithFallback(userMsg);
+      addChatMessage({ role: 'assistant', content: resultText || "我不太明白。" });
     } catch (err) {
       console.error(err);
-      addChatMessage({ role: 'assistant', content: "抱歉，我现在无法回答。请检查网络。 (Gemini API Error)" });
+      addChatMessage({ role: 'assistant', content: "抱歉，我现在无法回答。请检查网络和 API 设置。 (" + (err instanceof Error ? err.message : String(err)) + ")" });
     } finally {
       setIsTyping(false);
     }
@@ -473,6 +458,9 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onConnectStart={() => setIsConnecting(true)}
+              onConnectEnd={() => setIsConnecting(false)}
+              nodesDraggable={!isConnecting}
               nodeTypes={nodeTypes}
               onPaneContextMenu={onPaneContextMenu}
               onPaneClick={onPaneClick}
@@ -490,6 +478,13 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
               panOnDrag={[1]}
               selectionOnDrag={true}
               selectionMode={SelectionMode.Partial}
+              connectionRadius={60}
+              connectOnClick={true}
+              connectionLineStyle={{ strokeWidth: 4, stroke: '#38bdf8' }}
+              defaultEdgeOptions={{
+                style: { strokeWidth: 3, stroke: '#94a3b8' },
+                type: 'bezier'
+              }}
             >
             {isGridVisible && <Background color="var(--border)" variant={BackgroundVariant.Dots} gap={24} size={1} />}
             
@@ -696,10 +691,10 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                       }
                     }}
                     className={`w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-2xl p-4 pr-12 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]/50 resize-none min-h-[100px] placeholder:text-[var(--text-secondary)]/50 group-hover:border-[var(--border)] transition-all ${
-                      settings.inputFontSize === 'large' ? 'text-base' : 
-                      settings.inputFontSize === 'small' ? 'text-[10px]' : 'text-sm'
+                      typeof settings.inputFontSize === 'number' ? '' : (settings.inputFontSize === 'large' ? 'text-base' : settings.inputFontSize === 'small' ? 'text-[10px]' : 'text-sm')
                     }`}
                     placeholder="描述想法，Gemini 1.5 为你护航..."
+                    style={{ fontSize: typeof settings.inputFontSize === 'number' ? `${settings.inputFontSize}px` : undefined }}
                   />
                   <button 
                     onClick={handleSendMessage}
@@ -714,9 +709,28 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                     <button className="text-gray-500 hover:text-gray-300 transition-colors"><Paperclip size={18} /></button>
                     <button className="text-gray-500 hover:text-gray-300 transition-colors"><Mic size={18} /></button>
                   </div>
-                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 cursor-pointer transition-colors">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Pro Model</span>
-                    <ChevronUp size={12} className="text-gray-500" />
+                  <div className="relative group/model">
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                        {settings.apiSettings.engine} | {settings.apiSettings.imageEngine}
+                      </span>
+                      <ChevronUp size={12} className="text-gray-500" />
+                    </div>
+                    
+                    <div className="absolute bottom-full right-0 mb-2 w-56 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl opacity-0 invisible group-hover/model:opacity-100 group-hover/model:visible transition-all z-50 overflow-hidden">
+                       <div className="p-2 flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-2 py-1">Text Models</span>
+                          <button onClick={() => updateSettings({ apiSettings: { ...settings.apiSettings, isCustom: true, engine: 'gemini', modelId: 'gemini-1.5-flash', baseUrl: 'https://generativelanguage.googleapis.com' } })} className="px-3 py-2 text-xs text-gray-300 hover:bg-blue-600 hover:text-white rounded-lg text-left transition-colors">Gemini 1.5</button>
+                          <button onClick={() => updateSettings({ apiSettings: { ...settings.apiSettings, isCustom: true, engine: 'doubao', modelId: 'doubao-pro-32k', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3' } })} className="px-3 py-2 text-xs text-gray-300 hover:bg-blue-600 hover:text-white rounded-lg text-left transition-colors">Doubao Pro</button>
+                          <button onClick={() => updateSettings({ apiSettings: { ...settings.apiSettings, isCustom: true, engine: 'qianwen', modelId: 'qwen-max', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' } })} className="px-3 py-2 text-xs text-gray-300 hover:bg-blue-600 hover:text-white rounded-lg text-left transition-colors">Qwen Max</button>
+                          <button onClick={() => updateSettings({ apiSettings: { ...settings.apiSettings, isCustom: true, engine: 'deepseek', modelId: 'deepseek-chat', baseUrl: 'https://api.deepseek.com' } })} className="px-3 py-2 text-xs text-gray-300 hover:bg-blue-600 hover:text-white rounded-lg text-left transition-colors">DeepSeek Chat</button>
+                          <div className="h-px bg-white/5 my-1 mx-2" />
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-2 py-1">Image Generation</span>
+                          <button onClick={() => updateSettings({ apiSettings: { ...settings.apiSettings, imageEngine: 'online', imageModel: 'Nano Banana Pro' } })} className="px-3 py-2 text-xs text-gray-300 hover:bg-emerald-600 hover:text-white rounded-lg text-left transition-colors">Nano Banana Pro</button>
+                          <button onClick={() => updateSettings({ apiSettings: { ...settings.apiSettings, imageEngine: 'online', imageModel: 'chatgptimage2' } })} className="px-3 py-2 text-xs text-gray-300 hover:bg-emerald-600 hover:text-white rounded-lg text-left transition-colors">ChatGPT Image 2</button>
+                          <button onClick={() => updateSettings({ apiSettings: { ...settings.apiSettings, imageEngine: 'comfyui' } })} className="px-3 py-2 text-xs text-gray-300 hover:bg-emerald-600 hover:text-white rounded-lg text-left transition-colors">Local ComfyUI</button>
+                       </div>
+                    </div>
                   </div>
                </div>
             </div>

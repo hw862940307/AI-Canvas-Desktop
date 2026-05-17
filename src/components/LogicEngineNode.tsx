@@ -2,16 +2,7 @@ import React, { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Brain, Play, Loader2, X, Terminal, Code2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { GoogleGenAI } from '@google/genai';
-
-let ai: any = null;
-try {
-  if (process.env.GEMINI_API_KEY) {
-    ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
-} catch (e) {
-  console.error("Failed to initialize GoogleGenAI in LogicEngineNode:", e);
-}
+import { generateTextWithFallback } from '../lib/gemini';
 
 const LOGIC_PRESETS = [
   { id: 'analyzer', name: '深度逻辑分析', prompt: '对输入内容进行多维度逻辑分析，指出潜在矛盾与优化点。' },
@@ -30,19 +21,14 @@ export const LogicEngineNode = ({ id, data }: { id: string; data: any }) => {
 
     setLoading(true);
     try {
-      if (!ai) {
-        updateNodeData(id, { output: '错误: Gemini API 密钥未配置' });
-        return;
-      }
       const selectedPreset = LOGIC_PRESETS.find(p => p.id === (data.preset || 'analyzer'));
       const systemPrompt = selectedPreset?.prompt || '';
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `[LOGIC ENGINE MODE]\nInstruction: ${systemPrompt}\n\nInputs:\n${context || data.input || 'No input data.'}`,
-      });
-
-      updateNodeData(id, { output: response.text });
+      const resultText = await generateTextWithFallback(
+        `[LOGIC ENGINE MODE]\n\nInputs:\n${context || data.input || 'No input data.'}`, 
+        systemPrompt
+      );
+      updateNodeData(id, { output: resultText });
     } catch (error) {
       console.error('Logic Engine failed:', error);
       updateNodeData(id, { output: `执行失败: ${error instanceof Error ? error.message : String(error)}` });
@@ -116,8 +102,8 @@ export const LogicEngineNode = ({ id, data }: { id: string; data: any }) => {
         </button>
       </div>
 
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-blue-500 !border-2 !border-[#0f1115]" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-blue-500 !border-2 !border-[#0f1115]" />
+      <Handle type="target" position={Position.Left} className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
     </div>
   );
 };

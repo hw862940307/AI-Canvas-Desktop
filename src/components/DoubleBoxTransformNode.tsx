@@ -37,7 +37,19 @@ interface BoxState {
 
 export function DoubleBoxTransformNode({ id, data, selected }: NodeProps) {
   const nodeData = data as any;
-  const { updateNodeData, getIncomingData, removeNode } = useStore();
+  const { updateNodeData, getIncomingData, removeNode, settings } = useStore();
+  
+  const getFontSizeStyle = () => {
+    return typeof settings.inputFontSize === 'number' 
+      ? { fontSize: `${settings.inputFontSize}px` } 
+      : {};
+  };
+  const getFontSizeClass = () => {
+    if (typeof settings.inputFontSize === 'number') return '';
+    if (settings.inputFontSize === 'small') return 'text-[10px]';
+    if (settings.inputFontSize === 'large') return 'text-sm';
+    return 'text-xs';
+  };
   
   // Base dimensions
   const initialWidth = nodeData.width || 800;
@@ -623,15 +635,14 @@ ${annotationNotes || '无附加标注说明'}
         isVisible={selected} 
         lineClassName="border-blue-500/50" 
         handleClassName="h-3 w-3 bg-white border-2 border-blue-500 rounded-sm" 
-        onResize={(_, { width, height }) => updateNodeData(id, { width, height })} 
       />
       
       <div 
         className={`flex flex-col w-full h-full bg-[#0c1016] rounded-[32px] border-2 transition-all ${selected ? 'border-blue-500 ring-8 ring-blue-500/10' : 'border-white/10'}`}
         style={{ ['--node-zoom' as any]: zoomScale }}
       >
-        <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-blue-500" />
-        <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-blue-500" />
+        <Handle type="target" position={Position.Left} className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+        <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
 
         {/* Header */}
         <div 
@@ -704,7 +715,7 @@ ${annotationNotes || '无附加标注说明'}
               style={{ aspectRatio: imgRatio || 'auto' }}
             >
               {imageUrl ? (
-                <img 
+                <img draggable={false} 
                   src={imageUrl} 
                   alt="" 
                   className="w-full h-full object-contain opacity-80" 
@@ -1129,7 +1140,7 @@ ${annotationNotes || '无附加标注说明'}
                       style={{ aspectRatio: imgRatio || 'auto' }}
                     >
                       {imageUrl && (
-                        <img 
+                        <img draggable={false} 
                           src={imageUrl} 
                           alt="" 
                           className="w-full h-full object-contain opacity-80" 
@@ -1427,7 +1438,7 @@ ${annotationNotes || '无附加标注说明'}
                               updateNodeData(id, { annotationNotes: e.target.value });
                             }}
                             placeholder="输入对此节点的标注注释..."
-                            className="w-full h-24 bg-black/40 border border-white/5 rounded-2xl p-4 text-xs text-white/80 focus:outline-none focus:border-indigo-500/50 resize-none transition-all placeholder:text-gray-700 font-mono"
+                            className={`w-full h-24 bg-black/40 border border-white/5 rounded-2xl p-4 ${getFontSizeClass()} text-white/80 focus:outline-none focus:border-indigo-500/50 resize-none transition-all placeholder:text-gray-700 font-mono`}
                           />
                         </div>
 

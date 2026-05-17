@@ -374,8 +374,8 @@ const NodeUI = ({
       
       {!isInPortal && (
         <>
-          <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-blue-500" />
-          <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-blue-500" />
+          <Handle type="target" position={Position.Left} className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+          <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
         </>
       )}
 

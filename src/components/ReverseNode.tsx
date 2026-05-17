@@ -4,6 +4,7 @@ import { ScanSearch, Play, Loader2, Copy, Check, Info, Zap, Terminal, Maximize2,
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
+import { generateTextWithFallback } from '../lib/gemini';
 
 export function ReverseNode({ id, data, selected }: NodeProps) {
   const nodeData = data as any;
@@ -30,13 +31,28 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
     if (running || !incomingImages.length) return;
     setRunning(true);
     try {
-      // Mocking result for now
-      setTimeout(() => {
-        const result = `【画面解析】: 这是一个基于参考图的${incomingImages.length}张图片的深度解析。画面包含清晰的主体结构与动态光影，构图平衡且富有张力。\n\n【正向提示词】: masterpiece, best quality, ultra-detailed, cinematic lighting, 8k wallpaper...\n\n【最终提示词】: final_prompt: A high quality professional photograph of the subject with soft diffused lighting, sharp focus, vibrant colors, 85mm lens.`;
-        updateNodeData(id, { outputText: result });
-        setRunning(false);
-      }, 2500);
+      const contents: any[] = [];
+      const fullPrompt = `Objective: ${instruction}`;
+      contents.push({ text: fullPrompt });
+
+      // Add last image as reference for now, or all if model supports
+      for (const imgUrl of incomingImages.slice(-3)) {
+        if (imgUrl.startsWith('data:')) {
+          contents.push({
+            inlineData: {
+              mimeType: "image/png",
+              data: imgUrl.split(',')[1]
+            }
+          });
+        }
+      }
+
+      const resultText = await generateTextWithFallback(contents, systemPrompt);
+      updateNodeData(id, { outputText: resultText });
     } catch (e) {
+      console.error('Reverse analysis failed:', e);
+      updateNodeData(id, { outputText: `执行失败: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
       setRunning(false);
     }
   };
@@ -191,8 +207,8 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
     <>
       <NodeResizer minWidth={300} minHeight={400} isVisible={selected} lineClassName="border-cyan-500/50" handleClassName="h-3 w-3 bg-white border-2 border-cyan-500 rounded-sm" />
       <div className={`flex flex-col w-full h-full bg-[#0c1016] rounded-3xl border-2 border-white/10 overflow-hidden shadow-2xl transition-all ${selected ? 'border-cyan-500 ring-8 ring-cyan-500/10' : ''}`}>
-        <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-cyan-500" />
-        <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-cyan-500" />
+        <Handle type="target" position={Position.Left} className="!bg-cyan-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+        <Handle type="source" position={Position.Right} className="!bg-cyan-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
 
         {ReverseContent(false)}
       </div>

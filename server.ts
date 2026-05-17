@@ -138,6 +138,91 @@ async function startServer() {
     }
   });
 
+  // Proxy for LLM Chat Completions
+  app.post('/api/chat', async (req, res) => {
+    const { engine, baseUrl, apiKey, modelId, messages } = req.body;
+
+    if (!apiKey) {
+      return res.status(400).json({ error: 'API Key is missing' });
+    }
+
+    try {
+      if (engine === 'gemini') {
+        const url = `${baseUrl || 'https://generativelanguage.googleapis.com'}/v1beta/models/${modelId || 'gemini-1.5-flash'}:generateContent?key=${apiKey}`;
+        
+        let prompt = '';
+        if (Array.isArray(messages)) {
+          prompt = messages.map(m => m.content).join('\n\n');
+        } else {
+          prompt = String(messages);
+        }
+
+        const response = await axios.post(url, {
+          contents: [{ parts: [{ text: prompt }] }]
+        }, {
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        return res.json({ text });
+      } else {
+        // OpenAI compatibility format
+        const finalBaseUrl = baseUrl || 'https://api.openai.com/v1';
+        const url = `${finalBaseUrl.replace(/\/$/, '')}/chat/completions`;
+        
+        const response = await axios.post(url, {
+          model: modelId || 'gpt-3.5-turbo',
+          messages: messages,
+        }, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const text = response.data.choices?.[0]?.message?.content || '';
+        return res.json({ text });
+      }
+    } catch (error: any) {
+      console.error('LLM API Error:', error?.response?.data || error.message);
+      const errMsg = error?.response?.data?.error?.message || error?.response?.data?.error || error.message || 'Unknown API Error';
+      res.status(500).json({ error: typeof errMsg === 'object' ? JSON.stringify(errMsg) : errMsg });
+    }
+  });
+
+  // Proxy for LLM Image Generations (OpenAI format)
+  app.post('/api/images', async (req, res) => {
+    const { baseUrl, apiKey, modelId, prompt } = req.body;
+
+    if (!apiKey) {
+      return res.status(400).json({ error: 'API Key is missing' });
+    }
+
+    try {
+      const finalBaseUrl = baseUrl || 'https://api.openai.com/v1';
+      const url = `${finalBaseUrl.replace(/\/$/, '')}/images/generations`;
+      
+      const response = await axios.post(url, {
+        prompt: prompt,
+        model: modelId || 'dall-e-3',
+        n: 1,
+        size: '1024x1024'
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const imageUrl = response.data.data?.[0]?.url;
+      return res.json({ imageUrl });
+    } catch (error: any) {
+      console.error('Image API Error:', error?.response?.data || error.message);
+      const errMsg = error?.response?.data?.error?.message || error?.response?.data?.error || error.message || 'Unknown API Error';
+      res.status(500).json({ error: typeof errMsg === 'object' ? JSON.stringify(errMsg) : errMsg });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

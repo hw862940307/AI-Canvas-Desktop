@@ -349,25 +349,15 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
 
   return (
     <div 
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('application/reactflow', JSON.stringify({ 
-          type: 'image',
-          url: data.imageUrl,
-          id: id 
-        }));
-        e.dataTransfer.effectAllowed = 'copyMove';
-      }}
       onDragEnter={(e) => handleDragEnter(e)}
       onDragOver={(e) => handleDragOver(e)}
       onDragLeave={(e) => handleDragLeave(e)}
       onDrop={(e) => handleDrop(e)}
-      className={`relative group/node border ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl overflow-visible shadow-2xl transition-all flex flex-col pointer-events-auto ${
+      className={`relative group/node border w-full h-full ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl overflow-visible shadow-2xl transition-all flex flex-col pointer-events-auto ${
         isDragOver ? 'border-blue-500 ring-4 ring-blue-500/10' : ''
       } ${
         settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-secondary)]'
       }`}
-      style={{ width: data.width || 320, height: data.height || 400 }}
     >
       <NodeResizer 
         color="var(--accent)" 
@@ -376,9 +366,6 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
         minHeight={200}
         keepAspectRatio={true}
         handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid #3b82f6' }}
-        onResize={(_, { width, height }) => {
-          updateNodeData(id, { width, height });
-        }}
       />
       {/* Floating Toolbar */}
       <AnimatePresence>
@@ -437,7 +424,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
           <div 
             className="relative w-full flex-1 rounded-2xl overflow-hidden bg-black/60 group/img ring-1 ring-[var(--border)]"
           >
-            <img src={data.imageUrl} alt="Node content" className="w-full h-full object-contain" />
+            <img draggable={false} src={data.imageUrl} alt="Node content" className="w-full h-full object-contain" />
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
               <button 
                 onClick={() => fileInputRef.current?.click()}
@@ -689,7 +676,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                         aspect={aspect}
                         className="max-h-[70vh]"
                       >
-                        <img 
+                        <img draggable={false} 
                           ref={imgRef}
                           src={data.imageUrl} 
                           alt="Crop Source" 
@@ -777,7 +764,7 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
                       <X size={20} />
                     </button>
                   </div>
-                  <img src={data.imageUrl} alt="Fullscreen" className="max-w-full max-h-[85vh] object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-3xl border border-white/5" />
+                  <img draggable={false} src={data.imageUrl} alt="Fullscreen" className="max-w-full max-h-[85vh] object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-3xl border border-white/5" />
                   <div className="flex items-center gap-3 px-6 py-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[24px]">
                      <div className="flex items-center gap-2 pr-4 border-r border-white/10">
                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -795,8 +782,8 @@ export const ImageNode = ({ id, data, selected }: { id: string; data: any; selec
         document.body
       )}
 
-      <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-blue-500 !border-2 !border-[#111]" />
-      <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-blue-500 !border-2 !border-[#111]" />
+      <Handle type="target" position={Position.Left} className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
     </div>
   );
 };

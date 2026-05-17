@@ -25,11 +25,22 @@ import {
   Grid
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI } from "@google/genai";
-
-const aiInstance = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { generateTextWithFallback } from '../lib/gemini';
+import { useStore } from '../store/useStore';
 
 const FusionMasterNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
+  const { settings } = useStore();
+  const getFontSizeStyle = () => {
+    return typeof settings.inputFontSize === 'number' 
+      ? { fontSize: `${settings.inputFontSize}px` } 
+      : {};
+  };
+  const getFontSizeClass = () => {
+    if (typeof settings.inputFontSize === 'number') return '';
+    if (settings.inputFontSize === 'small') return 'text-[10px]';
+    if (settings.inputFontSize === 'large') return 'text-sm';
+    return 'text-xs';
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const frameworkInputRef = useRef<HTMLInputElement>(null);
   const [showTools, setShowTools] = useState(false);
@@ -284,13 +295,10 @@ Analyze the provided visual assets and generate a high-fidelity fusion prompt. F
 4. Composition integrity.
 5. Technical parameters (Shutter speed, Focal length, ISO).
 
-USER FEEDBACK: ${userPrompt}
-
 OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
 
-      const contents = [];
-      const fullPrompt = `${systemPrompt}\n\nUser Input: ${userPrompt}`;
-
+      const contents: any[] = [];
+      const fullPrompt = `User Input: ${userPrompt || 'Analyze these images and provide the fusion prompt.'}`;
       contents.push({ text: fullPrompt });
 
       if (mode !== 'Mode C' && mainSlots.productMaster) {
@@ -301,18 +309,8 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
         contents.push({ inlineData: { mimeType: "image/png", data: (mainSlots.sceneReference as string).split(',')[1] } });
       }
 
-      const response = await aiInstance.models.generateContent({
-        model: "gemini-3-flash-preview",
-        config: {
-          temperature: 0.7,
-          topP: 0.95,
-          topK: 40,
-        },
-        contents: contents
-      });
-
-      const text = response.text || '';
-      setUserPrompt(text);
+      const responseText = await generateTextWithFallback(contents, systemPrompt);
+      setUserPrompt(responseText);
     } catch (error) {
       console.error('Core Fusion Engine Error:', error);
     } finally {
@@ -372,7 +370,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
             <div className="w-full h-full flex flex-col items-center justify-center">
               {mainSlots.productMaster ? (
                 <div className="w-full h-full relative">
-                  <img src={mainSlots.productMaster!} className="w-full h-full object-cover" alt="Product Master" />
+                  <img draggable={false} src={mainSlots.productMaster!} className="w-full h-full object-cover" alt="Product Master" />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">
                     <button onClick={() => triggerUpload('productMaster')} className="p-2.5 bg-blue-600 rounded-xl text-white pointer-events-auto"><ImageIcon size={18} /></button>
                     <button onClick={() => setMainSlots(prev => ({ ...prev, productMaster: null }))} className="p-2.5 bg-red-500 rounded-xl text-white pointer-events-auto"><X size={18} /></button>
@@ -415,7 +413,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
           <div className="w-full h-full flex flex-col items-center justify-center">
             {mainSlots.sceneReference ? (
               <div className="w-full h-full relative">
-                <img src={mainSlots.sceneReference!} className="w-full h-full object-cover" alt="Scene Reference" />
+                <img draggable={false} src={mainSlots.sceneReference!} className="w-full h-full object-cover" alt="Scene Reference" />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">
                   <button onClick={() => triggerUpload('sceneReference')} className="p-2.5 bg-blue-600 rounded-xl text-white pointer-events-auto"><ImageIcon size={18} /></button>
                   <button onClick={() => setMainSlots(prev => ({ ...prev, sceneReference: null }))} className="p-2.5 bg-red-500 rounded-xl text-white pointer-events-auto"><X size={18} /></button>
@@ -495,7 +493,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                <div className="flex gap-3">
                  <Command size={12} className="text-gray-700 shrink-0 mt-0.5 group-hover:text-blue-500" />
                  <textarea
-                   className="nodrag nopan bg-transparent border-none outline-none text-[10px] text-gray-500 w-full font-medium resize-none scrollbar-hide"
+                   className={`nodrag nopan bg-transparent border-none outline-none ${getFontSizeClass()} text-gray-500 w-full font-medium resize-none scrollbar-hide`}
                    value={cmd}
                    rows={2}
                    onClick={(e) => e.stopPropagation()}
@@ -518,7 +516,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
             value={userPrompt}
             onChange={(e) => setUserPrompt(e.target.value)}
             placeholder="追问或特殊分析指令或优化建议..."
-            className="nodrag nopan w-full min-h-[120px] p-4 bg-black/40 border border-white/5 rounded-2xl text-[11px] text-gray-300 outline-none focus:border-blue-500/50 transition-all font-medium scrollbar-hide resize-none font-mono"
+            className={`nodrag nopan w-full min-h-[120px] p-4 bg-black/40 border border-white/5 rounded-2xl ${getFontSizeClass()} text-gray-300 outline-none focus:border-blue-500/50 transition-all font-medium scrollbar-hide resize-none font-mono`}
           />
         </div>
       </div>
@@ -560,23 +558,14 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
     <>
       <div 
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-        className={`bg-[#0A0A0A] rounded-[32px] border-2 transition-all flex flex-col ${
+        className={`bg-[#0A0A0A] rounded-[32px] border-2 transition-all flex flex-col w-full h-full ${
           selected ? 'border-blue-500 ring-8 ring-blue-500/10 scale-[1.01]' : 'border-white/10'
         }`}
-        style={{ 
-          width: data?.width || 520, 
-          height: data?.height || 'auto',
-          minWidth: 400,
-          minHeight: 600
-        }}
       >
         <NodeResizer 
           isVisible={selected} 
           minWidth={400} 
           minHeight={600} 
-          onResize={(_, { width, height }) => {
-            updateNodeData(id, { width, height });
-          }}
         />
         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
         <input type="file" ref={frameworkInputRef} onChange={handleFrameworkUpload} className="hidden" accept=".txt,.json" />
@@ -609,8 +598,8 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
           </AnimatePresence>
         </div>
 
-        <Handle type="target" position={Position.Left} className="!w-5 !h-5 !bg-blue-600 !border-4 !border-[#0A0A0A] !-left-2.5 shadow-2xl" />
-        <Handle type="source" position={Position.Right} className="!w-5 !h-5 !bg-blue-600 !border-4 !border-[#0A0A0A] !-right-2.5 shadow-2xl" />
+        <Handle type="target" position={Position.Left} className="!bg-blue-600 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+        <Handle type="source" position={Position.Right} className="!bg-blue-600 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
       </div>
 
       {createPortal(
@@ -700,7 +689,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                              <div className={`w-full h-full flex flex-col items-center justify-center ${isDragOver.productMaster ? 'pointer-events-none' : ''}`}>
                                {mainSlots.productMaster ? (
                                  <div className="w-full h-full relative group/img">
-                                   <img src={mainSlots.productMaster!} className="w-full h-full object-contain" alt="PROD" />
+                                   <img draggable={false} src={mainSlots.productMaster!} className="w-full h-full object-contain" alt="PROD" />
                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 transition-all flex items-center justify-center gap-4">
                                      <button onClick={() => triggerUpload('productMaster')} className="p-4 bg-blue-600 rounded-[20px] text-white hover:scale-110 active:scale-95 transition-all shadow-xl pointer-events-auto"><ImageIcon size={24} /></button>
                                      <button onClick={() => setMainSlots(prev => ({ ...prev, productMaster: null }))} className="p-4 bg-red-500 rounded-[20px] text-white hover:scale-110 active:scale-95 transition-all shadow-xl pointer-events-auto"><X size={24} /></button>
@@ -739,7 +728,7 @@ OUTPUT FORMAT: Provide a comprehensive engineered prompt in plain text.`;
                             <div className={`w-full h-full flex flex-col items-center justify-center ${isDragOver.sceneReference ? 'pointer-events-none' : ''}`}>
                               {mainSlots.sceneReference ? (
                                  <div className="w-full h-full relative group/img">
-                                   <img src={mainSlots.sceneReference!} className="w-full h-full object-contain" alt="SCN" />
+                                   <img draggable={false} src={mainSlots.sceneReference!} className="w-full h-full object-contain" alt="SCN" />
                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 transition-all flex items-center justify-center gap-4">
                                      <button onClick={() => triggerUpload('sceneReference')} className="p-4 bg-blue-600 rounded-[20px] text-white hover:scale-110 active:scale-95 transition-all shadow-xl pointer-events-auto"><ImageIcon size={24} /></button>
                                      <button onClick={() => setMainSlots(prev => ({ ...prev, sceneReference: null }))} className="p-4 bg-red-500 rounded-[20px] text-white hover:scale-110 active:scale-95 transition-all shadow-xl pointer-events-auto"><X size={24} /></button>
