@@ -7,8 +7,6 @@ import {
   Upload, 
   Maximize2, 
   X, 
-  Crop as CropIcon, 
-  LayoutGrid, 
   Download, 
   MoreHorizontal, 
   Edit2, 
@@ -21,30 +19,16 @@ import {
   ZoomOut,
   Pencil
 } from 'lucide-react';
-import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnnotationModal } from './AnnotationModal';
 import { downloadImage } from '../lib/download';
-
-const CROP_ASPECTS = [
-  { label: '自由比例', value: undefined },
-  { label: '原图比例', value: 'original' },
-  { label: '21:9', value: 21 / 9 },
-  { label: '16:9', value: 16 / 9 },
-  { label: '9:16', value: 9 / 16 },
-  { label: '4:3', value: 4 / 3 },
-  { label: '3:4', value: 3 / 4 },
-  { label: '1:1', value: 1 / 1 },
-];
 
 export const SourceImageNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
   const { updateNodeData, addNode, settings } = useStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   
-  const [isCropping, setIsCropping] = useState(false);
   const [isAnnotating, setIsAnnotating] = useState(false);
-  const [isGridCropping, setIsGridCropping] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
@@ -53,15 +37,6 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   const [isDragOver, setIsDragOver] = useState(false);
   const dragCounter = useRef(0);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
-  const [cropMode, setCropMode] = useState<'rect' | 'path'>('rect');
-  const [pathPoints, setPathPoints] = useState<{ x: number, y: number }[]>([]);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  const [crop, setCrop] = useState<Crop>();
-  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
-  const [aspect, setAspect] = useState<number | undefined>(undefined);
 
   // Resize when original dimensions are provided (e.g. from global paste)
   useEffect(() => {
@@ -85,36 +60,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight, width, height } = e.currentTarget;
     setDimensions({ width: naturalWidth, height: naturalHeight });
-    
-    if (aspect) {
-      setCrop(centerCrop(
-        makeAspectCrop(
-          { unit: '%', width: 90 },
-          aspect,
-          width,
-          height
-        ),
-        width,
-        height
-      ));
-    }
   };
-
-  useEffect(() => {
-    if (isCropping && imgRef.current && aspect) {
-       const { width, height } = imgRef.current;
-       setCrop(centerCrop(
-        makeAspectCrop(
-          { unit: '%', width: 90 },
-          aspect,
-          width,
-          height
-        ),
-        width,
-        height
-      ));
-    }
-  }, [aspect, isCropping]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -295,122 +241,6 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
     updateNodeData(id, { url: null });
   };
 
-  const generateCroppedImage = async () => {
-    try {
-      if (!imgRef.current || !completedCrop) return;
-      
-      const croppedImage = await getCroppedImg(imgRef.current, completedCrop);
-      // Find current node to place new node nearby
-      const currentNode = useStore.getState().nodes.find(n => n.id === id);
-      const x = currentNode ? currentNode.position.x + 350 : window.innerWidth / 2;
-      const y = currentNode ? currentNode.position.y : window.innerHeight / 2;
-      
-      const ratio = completedCrop.width / completedCrop.height;
-      const width = Math.min(completedCrop.width, 400);
-      const imageHeight = width / ratio;
-
-      addNode('image-source', x, y, { 
-        url: croppedImage,
-        aspectRatio: ratio,
-        width,
-        height: imageHeight + 150
-      });
-      setIsCropping(false);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleGridCrop = async (count: number) => {
-    const gridSize = Math.sqrt(count);
-    const img = new Image();
-    img.src = data.url;
-    await new Promise((res) => (img.onload = res));
-
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const tileW = img.width / gridSize;
-    const tileH = img.height / gridSize;
-    canvas.width = tileW;
-    canvas.height = tileH;
-
-    const currentNode = useStore.getState().nodes.find(n => n.id === id);
-    const startX = currentNode ? currentNode.position.x + 400 : window.innerWidth / 2;
-    const startY = currentNode ? currentNode.position.y : window.innerHeight / 2;
-
-    const ratio = tileW / tileH;
-    const nodeWidth = 400;
-    const nodeHeight = (nodeWidth / ratio) + 150;
-
-    for (let row = 0; row < gridSize; row++) {
-      for (let col = 0; col < gridSize; col++) {
-        ctx.clearRect(0, 0, tileW, tileH);
-        ctx.drawImage(img, col * tileW, row * tileH, tileW, tileH, 0, 0, tileW, tileH);
-        const tileUrl = canvas.toDataURL('image/webp');
-        addNode('image-source', startX + col * 350, startY + row * 280, { 
-          url: tileUrl,
-          width: nodeWidth,
-          height: nodeHeight,
-          aspectRatio: ratio
-        });
-      }
-    }
-    setIsGridCropping(false);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (cropMode !== 'path' || !imgRef.current) return;
-    setIsDrawing(true);
-    const rect = imgRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setPathPoints([{ x, y }]);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDrawing || cropMode !== 'path' || !imgRef.current) return;
-    const rect = imgRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    
-    // Optimization: only add point if it's far enough from the last point
-    const lastPoint = pathPoints[pathPoints.length - 1];
-    if (lastPoint) {
-      const dist = Math.sqrt(Math.pow(x - lastPoint.x, 2) + Math.pow(y - lastPoint.y, 2));
-      if (dist < 0.5) return;
-    }
-    
-    setPathPoints([...pathPoints, { x, y }]);
-  };
-
-  const handleMouseUp = () => {
-    setIsDrawing(false);
-  };
-
-  const generatePathCroppedImage = async () => {
-    if (!imgRef.current || pathPoints.length < 3) return;
-    try {
-      const croppedImage = await getPathCroppedImg(imgRef.current, pathPoints);
-      
-      const currentNode = useStore.getState().nodes.find(n => n.id === id);
-      const x = currentNode ? currentNode.position.x + 350 : window.innerWidth / 2;
-      const y = currentNode ? currentNode.position.y : window.innerHeight / 2;
-      
-      addNode('image-source', x, y, { 
-        url: croppedImage,
-        width: 400,
-        height: 480,
-        aspectRatio: 1
-      });
-      setIsCropping(false);
-      setPathPoints([]);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   return (
     <div 
       onDragEnter={(e) => handleDragEnter(e)}
@@ -433,7 +263,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
       />
       {/* Floating Toolbar */}
       <AnimatePresence>
-        {selected && data.url && !isCropping && !isGridCropping && (
+        {selected && data.url && (
           <motion.div 
             initial={{ opacity: 1, y: -60, scale: 1 }}
             animate={{ opacity: 1, y: -60, scale: 1 }}
@@ -444,12 +274,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
               settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-tertiary)]'
             }`}
           >
-            <ToolbarIconButton icon={<ImageIcon size={16} />} title="属性" />
             <ToolbarIconButton icon={<Pencil size={16} />} onClick={() => setIsAnnotating(true)} title="标注模式" />
-            <ToolbarIconButton icon={<MoreHorizontal size={16} />} title="更多" />
             <div className="w-px h-4 bg-[var(--border)] mx-1" />
-            <ToolbarIconButton icon={<LayoutGrid size={16} />} onClick={() => setIsGridCropping(true)} title="宫格裁剪" />
-            <ToolbarIconButton icon={<CropIcon size={16} />} onClick={() => { setIsCropping(true); setCropMode('rect'); }} title="裁剪" />
             <ToolbarIconButton icon={<Maximize2 size={16} />} onClick={() => setIsFullScreen(true)} title="全屏显示" />
             <ToolbarIconButton icon={<Download size={16} />} onClick={() => data.url && downloadImage(data.url, `source-image-\${id}.png`)} title="下载" />
           </motion.div>
@@ -548,256 +374,6 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                   setIsAnnotating(false);
                 }}
               />
-            )}
-          </AnimatePresence>
-
-          {/* Grid Cropping Modal */}
-          <AnimatePresence>
-            {isGridCropping && (
-              <div 
-                className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4"
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setIsGridCropping(false); }}
-              >
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="relative w-full max-w-xl bg-[#0a0a0a] border border-white/5 rounded-[32px] overflow-hidden shadow-2xl flex flex-col p-8"
-                >
-                  <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                        <LayoutGrid size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-white tracking-widest uppercase">宫格裁剪</h3>
-                        <p className="text-sm text-gray-500 mt-0.5">将源图像均匀切割为多个子节点</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setIsGridCropping(false)}
-                      className="w-10 h-10 flex items-center justify-center hover:bg-white/5 text-gray-500 hover:text-white rounded-full transition-all"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {[4, 9, 16, 25].map((count) => (
-                      <button 
-                        key={count}
-                        onClick={() => handleGridCrop(count)}
-                        className="flex items-center justify-between p-5 bg-[#111] hover:bg-[#1a1a1a] border border-[#222] hover:border-blue-500/50 rounded-2xl text-gray-400 hover:text-white transition-all group relative overflow-hidden"
-                      >
-                        <div className="flex items-center gap-3 relative z-10">
-                          <LayoutGrid size={22} className="text-gray-700 group-hover:text-blue-400 transition-colors" />
-                          <div className="flex flex-col items-start">
-                            <span className="text-lg font-bold">{count} 宫格</span>
-                            <span className="text-sm text-gray-600 font-mono tracking-tighter">{Math.sqrt(count)}×{Math.sqrt(count)} 网格</span>
-                          </div>
-                        </div>
-                        <div className="p-1.5 bg-blue-600/10 text-blue-500 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all z-10">
-                          <Plus size={16} />
-                        </div>
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
-                    <button 
-                      onClick={() => setIsGridCropping(false)}
-                      className="px-6 py-2.5 text-base font-bold text-gray-500 hover:text-white transition-all"
-                    >
-                       取消
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-
-          {/* Manual Cropping Modal */}
-          <AnimatePresence>
-            {isCropping && (
-              <div 
-                className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-3xl flex flex-col p-4"
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Simplified Header */}
-                <div className="flex items-center justify-between px-8 py-6 bg-[#0a0a0a] border border-white/5 rounded-t-[32px]">
-                  <div className="flex items-center gap-4">
-                    <div className="flex p-1 bg-white/5 rounded-2xl border border-white/10">
-                      <button 
-                        onClick={() => { setCropMode('rect'); setPathPoints([]); }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${cropMode === 'rect' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
-                      >
-                        <CropIcon size={14} />
-                        <span>矩形裁切</span>
-                      </button>
-                      <button 
-                        onClick={() => { setCropMode('path'); setCrop(undefined); setPathPoints([]); }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${cropMode === 'path' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
-                      >
-                        <Pen size={14} />
-                        <span>套索工具</span>
-                      </button>
-                    </div>
-                    <div className="w-px h-6 bg-white/10 mx-2" />
-                    <div className="flex items-center gap-3">
-                       <ZoomOut size={14} className="text-gray-500" />
-                       <input 
-                         type="range" 
-                         min="0.5" 
-                         max="3" 
-                         step="0.1" 
-                         value={zoom} 
-                         onChange={(e) => setZoom(parseFloat(e.target.value))}
-                         className="w-32 accent-blue-600"
-                       />
-                       <ZoomIn size={14} className="text-gray-500" />
-                       <span className="text-sm font-mono text-blue-500 font-bold">{Math.round(zoom * 100)}%</span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setIsCropping(false)}
-                    className="w-10 h-10 flex items-center justify-center hover:bg-red-500 text-gray-500 hover:text-white rounded-full transition-all"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <div 
-                  ref={containerRef}
-                  className="flex-1 relative bg-[#050505] overflow-auto flex items-center justify-center border-x border-white/5"
-                  onWheel={(e) => {
-                    if (e.ctrlKey || e.metaKey) {
-                      e.preventDefault();
-                      setZoom(prev => Math.min(Math.max(prev - e.deltaY * 0.005, 0.5), 5));
-                    }
-                  }}
-                >
-                  <motion.div 
-                    style={{ scale: zoom }}
-                    className="relative origin-center transition-transform duration-200"
-                  >
-                    {cropMode === 'path' ? (
-                      <div 
-                        className="relative group cursor-crosshair" 
-                        onMouseDown={handleMouseDown}
-                        onMouseMove={handleMouseMove}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={handleMouseUp}
-                      >
-                        <img 
-                          ref={imgRef}
-                          src={data.url} 
-                          alt="Crop Source" 
-                          onLoad={onImageLoad}
-                          className="max-h-[70vh] object-contain select-none shadow-2xl"
-                          draggable={false}
-                        />
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-                          {pathPoints.length > 0 && (
-                            <path 
-                              d={`M ${(pathPoints[0].x * (imgRef.current?.width || 0)) / 100} ${(pathPoints[0].y * (imgRef.current?.height || 0)) / 100} ${pathPoints.slice(1).map(p => `L ${(p.x * (imgRef.current?.width || 0)) / 100} ${(p.y * (imgRef.current?.height || 0)) / 100}`).join(' ')} ${pathPoints.length > 2 ? 'Z' : ''}`}
-                              fill={pathPoints.length > 2 ? "rgba(37, 99, 235, 0.2)" : "none"}
-                              stroke="#2563eb"
-                              strokeWidth="2"
-                              strokeDasharray={pathPoints.length > 2 ? "none" : "4 4"}
-                            />
-                          )}
-                          {pathPoints.map((p, i) => (
-                            <circle 
-                              key={i}
-                              cx={(p.x * (imgRef.current?.width || 0)) / 100}
-                              cy={(p.y * (imgRef.current?.height || 0)) / 100}
-                              r={4}
-                              fill="#2563eb"
-                              stroke="white"
-                              strokeWidth="1"
-                            />
-                          ))}
-                        </svg>
-                        {pathPoints.length > 0 && (
-                          <div className="absolute top-4 left-4 bg-blue-600 px-3 py-1.5 rounded-xl text-sm font-bold text-white shadow-xl pointer-events-none">
-                            按住并拖动进行手动绘制 ({pathPoints.length})
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <ReactCrop
-                        crop={crop}
-                        onChange={c => setCrop(c)}
-                        onComplete={c => setCompletedCrop(c)}
-                        aspect={aspect}
-                        className="max-h-[70vh]"
-                      >
-                        <img draggable={false} 
-                          ref={imgRef}
-                          src={data.url} 
-                          alt="Crop Source" 
-                          onLoad={onImageLoad}
-                          className="max-h-[70vh] object-contain select-none shadow-2xl border border-white/10"
-                        />
-                      </ReactCrop>
-                    )}
-                  </motion.div>
-                </div>
-                
-                <div className="px-8 py-6 bg-[#0a0a0a] border border-white/5 rounded-b-[32px] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {cropMode === 'rect' && CROP_ASPECTS.map((opt) => (
-                      <button 
-                        key={opt.label}
-                        onClick={async () => {
-                          if (opt.value === 'original') {
-                            const img = new Image();
-                            img.src = data.url;
-                            await new Promise(res => img.onload = res);
-                            setAspect(img.width / img.height);
-                          } else {
-                            setAspect(opt.value as any);
-                          }
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${aspect === (opt.value === 'original' ? aspect : opt.value) ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                    {cropMode === 'path' && (
-                      <button 
-                        onClick={() => setPathPoints([])}
-                        className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white rounded-xl text-sm font-bold transition-all border border-white/5"
-                      >
-                        重置点
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => setIsCropping(false)} 
-                      className="px-6 py-2 text-base font-bold text-gray-500 hover:text-white transition-all"
-                    >
-                      取消
-                    </button>
-                    <button 
-                      onClick={cropMode === 'rect' ? generateCroppedImage : generatePathCroppedImage} 
-                      disabled={cropMode === 'rect' ? !completedCrop : pathPoints.length < 3}
-                      className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-xl active:scale-95 disabled:opacity-50"
-                    >
-                      <Check size={18} />
-                      <span>应用方案</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
             )}
           </AnimatePresence>
 
@@ -904,77 +480,4 @@ const ToolbarIconButton = ({ icon, onClick, title, disabled = false }: { icon: R
     {icon}
   </button>
 );
-
-/**
- * Utility to crop image
- */
-async function getCroppedImg(image: HTMLImageElement, crop: PixelCrop): Promise<string> {
-  const canvas = document.createElement('canvas');
-  const scaleX = image.naturalWidth / image.width;
-  const scaleY = image.naturalHeight / image.height;
-  canvas.width = crop.width;
-  canvas.height = crop.height;
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) return '';
-
-  ctx.drawImage(
-    image,
-    crop.x * scaleX,
-    crop.y * scaleY,
-    crop.width * scaleX,
-    crop.height * scaleY,
-    0,
-    0,
-    crop.width,
-    crop.height
-  );
-
-  return canvas.toDataURL('image/webp');
-}
-
-async function getPathCroppedImg(image: HTMLImageElement, points: { x: number, y: number }[]): Promise<string> {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return '';
-
-  const scaleX = image.naturalWidth / 100;
-  const scaleY = image.naturalHeight / 100;
-
-  // Find bounds
-  let minX = 100, minY = 100, maxX = 0, maxY = 0;
-  points.forEach(p => {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  });
-
-  const width = (maxX - minX) * scaleX;
-  const height = (maxY - minY) * scaleY;
-  canvas.width = width;
-  canvas.height = height;
-
-  ctx.beginPath();
-  ctx.moveTo((points[0].x - minX) * scaleX, (points[0].y - minY) * scaleY);
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo((points[i].x - minX) * scaleX, (points[i].y - minY) * scaleY);
-  }
-  ctx.closePath();
-  ctx.clip();
-
-  ctx.drawImage(
-    image,
-    minX * scaleX,
-    minY * scaleY,
-    (maxX - minX) * scaleX,
-    (maxY - minY) * scaleY,
-    0,
-    0,
-    width,
-    height
-  );
-
-  return canvas.toDataURL('image/webp');
-}
 

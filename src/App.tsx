@@ -18,7 +18,6 @@ import {
   SelectionMode,
 } from "@xyflow/react";
 import { useStore } from "./store/useStore";
-import { ImageNode } from "./components/ImageNode";
 import { TextNode } from "./components/TextNode";
 import { ImageGenNode } from "./components/ImageGenNode";
 import { TextGenNode } from "./components/TextGenNode";
@@ -87,7 +86,6 @@ import { MsGenNode } from "./components/MsGenNode";
 // Gemini initialization logic removed here, handled by getGenAI utility
 
 const nodeTypes = {
-  image: ImageNode,
   text: TextNode,
   "image-gen": ImageGenNode,
   "text-gen": TextGenNode,
@@ -331,7 +329,6 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                 // If an image-capable node is selected, update it
                 const selectedNode = nodes.find((n) => n.selected);
                 const imageNodes = [
-                  "image",
                   "image-source",
                   "image-gen",
                   "reverse",
@@ -389,8 +386,8 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
       });
-      addNode("image", center.x - 150, center.y - 120, {
-        imageUrl,
+      addNode("image-source", center.x - 150, center.y - 120, {
+        url: imageUrl,
         name: name || "Pasted Image",
         originalWidth: width,
         originalHeight: height,
@@ -474,8 +471,8 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
             const reader = new FileReader();
             reader.onload = (e) => {
               const imageUrl = e.target?.result as string;
-              addNode("image", position.x - 150, position.y - 120, {
-                imageUrl,
+              addNode("image-source", position.x - 150, position.y - 120, {
+                url: imageUrl,
                 name: file.name,
               });
             };
@@ -635,8 +632,10 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                       return "var(--accent)";
                     case "prompt-engine":
                       return "#a855f7";
-                    case "image":
+                    case "image-source":
                       return "#22c55e";
+                    case "text-source":
+                    case "text-gen":
                     case "text":
                       return "#f59e0b";
                     default:
@@ -1248,7 +1247,7 @@ function SidebarWrapper({ onOpenSettings }: { onOpenSettings: () => void }) {
 
       <div
         ref={scrollRef}
-        className="flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar py-2 w-full items-center"
+        className="flex-1 flex flex-col gap-6 overflow-y-auto scrollbar-hide py-2 w-full items-center"
       >
         <SidebarButton
           icon={<Plus size={22} />}
