@@ -1,0 +1,1800 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
+import { 
+  Globe2, 
+  ExternalLink, 
+  Link as LinkIcon, 
+  ImagePlus, 
+  Trash2, 
+  Info, 
+  Maximize2, 
+  Minimize2, 
+  Plus, 
+  Minus, 
+  Star, 
+  X, 
+  Search, 
+  RefreshCw, 
+  Send,
+  CloudLightning,
+  Terminal,
+  FileJson,
+  Database,
+  Upload,
+  Play,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Image as ImageIcon
+} from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { motion, AnimatePresence } from 'motion/react';
+import axios from 'axios';
+
+// --- ComfyUI Types ---
+interface ComfyNodeData {
+  comfyUrl?: string;
+  workflowJson?: any;
+  workflowName?: string;
+  scanResult?: WorkflowScanResult;
+  outputs?: {
+    status?: 'idle' | 'scanning' | 'ready' | 'uploading' | 'running' | 'success' | 'error';
+    promptId?: string;
+    logs?: string[];
+    images?: any[];
+  }
+}
+
+interface ImageMapping {
+  comfyNodeId: string;
+  classType: string;
+  title: string;
+  field: string;
+  currentValue: string;
+}
+
+interface ImageOutput {
+  comfyNodeId: string;
+  classType: string;
+  title: string;
+  field: string;
+}
+
+interface EditableField {
+  name: string;
+  label: string;
+  value: any;
+  fieldType: 'text' | 'textarea' | 'number' | 'checkbox' | 'file-input';
+  path: string;
+}
+
+interface ExposedParam {
+  exposeIndex: number;
+  comfyNodeId: string;
+  classType: string;
+  title: string;
+  editableFields: EditableField[];
+}
+
+interface WorkflowScanResult {
+  imageInputs: ImageMapping[];
+  imageOutputs: ImageOutput[];
+  exposedParams: ExposedParam[];
+}
+
+// --- ComfyUI Utils ---
+const AUTO_IMAGE_INPUT_CLASSES = ["LoadImage", "LoadImageMask"];
+const AUTO_IMAGE_OUTPUT_CLASSES = ["SaveImage", "PreviewImage"];
+const HASHTAG_EXPOSE_REGEX = /#(\d+)/;
+
+function inferFieldType(name: string, value: any): 'text' | 'textarea' | 'number' | 'checkbox' | 'file-input' {
+  if (typeof value === "boolean") return "checkbox";
+  if (typeof value === "number") return "number";
+  if (typeof value === "string") {
+    if (name === "text" || value.length > 80 || value.includes("\n")) return "textarea";
+    if (name.toLowerCase().includes("image") && !name.toLowerCase().includes("mask")) return "file-input";
+    return "text";
+  }
+  return "text";
+}
+
+function extractEditableInputs(node: any): EditableField[] {
+  const inputs = node.inputs || {};
+  const fields: EditableField[] = [];
+  for (const [name, value] of Object.entries(inputs)) {
+    // Arrays in ComfyUI workflow JSON usually represent connections [node_id, output_index]
+    if (Array.isArray(value)) continue;
+    
+    // Filter out some common internal fields that shouldn't be edited directly as simple text/number
+    if (name === "image" && AUTO_IMAGE_INPUT_CLASSES.includes(node.class_type)) continue;
+    
+    fields.push({ 
+      name, 
+      label: name, 
+      value, 
+      fieldType: inferFieldType(name, value), 
+      path: `inputs.${name}` 
+    });
+  }
+  return fields;
+}
+
+function scanComfyWorkflow(workflow: any): WorkflowScanResult {
+  const imageInputs: ImageMapping[] = [];
+  const imageOutputs: ImageOutput[] = [];
+  const exposedParams: ExposedParam[] = [];
+  
+  if (!workflow || typeof workflow !== 'object') return { imageInputs: [], imageOutputs: [], exposedParams: [] };
+  
+  // First pass: identify all nodes
+  for (const [nodeId, node] of Object.entries<any>(workflow)) {
+    const classType = node.class_type || node.type;
+    const title = node._meta?.title || node.title || classType || `Node ${nodeId}`;
+    
+    // 1. Auto-identify Image Inputs
+    if (AUTO_IMAGE_INPUT_CLASSES.includes(classType)) {
+      imageInputs.push({ 
+        comfyNodeId: nodeId, 
+        classType, 
+        title, 
+        field: "image", 
+        currentValue: node.inputs?.image || "" 
+      });
+    }
+    
+    // 2. Auto-identify Image Outputs
+    if (AUTO_IMAGE_OUTPUT_CLASSES.includes(classType)) {
+      imageOutputs.push({ 
+        comfyNodeId: nodeId, 
+        classType, 
+        title, 
+        field: "images" 
+      });
+    }
+    
+    // 3. Identify Hashtag Exposed Parameters
+    const match = title.match(HASHTAG_EXPOSE_REGEX);
+    if (match) {
+      exposedParams.push({
+        exposeIndex: Number(match[1]),
+        comfyNodeId: nodeId,
+        classType,
+        title,
+        editableFields: extractEditableInputs(node)
+      });
+    }
+  }
+  
+  // Sort exposed parameters by the # index
+  exposedParams.sort((a, b) => a.exposeIndex - b.exposeIndex);
+  
+  return { imageInputs, imageOutputs, exposedParams };
+}
+
+interface BrowserFrameProps {
+  isPortal?: boolean;
+  pageUrl: string;
+  setPageUrl: (url: string) => void;
+  iframeUrl: string;
+  refreshKey: number;
+  favorites: string[];
+  onNavigate: () => void;
+  onRefresh: () => void;
+  onAddFavorite: () => void;
+  onRemoveFavorite: (url: string) => void;
+  onBookmarkClick: (url: string) => void;
+  onToggleOverlay: (open: boolean) => void;
+  onOpenExternal: () => void;
+}
+
+const BrowserFrame = React.memo(({ 
+  isPortal = false, 
+  pageUrl, 
+  setPageUrl, 
+  iframeUrl, 
+  refreshKey, 
+  favorites, 
+  onNavigate, 
+  onRefresh, 
+  onAddFavorite, 
+  onRemoveFavorite, 
+  onBookmarkClick,
+  onToggleOverlay,
+  onOpenExternal
+}: BrowserFrameProps) => {
+  const isLocaltunnel = (iframeUrl || '').includes('.loca.lt');
+
+  return (
+    <div className={`flex flex-col bg-[#0c1016] border border-white/10 overflow-hidden nodrag ${isPortal ? 'w-[90vw] h-[85vh] rounded-[32px] shadow-2xl' : 'flex-1 rounded-2xl'}`}>
+      {/* Search Header */}
+      <div className="bg-black/60 px-4 py-3 border-b border-white/5 flex items-center justify-between gap-4 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 px-1">
+           <div className="w-3 h-3 rounded-full bg-red-500/40" />
+           <div className="w-3 h-3 rounded-full bg-yellow-500/40" />
+           <div className="w-3 h-3 rounded-full bg-green-500/40" />
+        </div>
+        
+        <div className="flex-1 flex items-center gap-3 bg-white/5 border border-white/5 rounded-xl px-4 py-1.5 min-w-0 group hover:bg-white/10 transition-all">
+          <Search size={14} className="text-gray-600 group-hover:text-gray-400" />
+          <input 
+            className="flex-1 bg-transparent text-[11px] text-gray-300 outline-none truncate font-mono"
+            value={pageUrl || ''}
+            onChange={(e) => setPageUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onNavigate()}
+            placeholder="Search or enter URL"
+          />
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={onNavigate}
+              className="text-indigo-400 hover:text-indigo-300 transition-colors p-1"
+              title="Navigate"
+            >
+              <Send size={14} />
+            </button>
+            <button 
+              onClick={onRefresh}
+              className="text-gray-600 hover:text-white transition-colors p-1"
+              title="Refresh"
+            >
+              <RefreshCw size={14} />
+            </button>
+            <button 
+              onClick={onAddFavorite}
+              className={`transition-colors ${favorites.includes(pageUrl) ? 'text-yellow-500' : 'text-gray-600 hover:text-white'}`}
+            >
+              <Star size={14} fill={favorites.includes(pageUrl) ? "currentColor" : "none"} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={onOpenExternal} className="p-2 text-gray-500 hover:text-white transition-all" title="在新标签页打开">
+            <ExternalLink size={16} />
+          </button>
+          <button onClick={() => onToggleOverlay(!isPortal)} className="p-2 text-gray-500 hover:text-white transition-all" title={isPortal ? "最小化" : "最大化"}>
+            {isPortal ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+          {isPortal && (
+            <button onClick={() => onToggleOverlay(false)} className="p-2 text-red-500/50 hover:text-red-500 ml-1">
+              <X size={18} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Bookmarks Bar */}
+      <div className="bg-black/40 px-4 py-2 border-b border-white/5 flex items-center gap-2 overflow-x-auto no-scrollbar scrollbar-hide shrink-0">
+        <button 
+          onClick={() => {
+            const url = prompt('输入要收藏的网页地址:', pageUrl);
+            if (url && /^https?:\/\//i.test(url)) {
+               // Logic handled by caller through prop
+            }
+          }}
+          className="w-6 h-6 flex items-center justify-center bg-white/5 hover:bg-blue-600/20 rounded shadow-sm text-gray-500 hover:text-blue-500 transition-all shrink-0"
+        >
+          <Plus size={14} />
+        </button>
+        
+        <div className="w-px h-4 bg-white/10 mx-1 shrink-0" />
+
+        {favorites.map((url) => (
+          <div key={url} className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all shrink-0 ${iframeUrl === url ? 'bg-blue-600/20 border-blue-500/30 text-blue-400' : 'bg-white/2 border-white/5 text-gray-500 hover:bg-white/5'}`}>
+            <button 
+              onClick={() => onBookmarkClick(url)}
+              className="text-[10px] font-black uppercase tracking-tight truncate max-w-[140px]"
+            >
+              {tryGetHostname(url)}
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onRemoveFavorite(url); }}
+              className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-500 transition-all p-0.5"
+            >
+              <Minus size={12} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex-1 relative bg-white">
+        {iframeUrl ? (
+          <>
+            <iframe 
+              key={refreshKey}
+              src={iframeUrl} 
+              className="w-full h-full border-0" 
+              referrerPolicy="no-referrer" 
+            />
+            {isLocaltunnel && (
+               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[60]">
+                  <button 
+                    onClick={() => window.open(iframeUrl, '_blank')}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl text-[10px] font-black shadow-2xl flex items-center gap-3 animate-bounce border border-white/20"
+                  >
+                    <ExternalLink size={14} /> 
+                    如果您看到 Localtunnel 的黑屏提示，请点击此处并在新窗口点击 "Bypass" 以启用预览
+                  </button>
+               </div>
+            )}
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c1016] text-gray-700 gap-3 opacity-30 select-none font-sans">
+             <Globe2 size={48} strokeWidth={1} />
+             <span className="text-[10px] font-black uppercase tracking-[0.4em]">Awaiting Data Stream</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// Helper for safe hostname extraction
+function tryGetHostname(url: string) {
+  try {
+    return new URL(url).hostname.replace('www.', '');
+  } catch (e) {
+    return url;
+  }
+}
+
+const TabButton = ({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) => (
+  <button 
+    onClick={onClick}
+    className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-all ${active ? 'border-blue-500 text-blue-400 bg-blue-500/5' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+  >
+    {icon}
+    <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
+  </button>
+);
+
+export function AptWebToolNode({ id, data, selected }: NodeProps) {
+  const nodeData = data as any;
+  const { updateNodeData, getIncomingData, addFile } = useStore();
+  
+  // Calculate zoom scale based on current node width (baseline is 1000px for this wide tool)
+  const baselineWidth = 1000;
+  const zoomScale = Math.max(0.4, (nodeData.width || baselineWidth) / baselineWidth);
+  
+  // Scraper States
+  const [pageUrl, setPageUrl] = useState(nodeData.pageUrl || 'https://www.tujiagirl.com/online_ps/');
+  const [iframeUrl, setIframeUrl] = useState(nodeData.pageUrl || 'https://www.tujiagirl.com/online_ps/');
+  const [imageAddress, setImageAddress] = useState(nodeData.imageAddress || '');
+  const [imageCount, setImageCount] = useState(nodeData.imageCount || 1);
+  const [status, setStatus] = useState(nodeData.status || '支持在线网页预览、打开网页、加载图片。');
+  const [images, setImages] = useState<any[]>(nodeData.images || []);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>(nodeData.selectedIndices || []);
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>(nodeData.favorites || [
+    'https://www.tujiagirl.com/online_ps/',
+    'https://liblib.art/',
+    'https://www.shutterstock.com/'
+  ]);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // ComfyUI States
+  const [viewMode, setViewMode] = useState<'scraper' | 'comfy'>(nodeData.viewMode || 'scraper');
+  const [comfyUrl, setComfyUrl] = useState(nodeData.comfyUrl || 'http://127.0.0.1:8188');
+  const [workflowJson, setWorkflowJson] = useState<any>(nodeData.workflowJson || {});
+  const [workflowText, setWorkflowText] = useState(JSON.stringify(nodeData.workflowJson || {}, null, 2));
+  const [comfyStatus, setComfyStatus] = useState<'idle' | 'scanning' | 'ready' | 'uploading' | 'running' | 'success' | 'error'>(nodeData.outputs?.status || 'idle');
+  const [scanResult, setScanResult] = useState<WorkflowScanResult>(nodeData.scanResult || { imageInputs: [], imageOutputs: [], exposedParams: [] });
+  const [promptId, setPromptId] = useState<string>(nodeData.outputs?.promptId || '');
+  const [logs, setLogs] = useState<string[]>(nodeData.outputs?.logs || []);
+  const [outputImages, setOutputImages] = useState<any[]>(nodeData.outputs?.images || []);
+  const [comfyView, setComfyView] = useState<'browser' | 'source'>(nodeData.comfyView || 'browser');
+  const [isComfyIframeLoading, setIsComfyIframeLoading] = useState(true);
+  const [showLocalHelp, setShowLocalHelp] = useState(false);
+
+  const comfyIframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Auto-scan workflow when text changes
+  useEffect(() => {
+    if (!workflowText || workflowText === '{}') return;
+    try {
+      const parsed = JSON.parse(workflowText);
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        setWorkflowJson(parsed);
+        const result = scanComfyWorkflow(parsed);
+        setScanResult(result);
+        updateNodeData(id, { 
+          workflowJson: parsed,
+          scanResult: result
+        });
+        if (comfyStatus === 'idle' || comfyStatus === 'error') {
+          setComfyStatus('ready');
+        }
+      }
+    } catch (e) {
+      // Ignore parsing errors during typing
+    }
+  }, [workflowText, id, updateNodeData]);
+
+  const addLog = useCallback((msg: string) => {
+    setLogs(prev => {
+      const newLogs = [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`].slice(-50);
+      updateNodeData(id, { outputs: { ...nodeData.outputs, logs: newLogs } });
+      return newLogs;
+    });
+  }, [id, nodeData.outputs, updateNodeData]);
+
+  const checkIsLocal = (url: string) => {
+    const trimmed = (url || '').trim().toLowerCase();
+    return trimmed.includes('127.0.0.1') || trimmed.includes('localhost') || trimmed.startsWith('http://192.168.') || trimmed.startsWith('http://10.') || trimmed.startsWith('http://172.');
+  };
+
+  const sanitizeUrl = (url: string) => {
+    let trimmed = (url || '').trim();
+    if (!trimmed) return '';
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      trimmed = 'http://' + trimmed;
+    }
+    return trimmed.replace(/\/$/, '');
+  };
+
+  const handleComfyStatusCheck = async () => {
+    const cleanUrl = sanitizeUrl(comfyUrl);
+    if (!cleanUrl) {
+      addLog('❌ 错误：ComfyUI URL 不能为空。');
+      return;
+    }
+    const isLocal = checkIsLocal(cleanUrl);
+    addLog(`Testing connection to ${cleanUrl} (${isLocal ? 'Local Mode' : 'Cloud Proxy Mode'})...`);
+    setStatus(`正在拨测 ${cleanUrl} (${isLocal ? '本地' : '云端'}) 连接状态...`);
+
+    try {
+      if (isLocal) {
+        // Direct local test via fetch (more precise error handling)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(`${cleanUrl}/system_stats`, { 
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit',
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          addLog('✅ 成功直接连接：本地 ComfyUI 响应正常。');
+          setStatus('✨ 本地连接测试成功！');
+          setComfyStatus('ready');
+          setShowLocalHelp(false);
+        } else {
+          addLog(`❌ 本地连接返回错误状态: ${response.status}`);
+          setComfyStatus('error');
+        }
+      } else {
+        const response = await axios.get('/api/comfy/status', { params: { url: cleanUrl } });
+        if (response.data.ok) {
+          addLog('✅ 成功建立连接：远端 ComfyUI 后端响应正常。');
+          setStatus('✨ 连接测试成功！');
+          setComfyStatus('ready');
+        } else {
+          addLog('❌ 连接失败：后端有响应但返回了错误。');
+          setComfyStatus('error');
+        }
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || String(error);
+      addLog(`❌ 连接失败: ${errorMsg}`);
+      
+      if (isLocal) {
+        setShowLocalHelp(true);
+        if (window.location.protocol === 'https:' && !cleanUrl.startsWith('https:')) {
+          addLog('⚠️ 核心原因: HTTPS 安全限制 (Mixed Content)。浏览器禁止在此加密页面请求您的 HTTP 本地地址。');
+          addLog('💡 推荐方案 A: 在浏览器地址栏左侧点击“锁头”图标 -> 网站设置 -> 找到“不安全内容” -> 设置为“允许”。');
+          addLog('💡 推荐方案 B: 使用 localtunnel (npx localtunnel --port 8188) 获取一个 https 地址。');
+          addLog('💡 提示: 也可以搜索并安装 "Allow CORS: Access-Control-Allow-Origin" 插件。');
+        } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('aborted')) {
+          addLog('💡 提示: 无法获取连接信息。请确认 ComfyUI 是否已通过 --listen 启动，且允许 CORS。');
+        }
+      }
+      setComfyStatus('error');
+      setStatus('连接失败，请检查 URL 和网络环境。');
+    }
+  };
+
+  const handleSyncFromLocal = async () => {
+    const isLocal = comfyUrl.includes('127.0.0.1') || comfyUrl.includes('localhost');
+    if (!isLocal) {
+      addLog('💡 同步功能目前仅支持本地节点 (127.0.0.1)。');
+      return;
+    }
+
+    addLog('正在尝试从本地 ComfyUI 同步工作流信息...');
+    try {
+      const response = await fetch(`${comfyUrl.replace(/\/$/, '')}/object_info`, { mode: 'cors' });
+      if (response.ok) {
+        const data = await response.json();
+        addLog(`✅ 已从本地获取到 ${Object.keys(data).length} 个节点定义。`);
+        setStatus('本地信息同步完成。若需同步具体工作流，请手动导入 JSON。');
+      } else {
+        addLog(`❌ 同步失败: 状态码 ${response.status}`);
+      }
+    } catch (e: any) {
+      addLog(`❌ 同步失败: ${e.message}`);
+    }
+  };
+
+  const handleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      setWorkflowText(text);
+      addLog(`File ${file.name} loaded. Click "Scan" to identify nodes.`);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleComfyScan = () => {
+    try {
+      const parsed = JSON.parse(workflowText);
+      setWorkflowJson(parsed);
+      const result = scanComfyWorkflow(parsed);
+      setScanResult(result);
+      updateNodeData(id, { 
+        workflowJson: parsed,
+        scanResult: result,
+        workflowName: nodeData.workflowName || 'Default Workflow'
+      });
+      addLog(`Workflow scanned. Found ${result.imageInputs.length} image inputs, ${result.imageOutputs.length} outputs, and ${result.exposedParams.length} exposed parameters.`);
+      setComfyStatus('ready');
+    } catch (e) {
+      addLog(`Failed to parse workflow JSON: ${String(e)}`);
+      setComfyStatus('error');
+    }
+  };
+
+  const handleComfyFieldChange = (cNodeId: string, fieldName: string, value: any) => {
+    // 1. Deep update workflowJson to ensure React picks up all internal changes
+    setWorkflowJson((prev: any) => {
+      const next = { ...prev };
+      if (next[cNodeId] && next[cNodeId].inputs) {
+        next[cNodeId] = {
+          ...next[cNodeId],
+          inputs: {
+            ...next[cNodeId].inputs,
+            [fieldName]: value
+          }
+        };
+      }
+      
+      // Update text and sync to node data in a way that doesn't trigger loops
+      const newText = JSON.stringify(next, null, 2);
+      setWorkflowText(newText);
+      updateNodeData(id, { workflowJson: next });
+      
+      return next;
+    });
+    
+    // 2. Update scanResult locally for immediate UI feedback
+    setScanResult(prev => {
+      const nextResult = { ...prev };
+      const paramNode = nextResult.exposedParams.find(p => p.comfyNodeId === cNodeId);
+      if (paramNode) {
+        const field = paramNode.editableFields.find(f => f.name === fieldName);
+        if (field) field.value = value;
+      }
+      return nextResult;
+    });
+
+    addLog(`Updated ${fieldName} to ${typeof value === 'string' ? `"${value.slice(0, 20)}${value.length > 20 ? '...' : ''}"` : value}`);
+  };
+
+  const handleComfyRun = async () => {
+    if (comfyStatus === 'running' || comfyStatus === 'uploading') return;
+    
+    // Check if workflow is loaded
+    if (!workflowJson || Object.keys(workflowJson).length === 0) {
+      addLog('❌ 运行失败：未检测到有效的工作流内容。');
+      setComfyStatus('error');
+      setStatus('错误：请先导入或粘贴 ComfyUI 工作流 JSON。');
+      return;
+    }
+
+    const cleanUrl = sanitizeUrl(comfyUrl);
+    if (!cleanUrl) {
+      addLog('❌ 运行失败：未设置 ComfyUI 服务器地址。');
+      setComfyStatus('error');
+      setStatus('错误：必须填写有效的 ComfyUI URL。');
+      return;
+    }
+
+    setComfyStatus('uploading');
+    const isLocal = checkIsLocal(cleanUrl);
+    addLog(`System: 正在启动执行引擎... (模式: ${isLocal ? '本地直接' : '云端代理'})`);
+
+    try {
+      const baseApiUrl = isLocal ? cleanUrl : '';
+
+      addLog('Step 1: 正在检测输入图像与外部参数...');
+      const incomingData = getIncomingData(id);
+      const canvasImages = incomingData
+        .filter(d => (d as any).url || (d as any).imageUrl)
+        .map(d => (d as any).url || (d as any).imageUrl);
+      
+      // DEEP CLONE for execution payload
+      let updatedWorkflow = JSON.parse(JSON.stringify(workflowJson));
+
+      // 1. Sync Exposed Parameters
+      addLog('Step 2: 正在映射参数面板数值到工作流...');
+      scanResult.exposedParams.forEach(param => {
+        if (updatedWorkflow[param.comfyNodeId]) {
+          if (!updatedWorkflow[param.comfyNodeId].inputs) {
+            updatedWorkflow[param.comfyNodeId].inputs = {};
+          }
+          param.editableFields.forEach(field => {
+            updatedWorkflow[param.comfyNodeId].inputs[field.name] = field.value;
+          });
+        }
+      });
+
+      // 2. Upload Images to correct nodes
+      if (canvasImages.length > 0 && scanResult.imageInputs.length > 0) {
+        addLog(`Step 3: 正在准备上传图像 (检测到 ${canvasImages.length} 张输入图)...`);
+        
+        // Map images to LoadImage nodes sequentially
+        for (let i = 0; i < Math.min(canvasImages.length, scanResult.imageInputs.length); i++) {
+          const imgUrl = canvasImages[i];
+          const targetNode = scanResult.imageInputs[i];
+          
+          addLog(`> 正在处理图像 [${i+1}] 并上传给节点 [${targetNode.title}] (ID: ${targetNode.comfyNodeId})...`);
+          
+          try {
+            const response = await fetch(imgUrl);
+            const blob = await response.blob();
+            const file = new File([blob], `canvas_input_${Date.now()}_${i}.png`, { type: 'image/png' });
+
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('overwrite', 'true');
+
+            let uploadResponse;
+            if (isLocal) {
+              const uploadResult = await fetch(`${baseApiUrl}/upload/image`, {
+                method: 'POST',
+                body: formData,
+                mode: 'cors'
+              });
+              if (!uploadResult.ok) throw new Error(`Local upload failed: ${uploadResult.status}`);
+              uploadResponse = { data: await uploadResult.json() };
+            } else {
+              formData.append('url', cleanUrl);
+              uploadResponse = await axios.post('/api/comfy/upload-image', formData);
+            }
+            
+            const filename = uploadResponse.data.name || uploadResponse.data.filename;
+            updatedWorkflow[targetNode.comfyNodeId].inputs.image = filename;
+            addLog(`✅ 图像已上传: ${filename}`);
+          } catch (uploadErr: any) {
+            addLog(`⚠️ 图像 [${i+1}] 上传失败: ${uploadErr.message}`);
+          }
+        }
+      }
+
+      setComfyStatus('running');
+      addLog('🚀 Step 4: 正在提交任务至 ComfyUI API...');
+      
+      let promptId;
+      if (isLocal) {
+        const runResult = await fetch(`${baseApiUrl}/prompt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: updatedWorkflow,
+            client_id: `nv_node_${id}`
+          }),
+          mode: 'cors'
+        });
+        if (!runResult.ok) throw new Error(`Local prompt failed: ${runResult.status}`);
+        const runData = await runResult.json();
+        promptId = runData.prompt_id;
+      } else {
+        const runResponse = await axios.post('/api/comfy/run-workflow', {
+          url: cleanUrl,
+          workflow: updatedWorkflow,
+          client_id: `nv_node_${id}`
+        });
+        promptId = runResponse.data.prompt_id;
+      }
+
+      setPromptId(promptId);
+      addLog(`✨ 任务已成功入队！Prompt ID: ${promptId}`);
+      setStatus(`正在生成中... (ID: ${promptId.slice(0,8)})`);
+      pollComfyHistory(promptId, cleanUrl);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || String(error);
+      const isConnectionError = errorMsg.includes('ECONNREFUSED') || 
+                                errorMsg.includes('Network Error') || 
+                                errorMsg.includes('timeout') || 
+                                errorMsg.includes('Failed to fetch');
+      
+      addLog(`❌ 执行失败: ${errorMsg}`);
+      setComfyStatus('error');
+      setStatus(`执行故障: ${errorMsg}`);
+      
+      if (isLocal && (errorMsg.includes('Failed to fetch') || isConnectionError)) {
+        setShowLocalHelp(true);
+        if (window.location.protocol === 'https:' && !cleanUrl.startsWith('https:')) {
+           addLog('⚠️ 检测到安全限制: 您的浏览器拦截了从 HTTPS (云端应用) 到 HTTP (本地) 的请求。');
+           addLog('💡 必须执行以下操作才能运行：');
+           addLog('  1. 在浏览器地址栏左侧点击“锁头”图标 -> 网站设置 -> 找到“不安全内容” -> 设置为“允许”。');
+           addLog('  2. 或者使用 localtunnel (npx localtunnel --port 8188) 获取 https 地址。');
+        } else {
+           addLog('💡 请确保您的本地 ComfyUI 启动参数包含 --listen 且服务已正常开启。');
+        }
+      }
+    }
+  };
+
+  const pollComfyHistory = async (pId: string, currentUrl: string) => {
+    let attempts = 0;
+    const maxAttempts = 300; // ~10 minutes timeout with 2s interval
+    
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        clearInterval(interval);
+        addLog('❌ 任务超时：ComfyUI 未能在规定时间内返回结果。');
+        setComfyStatus('error');
+        setStatus('执行超时：ComfyUI 响应时间过长。');
+        return;
+      }
+
+      try {
+        const isLocal = checkIsLocal(currentUrl);
+        const baseApiUrl = isLocal ? currentUrl : '';
+        
+        let history;
+        if (isLocal) {
+          const response = await fetch(`${baseApiUrl}/history/${pId}`, { mode: 'cors' });
+          if (response.ok) {
+             const data = await response.json();
+             history = data[pId];
+          }
+        } else {
+          const response = await axios.get(`/api/comfy/history/${pId}`, { params: { url: currentUrl } });
+          history = response.data[pId];
+        }
+
+        if (history) {
+          clearInterval(interval);
+          addLog('✅ 工作流执行完毕。');
+          const extractedImages: any[] = [];
+          for (const outputNode of scanResult.imageOutputs) {
+            const nodeOut = history.outputs?.[outputNode.comfyNodeId];
+            if (nodeOut?.images) {
+              for (const img of nodeOut.images) {
+                 const url = isLocal 
+                   ? `${baseApiUrl}/view?filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || '')}&type=${img.type || 'output'}`
+                   : `/api/comfy/view?url=${encodeURIComponent(currentUrl)}&filename=${encodeURIComponent(img.filename)}&subfolder=${encodeURIComponent(img.subfolder || '')}&type=${img.type || 'output'}`;
+                 extractedImages.push({ ...img, url, nodeId: outputNode.comfyNodeId });
+              }
+            }
+          }
+          setOutputImages(extractedImages);
+          setComfyStatus('success');
+          setStatus('✨ 工作流执行成功！');
+          
+          // Sync extracted images to local history and global gallery
+          if (extractedImages.length > 0) {
+            const newImagesForScraper = [...images];
+            extractedImages.forEach((img, idx) => {
+              const name = `comfy_${img.filename || idx}_${Date.now()}`;
+              const imgData = { 
+                url: img.url, 
+                name: name, 
+                path: img.url, 
+                source: 'comfyui' 
+              };
+              
+              // 1. Add to node's internal history
+              newImagesForScraper.push(imgData);
+              
+              // 2. Add to global gallery
+              addFile({
+                name: name,
+                type: 'image',
+                url: img.url
+              });
+            });
+            
+            setImages(newImagesForScraper);
+            updateNodeData(id, { 
+              images: newImagesForScraper,
+              outputs: { 
+                status: 'success', 
+                images: extractedImages, 
+                promptId: pId, 
+                logs: logs 
+              } 
+            });
+            addLog(`✅ 已将 ${extractedImages.length} 张生成图同步至历史记录和全局图库。`);
+          } else {
+            updateNodeData(id, { outputs: { status: 'success', images: extractedImages, promptId: pId, logs: logs } });
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, 2000);
+  };
+
+  const updateStore = (updates: any) => {
+    updateNodeData(id, updates);
+  };
+
+  const handleNavigate = useCallback(() => {
+    let url = pageUrl.trim();
+    if (url && !url.startsWith('http')) {
+      url = 'https://' + url;
+    }
+    setIframeUrl(url);
+    setPageUrl(url);
+    updateStore({ pageUrl: url });
+  }, [pageUrl]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey(prev => prev + 1);
+  }, []);
+
+  const handleAddFavorite = useCallback(() => {
+    if (!pageUrl || favorites.includes(pageUrl)) return;
+    const next = [...favorites, pageUrl];
+    setFavorites(next);
+    updateStore({ favorites: next });
+  }, [pageUrl, favorites]);
+
+  const handleRemoveFavorite = useCallback((url: string) => {
+    const next = favorites.filter(f => f !== url);
+    setFavorites(next);
+    updateStore({ favorites: next });
+  }, [favorites]);
+
+  const handleBookmarkClick = useCallback((url: string) => {
+    setPageUrl(url);
+    setIframeUrl(url);
+    updateStore({ pageUrl: url });
+  }, []);
+
+  const handleAddOnlineImage = () => {
+    const raw = (imageAddress || '').trim();
+    if (!raw) {
+      setStatus('请先填写“在线图像地址”。');
+      return;
+    }
+    const urls = raw.split(/\n|,|\s+/).map(x => x.trim()).filter(Boolean).filter(x => /^https?:\/\//i.test(x));
+    if (!urls.length) {
+      setStatus('并未识别到有效的在线图像地址。');
+      return;
+    }
+    const max = Math.max(1, Number(imageCount || 1));
+    const newImages = [...images];
+    const extracted = urls.slice(0, max);
+    
+    extracted.forEach((url) => {
+      let name = `online_${newImages.length + 1}`;
+      try {
+        const u = new URL(url);
+        const base = decodeURIComponent(u.pathname.split('/').pop() || '');
+        if (base) name = base;
+      } catch (e) {}
+      
+      const imgData = { url, name, path: url, source: 'online' };
+      newImages.push(imgData);
+      
+      // Sync to global gallery
+      addFile({
+        name: name,
+        type: 'image',
+        url: url
+      });
+    });
+    
+    setImages(newImages);
+    updateStore({ images: newImages });
+    setImageAddress('');
+    setStatus(`成功捕获 ${extracted.length} 个新资源并同步至全局。`);
+  };
+
+  const handleToggleSelect = (index: number) => {
+    const set = new Set(selectedIndices);
+    if (set.has(index)) set.delete(index);
+    else set.add(index);
+    const next = [...set].sort((a, b) => a - b);
+    setSelectedIndices(next);
+    updateStore({ selectedIndices: next });
+  };
+
+  const handleRemoveImage = (index: number) => {
+    const nextImages = images.filter((_, i) => i !== index);
+    const nextIndices = selectedIndices.filter(i => i !== index).map(i => i > index ? i - 1 : i);
+    setImages(nextImages);
+    setSelectedIndices(nextIndices);
+    updateStore({ images: nextImages, selectedIndices: nextIndices });
+  };
+
+  const BrowserFrameComponent = (isPortal = false) => (
+    <BrowserFrame 
+      isPortal={isPortal}
+      pageUrl={pageUrl}
+      setPageUrl={setPageUrl}
+      iframeUrl={iframeUrl}
+      refreshKey={refreshKey}
+      favorites={favorites}
+      onNavigate={handleNavigate}
+      onRefresh={handleRefresh}
+      onAddFavorite={handleAddFavorite}
+      onRemoveFavorite={handleRemoveFavorite}
+      onBookmarkClick={handleBookmarkClick}
+      onToggleOverlay={setIsOverlayOpen}
+      onOpenExternal={() => window.open(iframeUrl || pageUrl, '_blank')}
+    />
+  );
+
+  const ComfyUIOverlay = () => (
+    <div className="w-full h-full flex flex-col bg-[#0c1016] rounded-[32px] overflow-hidden shadow-2xl border border-white/10">
+      <div className="bg-black/60 px-8 py-5 border-b border-white/5 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-6">
+           <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+             <CloudLightning size={24} className="text-white" />
+           </div>
+           <div>
+             <h3 className="text-lg font-black text-white tracking-widest uppercase italic">ComfyUI Full Control</h3>
+             <span className="text-xs font-mono text-gray-600 tracking-widest">BRIDGE_TERMINAL_V1.3</span>
+           </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setRefreshKey(prev => prev + 1)}
+            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-gray-400 hover:text-white transition-all flex items-center gap-3"
+          >
+            <RefreshCw size={20} />
+            <span className="text-[10px] font-black uppercase tracking-widest px-2">Refresh View</span>
+          </button>
+          <button 
+            onClick={() => setIsOverlayOpen(false)}
+            className="p-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-2xl transition-all"
+          >
+            <Minimize2 size={20} />
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 relative overflow-hidden">
+        <iframe 
+          key={`${refreshKey}-portal`}
+          src={comfyUrl}
+          className="w-full h-full border-none"
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <NodeResizer minWidth={400} minHeight={400} isVisible={selected} lineClassName="border-blue-500/50" handleClassName="h-3 w-3 bg-white border-2 border-blue-500 rounded-sm" onResize={(_, { width, height }) => updateNodeData(id, { width, height })} />
+      <div 
+        className={`flex flex-col w-full h-full bg-[#0c1016] rounded-[32px] border-2 border-white/10 overflow-hidden shadow-2xl transition-all ${selected ? 'border-blue-500 ring-8 ring-blue-500/10' : ''}`}
+        style={{ 
+          ['--node-zoom' as any]: zoomScale
+        }}
+      >
+        <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-blue-500" />
+        <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-blue-500" />
+
+        {/* Header */}
+        <div 
+          className="border-b border-white/5 flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle"
+          style={{ padding: 20 * zoomScale }}
+        >
+          <div 
+            className="flex items-center"
+            style={{ gap: 16 * zoomScale }}
+          >
+            <div 
+              className={`rounded-2xl flex items-center justify-center shadow-lg transition-all ${viewMode === 'scraper' ? 'bg-indigo-600' : 'bg-blue-600'}`}
+              style={{ width: 48 * zoomScale, height: 48 * zoomScale }}
+            >
+              {viewMode === 'scraper' ? <Globe2 size={24 * zoomScale} className="text-white" /> : <CloudLightning size={24 * zoomScale} className="text-white" />}
+            </div>
+            <div>
+              <h3 
+                className="font-black text-white tracking-widest uppercase italic"
+                style={{ fontSize: 14 * zoomScale }}
+              >
+                AI_网页百宝箱
+              </h3>
+              <div 
+                className="flex items-center font-mono text-gray-600 tracking-widest"
+                style={{ gap: 8 * zoomScale, fontSize: 10 * zoomScale, marginTop: 2 * zoomScale }}
+              >
+                <span>V1.3 APT_WEB_BRIDGE</span>
+                <div 
+                  className="rounded-full bg-indigo-500"
+                  style={{ width: 4 * zoomScale, height: 4 * zoomScale }}
+                />
+                <span className="text-indigo-500/60 uppercase">{viewMode === 'scraper' ? 'Asset Collector' : 'ComfyUI Bridge'}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div 
+            className="flex items-center"
+            style={{ gap: 8 * zoomScale }}
+          >
+            <div 
+              className="flex bg-white/5 rounded-xl border border-white/10"
+              style={{ padding: 4 * zoomScale, marginRight: 16 * zoomScale }}
+            >
+              <button 
+                onClick={() => { setViewMode('scraper'); updateStore({ viewMode: 'scraper' }); }}
+                className={`rounded-lg font-bold transition-all ${viewMode === 'scraper' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                style={{ 
+                  padding: `${6 * zoomScale}px ${12 * zoomScale}px`,
+                  fontSize: 10 * zoomScale
+                }}
+              >
+                网页采集
+              </button>
+              <button 
+                onClick={() => { setViewMode('comfy'); updateStore({ viewMode: 'comfy' }); }}
+                className={`rounded-lg font-bold transition-all ${viewMode === 'comfy' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                style={{ 
+                  padding: `${6 * zoomScale}px ${12 * zoomScale}px`,
+                  fontSize: 10 * zoomScale
+                }}
+              >
+                ComfyUI
+              </button>
+            </div>
+
+            <button 
+              onClick={() => setIsOverlayOpen(true)}
+              className="hover:bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all transform hover:scale-105 active:scale-95"
+              style={{ padding: 12 * zoomScale }}
+              title="全屏脱离画布"
+            >
+              <Maximize2 size={20 * zoomScale} />
+            </button>
+          </div>
+        </div>
+
+        <div 
+          className="flex-1 flex flex-col overflow-hidden nodrag"
+          style={{ padding: 20 * zoomScale, gap: 16 * zoomScale }}
+        >
+          {viewMode === 'scraper' ? (
+            <>
+              {/* Original Scraper UI */}
+              <div 
+                className="grid grid-cols-5 shrink-0"
+                style={{ gap: 12 * zoomScale }}
+              >
+                <div 
+                  className="col-span-3 bg-black/40 border border-white/5 rounded-[24px] group focus-within:border-indigo-500/50 transition-colors"
+                  style={{ padding: 16 * zoomScale, gap: 8 * zoomScale, display: 'flex', flexDirection: 'column' }}
+                >
+                  <label 
+                    className="font-black text-gray-600 uppercase tracking-[0.2em] flex items-center"
+                    style={{ fontSize: 9 * zoomScale, gap: 8 * zoomScale }}
+                  >
+                    <LinkIcon size={10 * zoomScale} /> Online Assets Hub
+                  </label>
+                  <textarea 
+                    className="w-full bg-transparent text-white/80 outline-none resize-none font-mono custom-scrollbar placeholder:text-gray-700"
+                    style={{ height: 60 * zoomScale, fontSize: 11 * zoomScale }}
+                    value={imageAddress}
+                    onChange={(e) => setImageAddress(e.target.value)}
+                    placeholder="Paste raw links or HTML snippet here..."
+                  />
+                </div>
+                <div 
+                  className="col-span-2 flex flex-col"
+                  style={{ gap: 8 * zoomScale }}
+                >
+                   <button 
+                     onClick={handleAddOnlineImage}
+                     className="flex-1 flex flex-col items-center justify-center bg-indigo-600 hover:bg-indigo-500 rounded-[20px] text-white transition-all shadow-xl shadow-indigo-900/10 group active:scale-[0.98]"
+                     style={{ borderRadius: 20 * zoomScale }}
+                   >
+                      <ImagePlus size={24 * zoomScale} className="group-hover:scale-110 transition-transform" style={{ marginBottom: 4 * zoomScale }} />
+                      <span className="font-black uppercase tracking-[0.3em]" style={{ fontSize: 10 * zoomScale }}>Harvest</span>
+                   </button>
+                   <div 
+                     className="flex items-center bg-white/5 border border-white/5"
+                     style={{ height: 48 * zoomScale, borderRadius: 16 * zoomScale, paddingLeft: 16 * zoomScale, paddingRight: 16 * zoomScale }}
+                   >
+                      <span className="font-black text-gray-600 uppercase tracking-[0.1em]" style={{ fontSize: 9 * zoomScale, marginRight: 16 * zoomScale }}>Pool Limit</span>
+                      <input 
+                        type="number" 
+                        className="flex-1 bg-transparent text-right text-indigo-400 font-black outline-none"
+                        style={{ fontSize: 12 * zoomScale }}
+                        value={imageCount}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          setImageCount(val);
+                          updateStore({ imageCount: val });
+                        }}
+                      />
+                   </div>
+                </div>
+              </div>
+
+              {BrowserFrameComponent(false)}
+
+              {/* Collection Bar */}
+              <div 
+                className="bg-black/40 border border-white/5 overflow-hidden flex flex-col shrink-0"
+                style={{ height: 150 * zoomScale, borderRadius: 24 * zoomScale, padding: 16 * zoomScale, gap: 12 * zoomScale }}
+              >
+                <div 
+                  className="flex items-center justify-between"
+                  style={{ marginBottom: 4 * zoomScale }}
+                >
+                   <div 
+                    className="flex items-center"
+                    style={{ gap: 8 * zoomScale }}
+                   >
+                      <div 
+                        className="rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse" 
+                        style={{ width: 8 * zoomScale, height: 8 * zoomScale }}
+                      />
+                      <span 
+                        className="font-black text-gray-600 uppercase tracking-widest"
+                        style={{ fontSize: 10 * zoomScale }}
+                      >
+                        Captured Resources
+                      </span>
+                   </div>
+                   <div 
+                    className="flex items-center"
+                    style={{ gap: 16 * zoomScale }}
+                   >
+                     <button onClick={() => { setImages([]); setSelectedIndices([]); updateStore({ images: [], selectedIndices: [] }); }} className="text-gray-700 hover:text-red-500 transition-colors p-1" title="Purge All">
+                        <Trash2 size={14 * zoomScale} />
+                     </button>
+                     <div className="bg-white/10" style={{ height: 12 * zoomScale, width: 1 }} />
+                     <span 
+                      className="font-mono text-indigo-500/50 italic tracking-tighter"
+                      style={{ fontSize: 9 * zoomScale }}
+                     >
+                      REF_COUNT: {selectedIndices.length || images.length} / {images.length}
+                     </span>
+                   </div>
+                </div>
+                <div 
+                  className="flex-1 overflow-auto grid grid-cols-7 gap-3 custom-scrollbar pr-2 pb-1 scrollbar-hide"
+                  style={{ gap: 12 * zoomScale }}
+                >
+                  <AnimatePresence>
+                    {images.map((img, i) => (
+                      <motion.div 
+                        key={img.url + i}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleToggleSelect(i)}
+                        className={`group relative aspect-square border-2 overflow-hidden cursor-pointer transition-all ${selectedIndices.includes(i) ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)]' : 'border-white/5 hover:border-white/20'}`}
+                        style={{ borderRadius: 14 * zoomScale }}
+                      >
+                        <img src={img.url} className="w-full h-full object-cover" alt="" />
+                        <div className={`absolute inset-0 bg-blue-500/20 transition-opacity ${selectedIndices.includes(i) ? 'opacity-100' : 'opacity-0'}`} />
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(i); }}
+                          className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all border border-white/10"
+                          style={{ width: 20 * zoomScale, height: 20 * zoomScale, fontSize: 10 * zoomScale }}
+                        >
+                          ×
+                        </button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  {!images.length && (
+                    <div 
+                      className="col-span-full h-full flex flex-col items-center justify-center text-gray-700 opacity-40 italic"
+                      style={{ fontSize: 10 * zoomScale, gap: 12 * zoomScale }}
+                    >
+                       <div 
+                        className="rounded-full border border-dashed border-gray-700 flex items-center justify-center"
+                        style={{ width: 48 * zoomScale, height: 48 * zoomScale }}
+                       >
+                          <ImagePlus size={20 * zoomScale} strokeWidth={1} />
+                       </div>
+                       <span className="tracking-[0.2em] font-black uppercase">Awaiting Data Streams</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+               {/* ComfyUI Header / Address Bar */}
+               <div className="px-5 py-4 bg-black/40 border border-white/5 rounded-[24px] flex flex-col gap-3 shrink-0 shadow-lg">
+                  <div className="flex items-center gap-4">
+                     <div className="flex-1 relative group">
+                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500/50 group-focus-within:text-blue-500 transition-colors">
+                           <Globe2 size={14} />
+                         </div>
+                         <input 
+                           type="text"
+                           value={comfyUrl}
+                           onChange={(e) => setComfyUrl(e.target.value)}
+                           className={`w-full bg-white/5 border rounded-[18px] pl-10 pr-24 py-2.5 text-[11px] transition-all font-mono ${
+                             comfyStatus === 'success' ? 'border-emerald-500/30 text-emerald-300' :
+                             comfyStatus === 'error' ? 'border-red-500/30 text-red-300' :
+                             'border-white/10 text-white/70 focus:border-blue-500/50'
+                           }`}
+                           placeholder="ComfyUI Server URL..."
+                         />
+                         <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center">
+                            <div className={`w-1.5 h-1.5 rounded-full mr-2 ${
+                              comfyStatus === 'success' ? 'bg-emerald-500' : 
+                              comfyStatus === 'error' ? 'bg-red-500' : 
+                              'bg-blue-500 animate-pulse'
+                            }`} />
+                         </div>
+                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                           <button onClick={() => window.open(comfyUrl, '_blank')} className="p-2 hover:bg-white/10 rounded-xl text-orange-400/60 hover:text-orange-400 transition-all" title="Open in New Tab (Bypass HTTPS block)">
+                              <ExternalLink size={14} />
+                           </button>
+                           <button onClick={handleSyncFromLocal} className="p-2 hover:bg-white/10 rounded-xl text-emerald-400/60 hover:text-emerald-400 transition-all" title="Sync from Local">
+                              <RefreshCw size={14} />
+                           </button>
+                           <button onClick={handleComfyStatusCheck} className="p-2 hover:bg-white/10 rounded-xl text-blue-400/60 hover:text-blue-400 transition-all" title="Test Connection">
+                              <CloudLightning size={14} />
+                           </button>
+                           <button onClick={() => setRefreshKey(prev => prev + 1)} className="p-2 hover:bg-white/10 rounded-xl text-gray-500 hover:text-white transition-all" title="Reload View">
+                              <RefreshCw size={14} />
+                           </button>
+                         </div>
+                     </div>
+                     <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                       <button 
+                         onClick={() => setComfyView('browser')}
+                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${comfyView === 'browser' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                       >
+                         <Globe2 size={10} /> 预览
+                       </button>
+                       <button 
+                         onClick={() => setComfyView('source')}
+                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${comfyView === 'source' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                       >
+                         <FileJson size={10} /> 源码
+                       </button>
+                     </div>
+                  </div>
+
+                  {showLocalHelp && checkIsLocal(comfyUrl) && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex flex-col gap-2 overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 text-red-400 font-bold text-[10px]">
+                        <AlertCircle size={14} />
+                        <span>本地连接受阻：浏览器禁止跨域访问 HTTP (混合内容拦截)</span>
+                      </div>
+                      <p className="text-[9px] text-gray-400 leading-relaxed">
+                        您正在通过 HTTPS 访问此应用，而 ComfyUI 运行在 HTTP。请按照以下步骤解决：
+                      </p>
+                      <ul className="text-[9px] text-gray-500 space-y-1 list-decimal list-inside px-1">
+                        <li>点击浏览器地址栏左侧的 <span className="text-gray-300 font-bold">🔒 锁头图标</span></li>
+                        <li>选择 <span className="text-gray-300 font-bold">“网站设置” (Site settings)</span></li>
+                        <li>找到 <span className="text-gray-300 font-bold">“不安全内容” (Insecure content)</span></li>
+                        <li>将其设置为 <span className="text-blue-400 font-black">“允许” (Allow)</span> 并刷新页面</li>
+                      </ul>
+                      <div className="flex gap-2 mt-1">
+                        <button 
+                          onClick={() => window.open('https://npx.is/localtunnel', '_blank')}
+                          className="text-[8px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-blue-400 font-mono"
+                        >
+                          npx localtunnel --port 8188
+                        </button>
+                        <button 
+                          onClick={() => setShowLocalHelp(false)}
+                          className="text-[8px] ml-auto text-gray-600 hover:text-white"
+                        >
+                          [ 隐藏提示 ]
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+               </div>
+
+               {/* ComfyUI Main Content: Preview & Control */}
+               <div className="flex-1 flex flex-col gap-5 overflow-hidden">
+                  {/* Top Area: Viewer */}
+                  <div className="h-[55%] relative bg-black/40 rounded-[28px] overflow-hidden border border-white/5 group shadow-inner shrink-0">
+                    <AnimatePresence mode="wait">
+                      {comfyView === 'browser' ? (
+                        <motion.div key="iframe" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+                          <iframe 
+                            key={refreshKey}
+                            ref={comfyIframeRef}
+                            src={comfyUrl}
+                            className="w-full h-full border-none"
+                            onLoad={() => setIsComfyIframeLoading(false)}
+                          />
+                          {isComfyIframeLoading && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0c1016]">
+                               <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
+                               <span className="text-[10px] font-black text-gray-700 uppercase tracking-[0.4em]">Establishing Link...</span>
+                            </div>
+                          )}
+                        </motion.div>
+                      ) : (
+                        <motion.div key="workflow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 p-5 flex flex-col gap-4 bg-[#080a0f]">
+                           <div className="flex items-center justify-between">
+                              <div className="flex flex-col">
+                                 <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Workflow API JSON</span>
+                                 <span className="text-[8px] text-gray-600 mt-0.5">Enable "Dev Mode" to save API format</span>
+                              </div>
+                              <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-blue-400 text-[10px] font-black hover:bg-white/10 transition-all cursor-pointer uppercase tracking-widest">
+                                 <Upload size={12} /> 导入配置
+                                 <input type="file" accept=".json" onChange={handleJsonFileUpload} className="hidden" />
+                              </label>
+                           </div>
+                           <textarea 
+                             value={workflowText}
+                             onChange={(e) => setWorkflowText(e.target.value)}
+                             className="flex-1 w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-[11px] font-mono text-emerald-500/80 focus:outline-none focus:border-emerald-500/20 resize-none custom-scrollbar"
+                             placeholder="在此粘贴或导入 JSON 工作流..."
+                           />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Bottom Area: Parameters & Results (Unified Stacked View) */}
+                  <div className="flex-1 flex flex-col gap-5 overflow-y-auto custom-scrollbar min-h-0 pr-1">
+                    {/* Parameters Control Dashboard */}
+                    <div className="shrink-0 flex flex-col bg-black/40 border border-white/5 rounded-[28px] overflow-hidden shadow-2xl">
+                       <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0 bg-white/[0.03]">
+                          <div className="flex items-center gap-3">
+                             <div className="p-2 bg-blue-500/10 rounded-lg">
+                                <Database size={16} className="text-blue-500" />
+                             </div>
+                             <div className="flex flex-col">
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest"> 执行配置控制台 </span>
+                                <span className="text-[8px] text-gray-600">管理识别的输入输出与参数</span>
+                             </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                             <span className="text-[9px] font-mono text-gray-700 bg-white/5 px-2 py-1 rounded-md">DETECTION_SCAN: {scanResult.exposedParams.length + scanResult.imageInputs.length + scanResult.imageOutputs.length}</span>
+                          </div>
+                       </div>
+                       <div className="p-8">
+                         {scanResult.exposedParams.length === 0 && scanResult.imageInputs.length === 0 && scanResult.imageOutputs.length === 0 ? (
+                           <div className="py-16 flex flex-col items-center justify-center text-gray-800 gap-4 opacity-40">
+                              <Info size={32} />
+                              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-center max-w-[300px] leading-relaxed">
+                                未在工作流中检测到导出节点<br/>
+                                <span className="text-[8px] lowercase font-normal opacity-50 mt-2 block">提示：在 ComfyUI 中重命名节点，包含 #01, #02 等编号以暴露参数；图片节点 (LoadImage/SaveImage) 将被自动识别。</span>
+                              </p>
+                           </div>
+                         ) : (
+                           <div className="space-y-12">
+                              {/* 1. Auto Image Inputs */}
+                              {scanResult.imageInputs.length > 0 && (
+                                <section className="space-y-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className="px-3 py-1 bg-indigo-600/20 rounded-lg text-indigo-400 text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">
+                                      自动图像输入
+                                    </div>
+                                    <div className="flex-1 h-px bg-indigo-500/10" />
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    {scanResult.imageInputs.map((input, idx) => (
+                                      <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 group/input transition-all hover:bg-white/[0.04]">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{input.title}</span>
+                                          <span className="text-[8px] font-mono text-gray-700 italic">#{input.comfyNodeId}</span>
+                                        </div>
+                                        <div className="aspect-square bg-black/40 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-700 gap-2 relative overflow-hidden">
+                                           {input.currentValue ? (
+                                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                <ImageIcon size={24} className="opacity-20" />
+                                                <span className="text-[9px] mt-2 opacity-30 truncate px-2 w-full text-center">{input.currentValue}</span>
+                                              </div>
+                                           ) : (
+                                              <>
+                                                <Upload size={20} strokeWidth={1} />
+                                                <span className="text-[8px] uppercase tracking-widest">Awaiting Input</span>
+                                              </>
+                                           )}
+                                        </div>
+                                        <div className="text-[8px] text-gray-600 font-medium lowercase italic leading-relaxed">
+                                          * 当 AI Canvas 在此输入端连接图片节点时，执行引擎会自动代入。
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </section>
+                              )}
+                              {/* 2. Auto Image Outputs */}
+                              {scanResult.imageOutputs.length > 0 && (
+                                <section className="space-y-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className="px-3 py-1 bg-emerald-600/20 rounded-lg text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
+                                      自动图像输出
+                                    </div>
+                                    <div className="flex-1 h-px bg-emerald-500/10" />
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                    {scanResult.imageOutputs.map((output, idx) => (
+                                      <div key={idx} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 group/output transition-all hover:bg-white/[0.04]">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{output.title}</span>
+                                          <span className="text-[8px] font-mono text-gray-700 italic">#{output.comfyNodeId}</span>
+                                        </div>
+                                        <div className="aspect-square bg-black/40 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center text-gray-700 gap-2">
+                                           <CheckCircle2 size={24} strokeWidth={1} />
+                                           <span className="text-[8px] uppercase tracking-widest">Image Destination</span>
+                                        </div>
+                                        <div className="text-[8px] text-gray-600 font-medium lowercase italic leading-relaxed">
+                                          * 任务完成后，由此节点产出的结果将自动同步回 AI Canvas。
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </section>
+                              )}
+                              {/* 3. Hashtag Params */}
+                              {scanResult.exposedParams.length > 0 && (
+                                <section className="space-y-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className="px-3 py-1 bg-blue-600/20 rounded-lg text-blue-400 text-[10px] font-black uppercase tracking-widest border border-blue-500/20">
+                                      # 标记参数控制
+                                    </div>
+                                    <div className="flex-1 h-px bg-blue-500/10" />
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                                    {scanResult.exposedParams.map((param, pIdx) => (
+                                      <div key={pIdx} className="space-y-5 p-5 bg-white/[0.02] border border-white/5 rounded-2xl hover:border-blue-500/30 transition-all group/param">
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full bg-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.6)]" />
+                                                <span className="text-[11px] font-black text-white uppercase tracking-widest">{param.title}</span>
+                                            </div>
+                                            <span className="text-[8px] font-mono text-gray-700 italic">ID:{param.comfyNodeId}</span>
+                                          </div>
+                                          <div className="space-y-5 pl-4 border-l-2 border-blue-500/10 group-hover/param:border-blue-500/40 transition-colors">
+                                            {param.editableFields.map((field, fIdx) => (
+                                              <div key={fIdx} className="space-y-2">
+                                                  <div className="flex items-center justify-between">
+                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{field.label}</label>
+                                                    <span className="px-1.5 py-0.5 rounded-md bg-white/5 text-[7px] font-mono text-gray-700">{field.fieldType}</span>
+                                                  </div>
+                                                  {field.fieldType === 'textarea' ? (
+                                                    <textarea 
+                                                      value={field.value} 
+                                                      onChange={(e) => handleComfyFieldChange(param.comfyNodeId, field.name, e.target.value)} 
+                                                      className="w-full bg-black/40 border border-white/5 hover:border-white/20 rounded-xl p-4 text-[11px] text-blue-100/90 focus:outline-none focus:border-blue-500/40 transition-all min-h-[100px] resize-none font-sans leading-relaxed custom-scrollbar"
+                                                      placeholder={`输入 ${field.label}...`}
+                                                    />
+                                                  ) : (
+                                                    <input 
+                                                      type={field.fieldType === 'number' ? 'number' : 'text'} 
+                                                      value={field.value} 
+                                                      onChange={(e) => handleComfyFieldChange(param.comfyNodeId, field.name, field.fieldType === 'number' ? Number(e.target.value) : e.target.value)} 
+                                                      className="w-full bg-black/40 border border-white/5 hover:border-white/20 rounded-xl px-4 py-3 text-[11px] text-white/90 focus:outline-none focus:border-blue-500/40 transition-all font-sans"
+                                                      placeholder={`设置 ${field.label}...`}
+                                                    />
+                                                  )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </section>
+                              )}
+                            </div>
+                          )}
+                     </div>
+                   </div>
+
+                    {/* Results Hub */}
+                    <div className="shrink-0 flex flex-col bg-black/40 border border-white/5 rounded-[28px] overflow-hidden shadow-2xl relative">
+                       {/* Floating Status Notification Dashboard */}
+                       <AnimatePresence>
+                          {(comfyStatus === 'success' || comfyStatus === 'error' || comfyStatus === 'running' || comfyStatus === 'uploading') && (
+                            <motion.div 
+                              initial={{ y: -40, opacity: 0, scale: 0.9 }}
+                              animate={{ y: 0, opacity: 1, scale: 1 }}
+                              exit={{ y: -40, opacity: 0, scale: 0.9 }}
+                              className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl border min-w-[320px] justify-between"
+                              style={{ 
+                                backgroundColor: comfyStatus === 'success' ? 'rgba(16, 185, 129, 0.1)' : 
+                                                 comfyStatus === 'error' ? 'rgba(239, 68, 68, 0.1)' : 
+                                                 'rgba(59, 130, 246, 0.1)',
+                                borderColor: comfyStatus === 'success' ? 'rgba(16, 185, 129, 0.2)' : 
+                                             comfyStatus === 'error' ? 'rgba(239, 68, 68, 0.2)' : 
+                                             'rgba(59, 130, 246, 0.2)'
+                              }}
+                            >
+                               <div className="flex items-center gap-4">
+                                  <div className="relative">
+                                     <div className={`w-4 h-4 rounded-full ${
+                                       comfyStatus === 'success' ? 'bg-emerald-500' : 
+                                       comfyStatus === 'error' ? 'bg-red-500' : 
+                                       'bg-blue-500 animate-ping absolute inset-0'
+                                     }`} />
+                                     {(comfyStatus === 'running' || comfyStatus === 'uploading') && (
+                                       <div className="w-4 h-4 rounded-full bg-blue-500 relative z-10" />
+                                     )}
+                                     <div className={`absolute -inset-2 rounded-full blur-md ${
+                                       comfyStatus === 'success' ? 'bg-emerald-500/30' : 
+                                       comfyStatus === 'error' ? 'bg-red-500/30' : 
+                                       'bg-blue-500/30'
+                                     }`} />
+                                  </div>
+
+                                  <div className="flex flex-col">
+                                     <span className={`text-[12px] font-black uppercase tracking-[0.2em] ${
+                                       comfyStatus === 'success' ? 'text-emerald-400' : 
+                                       comfyStatus === 'error' ? 'text-red-400' : 
+                                       'text-blue-400'
+                                     }`}>
+                                       {comfyStatus === 'success' ? '任务执行完毕' : 
+                                        comfyStatus === 'error' ? '任务执行中断' : 
+                                        comfyStatus === 'uploading' ? '正在上传资源' : '引擎运行中'}
+                                     </span>
+                                     <span className="text-[10px] text-white/40 font-medium lowercase">
+                                       {comfyStatus === 'success' ? '数据已同步至输出面板' : 
+                                        comfyStatus === 'error' ? '检测到运行错误，请检查日志' : 
+                                        '保持连接状态，请勿刷新'}
+                                     </span>
+                                  </div>
+                               </div>
+
+                               <div className="flex items-center gap-2">
+                                  {(comfyStatus === 'success' || comfyStatus === 'error') && (
+                                    <button 
+                                      onClick={() => setComfyStatus('ready')}
+                                      className="p-2 hover:bg-white/10 rounded-xl transition-all group"
+                                      title="Dismiss"
+                                    >
+                                      <X size={14} className="text-white/30 group-hover:text-white" />
+                                    </button>
+                                  )}
+                                  {(comfyStatus === 'running' || comfyStatus === 'uploading') && (
+                                    <Loader2 size={16} className="text-blue-500 animate-spin" />
+                                  )}
+                               </div>
+                            </motion.div>
+                          )}
+                       </AnimatePresence>
+
+                       <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0 bg-white/[0.03]">
+                          <div className="flex items-center gap-3">
+                             <div className="p-2 bg-emerald-500/10 rounded-lg">
+                                <ImageIcon size={16} className="text-emerald-500" />
+                             </div>
+                             <div className="flex flex-col">
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest"> 执行历史与实时输出 </span>
+                                <span className="text-[8px] text-gray-600">查看生成的图像和系统日志</span>
+                             </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                             <div className={`w-2 h-2 rounded-full ${outputImages.length > 0 ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-gray-800'}`} />
+                          </div>
+                       </div>
+                       
+                       <div className="p-8 flex flex-col lg:flex-row gap-10">
+                          {/* Image Feed */}
+                          <div className="flex-1">
+                             {outputImages.length > 0 ? (
+                               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                                  {outputImages.map((img, idx) => (
+                                    <div key={idx} className="group relative aspect-square rounded-[24px] overflow-hidden border border-white/5 hover:border-emerald-500/50 shadow-2xl transition-all hover:-translate-y-1">
+                                       <img src={img.url} className="w-full h-full object-cover" alt="Output" />
+                                       <div className="absolute inset-0 bg-black/90 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-4 backdrop-blur-xl">
+                                          <button onClick={() => {
+                                             const nextImages = [...images, { url: img.url, name: `comfy_${img.nodeId}`, source: 'comfy' }];
+                                             setImages(nextImages);
+                                             updateStore({ images: nextImages });
+                                             setViewMode('scraper');
+                                             setStatus(`已将工作流结果导出至采集箱。`);
+                                          }} className="flex items-center gap-3 px-6 py-3 bg-indigo-600 rounded-2xl text-white text-[11px] font-black uppercase hover:bg-indigo-500 transition-all active:scale-95 shadow-xl">
+                                             <Star size={14} fill="currentColor" /> 收藏结果
+                                          </button>
+                                          <a href={img.url} target="_blank" rel="noreferrer" className="text-[10px] font-black text-white/40 hover:text-white uppercase tracking-widest flex items-center gap-2 transition-colors">
+                                             <ExternalLink size={12} /> 查看原图
+                                          </a>
+                                       </div>
+                                    </div>
+                                  ))}
+                               </div>
+                             ) : (
+                               <div className="py-20 flex flex-col items-center justify-center text-gray-800 gap-4 opacity-20 italic">
+                                  <div className="p-5 border-2 border-dashed border-gray-800 rounded-full">
+                                    <Play size={40} strokeWidth={1} />
+                                  </div>
+                                  <span className="text-[11px] font-black uppercase tracking-[0.4em]">Awaiting execution</span>
+                               </div>
+                             )}
+                          </div>
+
+                          {/* Live Log Stream */}
+                          <div className="w-full lg:w-[350px] flex flex-col gap-4 p-6 bg-black/40 rounded-3xl border border-white/5">
+                             <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                   <Terminal size={14} className="text-blue-400" />
+                                   <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">System Engine</span>
+                                </div>
+                                <button onClick={() => setLogs([])} className="text-[8px] font-black text-gray-700 hover:text-white uppercase tracking-widest transition-colors">Clear</button>
+                             </div>
+                             <div className="font-mono text-[9px] text-gray-500/80 leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar space-y-2">
+                                {logs.length === 0 ? (
+                                  <div className="text-[8px] italic opacity-30 mt-10 text-center">No logs generated yet</div>
+                                ) : (
+                                  logs.map((log, idx) => (
+                                    <div key={idx} className="break-all border-l border-white/10 pl-3 py-1 hover:bg-white/[0.02] transition-all rounded-r">
+                                      {log}
+                                    </div>
+                                  ))
+                                )}
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+               </div>
+
+                {/* ComfyUI Footer */}
+                <div 
+                  className="flex items-center justify-between shrink-0 px-1 pt-2"
+                  style={{ gap: 12 * zoomScale }}
+                >
+                   <div 
+                     className="flex items-center bg-black/40 rounded-[24px] border border-white/5 shadow-inner"
+                     style={{ gap: 12 * zoomScale, padding: `${12 * zoomScale}px ${24 * zoomScale}px` }}
+                   >
+                      <div 
+                        className="relative flex items-center justify-center"
+                        style={{ width: 16 * zoomScale, height: 16 * zoomScale }}
+                      >
+                        <div className={`absolute inset-0 rounded-full blur-sm opacity-50 ${
+                          comfyStatus === 'running' || comfyStatus === 'uploading' ? 'bg-blue-500 animate-pulse' : 
+                          comfyStatus === 'success' ? 'bg-emerald-500' : 
+                          comfyStatus === 'error' ? 'bg-red-500' : 
+                          'bg-gray-700'
+                        }`} />
+                        <div 
+                          className={`rounded-full relative z-10 transition-colors duration-500 ${
+                            comfyStatus === 'running' || comfyStatus === 'uploading' ? 'bg-blue-400 animate-pulse' : 
+                            comfyStatus === 'success' ? 'bg-emerald-400' : 
+                            comfyStatus === 'error' ? 'bg-red-400' : 
+                            'bg-gray-600'
+                          }`} 
+                          style={{ width: 10 * zoomScale, height: 10 * zoomScale }}
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <div 
+                          className="flex items-center"
+                          style={{ gap: 8 * zoomScale }}
+                        >
+                          <span 
+                            className={`font-black uppercase tracking-widest leading-none ${
+                                comfyStatus === 'success' ? 'text-emerald-400' : 
+                                comfyStatus === 'error' ? 'text-red-400' : 
+                                'text-white/40'
+                            }`}
+                            style={{ fontSize: 10 * zoomScale }}
+                          >
+                            {comfyStatus === 'idle' ? '系统就绪' : 
+                             comfyStatus === 'ready' ? '就绪 / 已扫描' : 
+                             comfyStatus === 'uploading' ? '上传中...' : 
+                             comfyStatus === 'running' ? '运行中...' : 
+                             comfyStatus === 'success' ? '探测成功' : 
+                             comfyStatus === 'error' ? '执行故障' : comfyStatus}
+                          </span>
+                          {comfyStatus === 'success' && <CheckCircle2 size={10 * zoomScale} className="text-emerald-500" />}
+                          {comfyStatus === 'error' && <AlertCircle size={10 * zoomScale} className="text-red-500" />}
+                        </div>
+                        {promptId && <span className="font-mono mt-1 opacity-50 tracking-tighter text-gray-700" style={{ fontSize: 8 * zoomScale }}>TASK_ID: {promptId}</span>}
+                      </div>
+                   </div>
+                   <button 
+                     id="comfy-run-btn"
+                     onClick={handleComfyRun} 
+                     disabled={comfyStatus === 'running' || comfyStatus === 'uploading'}
+                     className={`flex-1 flex items-center justify-center rounded-2xl font-black uppercase tracking-[0.3em] transition-all shadow-2xl active:scale-95 group relative overflow-hidden ${
+                       comfyStatus === 'running' || comfyStatus === 'uploading' 
+                       ? 'bg-gray-800 text-gray-600 cursor-not-allowed border border-white/5' 
+                       : comfyStatus === 'error'
+                       ? 'bg-red-600/20 hover:bg-red-600/30 text-red-500 border border-red-500/30'
+                       : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40 hover:shadow-blue-500/40'
+                     }`}
+                     style={{ 
+                       padding: `${16 * zoomScale}px ${48 * zoomScale}px`, 
+                       fontSize: 12 * zoomScale,
+                       gap: 16 * zoomScale 
+                     }}
+                   >
+                      <div 
+                        className="relative z-10 flex items-center"
+                        style={{ gap: 12 * zoomScale }}
+                      >
+                        {comfyStatus === 'running' || comfyStatus === 'uploading' ? (
+                          <Loader2 size={18 * zoomScale} className="animate-spin text-blue-500" />
+                        ) : (
+                          <div 
+                            className={`rounded-lg transition-colors ${comfyStatus === 'error' ? 'bg-red-500/20' : 'bg-white/10 group-hover:bg-white/20'}`}
+                            style={{ padding: 4 * zoomScale }}
+                          >
+                             {comfyStatus === 'error' ? <AlertCircle size={16 * zoomScale} /> : <Play size={16 * zoomScale} className="group-hover:translate-x-0.5 transition-transform" />}
+                          </div>
+                        )}
+                        <span>{comfyStatus === 'error' ? '重新尝试' : '执行工作流'}</span>
+                      </div>
+                     {(comfyStatus === 'running' || comfyStatus === 'uploading') && (
+                        <motion.div 
+                          className="absolute inset-0 bg-blue-500/10"
+                          animate={{ x: ['-100%', '100%'] }}
+                          transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                        />
+                     )}
+                   </button>
+                </div>
+            </div>
+          )}
+        </div>
+
+        <div 
+          className="bg-black/60 border-t border-white/5 flex items-center justify-between shrink-0"
+          style={{ padding: `${12 * zoomScale}px ${24 * zoomScale}px` }}
+        >
+          <div 
+            className="flex items-center font-mono italic truncate"
+            style={{ gap: 12 * zoomScale, fontSize: 10 * zoomScale, maxWidth: 500 * zoomScale }}
+          >
+             <Info size={14 * zoomScale} className="text-indigo-600 shrink-0" />
+             <span className="truncate">{status}</span>
+          </div>
+          <div 
+            className="flex items-center shrink-0"
+            style={{ gap: 16 * zoomScale }}
+          >
+             <div 
+               className="bg-white/10"
+               style={{ height: 16 * zoomScale, width: 1 }}
+             />
+             <span 
+              className="font-black text-indigo-500 uppercase tracking-[0.3em]"
+              style={{ fontSize: 9 * zoomScale }}
+             >
+               Stream Active
+             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* PORTAL OVERLAY */}
+      {isOverlayOpen && createPortal(
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-12 bg-black/85 backdrop-blur-3xl" onPointerDown={e => e.stopPropagation()}>
+           <motion.div 
+             initial={{ opacity: 0, scale: 0.9, y: 40 }}
+             animate={{ opacity: 1, scale: 1, y: 0 }}
+             exit={{ opacity: 0, scale: 0.9, y: 40 }}
+             className="w-full h-full"
+           >
+              {viewMode === 'scraper' ? BrowserFrameComponent(true) : ComfyUIOverlay()}
+           </motion.div>
+           {/* Background Click to Close - Optional, but let's keep it robust */}
+           <div className="absolute inset-0 -z-10" onClick={() => setIsOverlayOpen(false)} />
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}

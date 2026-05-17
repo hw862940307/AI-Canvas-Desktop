@@ -1,0 +1,14 @@
+{
+  "name": "AI Canvas Desktop",
+  "description": "A professional infinite canvas for AI-powered creation with nodes for images, text, and seamless local/cloud ComfyUI integration.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "AI-powered nodes",
+    "Infinite canvas",
+    "Image generation",
+    "Prompt engineering"
+  ]
+}

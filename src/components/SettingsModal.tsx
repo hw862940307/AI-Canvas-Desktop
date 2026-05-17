@@ -1,0 +1,431 @@
+import React, { useState } from 'react';
+import { 
+  X, 
+  Settings, 
+  Grid3X3, 
+  MousePointer2, 
+  Sun, 
+  Moon, 
+  Cloud,
+  Type,
+  FileDown,
+  Layout,
+  Link,
+  Magnet,
+  Maximize,
+  Keyboard,
+  CreditCard,
+  Key,
+  FolderOpen,
+  MousePointer,
+  Compass,
+  Zap,
+  AlignJustify
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useStore, AppSettings, MouseSize, AppTheme, BarTexture, FontSize, UploadQuality, MultiSelectMode } from '../store/useStore';
+
+interface SettingsModalProps {
+  onClose: () => void;
+}
+
+type SettingsTab = 'general' | 'canvas' | 'node' | 'file' | 'api' | 'subscription' | 'keyboard';
+
+export const SettingsModal = ({ onClose }: SettingsModalProps) => {
+  const { settings, updateSettings } = useStore();
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+
+  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'general', label: '常规', icon: <Grid3X3 size={18} /> },
+    { id: 'canvas', label: '画布与对齐', icon: <AlignJustify size={18} /> },
+    { id: 'node', label: '节点行为', icon: <MousePointer2 size={18} /> },
+    { id: 'file', label: '文件与保存', icon: <FolderOpen size={18} /> },
+    { id: 'api', label: 'API 输入', icon: <FileDown size={18} /> },
+    { id: 'subscription', label: '订阅中心', icon: <CreditCard size={18} /> },
+    { id: 'keyboard', label: '键盘快捷键', icon: <Keyboard size={18} /> },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className={`w-full max-w-5xl h-[80vh] border border-[var(--border)] rounded-[32px] overflow-hidden flex shadow-2xl shadow-black/50 ${
+          settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-secondary)]'
+        }`}
+      >
+        {/* Sidebar */}
+        <div className={`w-64 border-r border-[var(--border)] p-6 flex flex-col gap-6 ${
+          settings.barTexture === 'frosted' ? 'bg-black/20' : 'bg-[var(--bg-tertiary)]'
+        }`}>
+          <h2 className="text-xl font-bold text-[var(--text-primary)] px-2">设置</h2>
+          <div className="flex flex-col gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${
+                  activeTab === tab.id 
+                    ? 'bg-blue-600/10 text-blue-500 border border-blue-500/20' 
+                    : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                {tab.icon}
+                <span className="font-medium">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className={`flex-1 flex flex-col min-w-0 ${
+          settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-[var(--bg-secondary)]'
+        }`}>
+          <div className={`h-16 flex items-center justify-between px-8 border-b border-[var(--border)] ${
+            settings.barTexture === 'frosted' ? 'bg-white/5' : ''
+          }`}>
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">
+              {tabs.find(t => t.id === activeTab)?.label}
+            </h3>
+            <button 
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-[var(--text-secondary)] hover:text-white hover:bg-white/10 transition-all"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            {activeTab === 'general' && <GeneralSettings settings={settings} update={updateSettings} />}
+            {activeTab === 'canvas' && <CanvasSettings settings={settings} update={updateSettings} />}
+            {activeTab === 'file' && <FileSettings settings={settings} update={updateSettings} />}
+            {['node', 'api', 'subscription', 'keyboard'].includes(activeTab) && (
+              <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+                <Zap size={48} className="opacity-20" />
+                <p>该功能正在开发中...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: (s: Partial<AppSettings>) => void }) => {
+  return (
+    <div className="flex flex-col gap-10">
+      <SettingRow 
+        title="鼠标大小" 
+        desc="选择光标显示大小" 
+      >
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+          {(['small', 'medium', 'large'] as MouseSize[]).map((size) => (
+            <button
+              key={size}
+              onClick={() => update({ mouseSize: size })}
+              className={`flex-1 px-4 py-2 rounded-lg text-sm transition-all flex items-center gap-2 ${
+                settings.mouseSize === size ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <MousePointer size={size === 'small' ? 12 : size === 'medium' ? 16 : 20} />
+              {size === 'small' ? '小' : size === 'medium' ? '中' : '大'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow 
+        title="应用主题" 
+        desc="切换界面整体明暗外观" 
+      >
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+          {(['dark', 'mist', 'light'] as AppTheme[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => update({ theme: t })}
+              className={`flex-1 px-5 py-2.5 rounded-lg text-sm transition-all flex flex-col items-center gap-1 min-w-[70px] ${
+                settings.theme === t ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {t === 'dark' && <Moon size={18} />}
+              {t === 'mist' && <Cloud size={18} />}
+              {t === 'light' && <Sun size={18} />}
+              <span className="text-[10px] mt-1">{t === 'dark' ? '暗夕' : t === 'mist' ? '晨雾' : '白昼'}</span>
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow 
+        title="提示词与动作栏质感" 
+        desc="控制节点底部输入栏和浮动动作栏的背景样式" 
+      >
+        <div className="flex gap-2">
+          {(['transparent', 'frosted'] as BarTexture[]).map((tex) => (
+            <button
+              key={tex}
+              onClick={() => update({ barTexture: tex })}
+              className={`px-6 py-2 rounded-xl text-sm border transition-all ${
+                settings.barTexture === tex 
+                  ? 'bg-blue-600/10 border-blue-600/50 text-blue-500' 
+                  : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+              }`}
+            >
+              {tex === 'transparent' ? '透明' : '毛玻璃'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow title="网格点显示" desc="只影响显示，不影响网格吸附" shortcut=".">
+        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+          {[true, false].map((v) => (
+            <button 
+              key={String(v)}
+              className={`px-6 py-1.5 rounded-lg text-sm flex-1 transition-all ${
+                useStore.getState().isGridVisible === v 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              onClick={() => useStore.getState().toggleGrid()}
+            >
+              {v ? '开' : '关'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow title="输入字体大小" desc="调整节点提示词输入框的字体大小">
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+          {(['small', 'medium', 'large'] as FontSize[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => update({ inputFontSize: f })}
+              className={`flex-1 px-6 py-2 rounded-lg text-sm transition-all ${
+                settings.inputFontSize === f ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {f === 'small' ? '小' : f === 'medium' ? '中' : '大'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow title="图片入参上传质量" desc="生成前参考图上传的压缩档位">
+        <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/10">
+          {(['standard', 'high', 'original'] as UploadQuality[]).map((q) => (
+            <button
+              key={q}
+              onClick={() => update({ uploadQuality: q })}
+              className={`px-4 py-2 rounded-lg text-sm transition-all ${
+                settings.uploadQuality === q 
+                  ? 'bg-blue-600/10 text-blue-500 border border-blue-600/30' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {q === 'standard' ? '标准' : q === 'high' ? '高保真' : '原图优先'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+    </div>
+  );
+};
+
+const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (s: Partial<AppSettings>) => void }) => {
+  return (
+    <div className="flex flex-col gap-10">
+      <SettingRow title="点击节点时高亮关联节点" desc="选中节点后高亮直接连接的上下游节点和连线">
+        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+          {[true, false].map((v) => (
+            <button 
+              key={String(v)}
+              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+                settings.highlightAssociated === v 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              onClick={() => update({ highlightAssociated: v })}
+            >
+              {v ? '开' : '关'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      {settings.highlightAssociated && (
+        <div className="ml-8 -mt-6">
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-white font-medium">高亮颜色</span>
+              <span className="text-xs text-gray-500">设置关联节点边框与光晕颜色</span>
+            </div>
+            <div className="flex gap-2">
+              {['#ffffff', '#3b82f6', '#10b981', '#06b6d4', '#8b5cf6', '#ef4444', '#f59e0b'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => update({ highlightColor: c })}
+                  className={`w-6 h-6 rounded-full border-2 transition-all ${settings.highlightColor === c ? 'border-white scale-125' : 'border-transparent hover:scale-110'}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SettingRow title="连接线显示" desc="只控制画布上的连接线可见性，不影响节点连接关系" shortcut="B">
+        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+          {[true, false].map((v) => (
+            <button 
+              key={String(v)}
+              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+                settings.showConnections === v 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              onClick={() => update({ showConnections: v })}
+            >
+              {v ? '开' : '关'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow title="辅助线吸附" desc="开启后单节点拖拽时显示辅助线并自动吸附" shortcut=";">
+        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+          {[true, false].map((v) => (
+            <button 
+              key={String(v)}
+              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+                settings.snapToGuidelines === v 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              onClick={() => update({ snapToGuidelines: v })}
+            >
+              {v ? '开' : '关'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow title="网格吸附" desc="开启后拖拽节点时按网格点对齐" shortcut="L">
+        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+          {[true, false].map((v) => (
+            <button 
+              key={String(v)}
+              className={`px-6 py-1.5 rounded-lg text-sm min-w-[60px] transition-all ${
+                settings.snapToGrid === v 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              onClick={() => update({ snapToGrid: v })}
+            >
+              {v ? '开' : '关'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow title="启动多选对齐功能" desc="可设置为长按或点击快捷触发中心对齐面板" shortcut="Tab">
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+          {(['longPress', 'click', 'disabled'] as MultiSelectMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => update({ multiSelectAlignmentMode: mode })}
+              className={`px-5 py-2 rounded-lg text-sm transition-all ${
+                settings.multiSelectAlignmentMode === mode ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {mode === 'longPress' ? '长按开启' : mode === 'click' ? '点击开启' : '关闭'}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+
+      <div className="ml-8 -mt-6 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm text-white font-medium">对齐间距</span>
+            <span className="text-xs text-gray-500">分布时固定首节点，后续节点按该间距顺排</span>
+          </div>
+          <div className="flex items-center gap-4 min-w-[240px]">
+            <input 
+              type="range"
+              min="0"
+              max="200"
+              value={settings.alignmentSpacing}
+              onChange={(e) => update({ alignmentSpacing: parseInt(e.target.value) })}
+              className="flex-1 accent-blue-600 h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
+            />
+            <span className="text-sm font-mono text-white/50 w-8">{settings.alignmentSpacing}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const FileSettings = ({ settings, update }: { settings: AppSettings, update: (s: Partial<AppSettings>) => void }) => {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-gray-500 mb-6 font-medium">配置项目、素材数据和生成输出的本地保存目录。授权、API Key 和用户设置固定保存在应用数据目录。</p>
+      
+      <div className="flex flex-col gap-4 p-6 bg-white/[0.02] border border-white/10 rounded-[24px]">
+        <PathInput 
+          label="项目保存路径" 
+          desc="保存画布项目文件" 
+          value={settings.projectPath} 
+          onChange={(v) => update({ projectPath: v })}
+        />
+        <PathInput 
+          label="数据文件保存路径" 
+          desc="保存上传素材、资产库和工作流数据" 
+          value={settings.dataPath} 
+          onChange={(v) => update({ dataPath: v })}
+        />
+        <PathInput 
+          label="输出文件保存路径" 
+          desc="保存生成图片、视频、音频、裁剪和合成结果" 
+          value={settings.outputPath} 
+          onChange={(v) => update({ outputPath: v })}
+        />
+      </div>
+    </div>
+  );
+};
+
+const PathInput = ({ label, desc, value, onChange }: { label: string; desc: string; value: string; onChange: (v: string) => void }) => (
+  <div className="flex items-center justify-between gap-8 py-2">
+    <div className="flex flex-col gap-1">
+      <span className="text-sm text-[var(--text-primary)] font-bold">{label}</span>
+      <span className="text-xs text-[var(--text-secondary)]">{desc}</span>
+    </div>
+    <div className="flex-1 flex items-center bg-white/5 border border-white/5 rounded-xl px-4 py-3 group hover:border-white/10 transition-all">
+      <input 
+        className="w-full bg-transparent text-sm text-[var(--text-secondary)] outline-none"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  </div>
+);
+
+const SettingRow = ({ title, desc, children, shortcut }: { title: string; desc: string; children: React.ReactNode; shortcut?: string }) => (
+  <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-1.5 max-w-[400px]">
+      <div className="flex items-center gap-3">
+        <h4 className="text-[17px] font-bold text-[var(--text-primary)]">{title}</h4>
+        {shortcut && (
+          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-[var(--text-secondary)] font-mono">
+            {shortcut}
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-[var(--text-secondary)] leading-relaxed font-medium">{desc}</p>
+    </div>
+    {children}
+  </div>
+);

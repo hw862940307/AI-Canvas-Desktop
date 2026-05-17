@@ -1,0 +1,31 @@
+# 参考图视角变换文本节点｜原始框架与预设 V1.0
+
+【Reference Image Binding｜参考图绑定】
+当前参考图是唯一的主体与视角参考来源。保持参考图中的主体外观、结构、比例、轮廓、身份特征、材质关系、构图中心、前后层级、遮挡关系和空间关系不变。本节点只改变相机观察位置，不改变参考图内容。
+
+【Current Viewpoint｜当前参考视角】
+当前参考图呈现的是 {current_viewpoint_description}。该视角作为本次相机视角转换的起始视角参考。
+
+【Target Camera Transformation｜目标相机视角变换】
+将相机从当前参考视角移动到 {target_viewpoint_description}。新的相机位置相对于参考图主体位于 {target_horizontal_description}，垂直角度为 {target_vertical_description}，形成 {target_view_summary}。
+
+【View Transformation Rule｜视角变换规则】
+本次任务的核心是改变相机观察位置，而不是改变主体本身。保持参考图主体一致，只改变观察方向、观察高度、观察距离和镜头透视，使画面从当前参考图视角自然转换到目标视角。
+
+【Camera Distance & Framing｜相机距离与景别】
+{camera_distance_description}
+
+【Focal Length｜焦距】
+{focal_length_description}
+
+【Aperture & Depth of Field｜光圈与景深】
+{aperture_description}
+
+【Focus Point｜焦点位置】
+焦点锁定在当前参考图的 {focus_point_description}。焦点位置只用于描述相机观察重点，不改变参考图中的主体结构、位置、身份、比例或画面内容。
+
+【Spatial Consistency｜空间一致性】
+保持参考图原有主体的一致性、画面中心、空间层级、遮挡关系、前后关系、构图方向和透视逻辑不变。相机位置描述必须围绕参考图主体中心展开，不得引入新的主体位置、不合理旋转或错误方向。
+
+【Negative Spatial Constraints｜反向空间约束】
+禁止主体变形，禁止身份漂移，禁止结构改变，禁止比例异常，禁止左右反转错误，禁止正背面混淆，禁止目标视角错误，禁止错误俯仰角，禁止构图中心漂移，禁止改变参考图主体本身，禁止新增参考图中不存在的内容。
