@@ -297,7 +297,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
           </button>
           <div className="w-px h-6 bg-[var(--border)]" />
           
-          <div className="flex items-center gap-2 p-1 bg-white/5 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-2 p-1 bg-white/5 rounded-2xl border border-[var(--border)]">
             <ToolButton active={activeTool === 'brush'} icon={<Pencil size={18} />} onClick={() => setActiveTool('brush')} />
             <ToolButton active={activeTool === 'rectangle'} icon={<Square size={18} />} onClick={() => setActiveTool('rectangle')} />
             <ToolButton active={activeTool === 'circle'} icon={<Circle size={18} />} onClick={() => setActiveTool('circle')} />
@@ -306,7 +306,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
             <ToolButton active={activeTool === 'text'} icon={<Type size={18} />} onClick={() => setActiveTool('text')} />
           </div>
 
-          <div className="flex items-center gap-4 px-4 py-2 bg-white/5 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-4 px-4 py-2 bg-white/5 rounded-2xl border border-[var(--border)]">
             <div className="flex items-center gap-2">
               {['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#ffff00', '#000000'].map(c => (
                 <button 
@@ -322,7 +322,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
             <div className="flex flex-col gap-1 min-w-[200px]">
               <div className="flex items-center justify-between px-1">
                 <span className="text-sm text-[var(--text-secondary)] font-bold uppercase tracking-wider">大小</span>
-                <span className="text-sm font-mono text-blue-500 font-bold">{size}px</span>
+                <span className="text-sm font-mono text-accent font-bold">{size}px</span>
               </div>
               <input 
                 type="range"
@@ -330,7 +330,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
                 max="100"
                 value={size}
                 onChange={(e) => setSize(parseInt(e.target.value))}
-                className="w-full accent-blue-600 h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
+                className="w-full accent-accent h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
               />
             </div>
 
@@ -339,7 +339,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
             <div className="flex flex-col gap-1 min-w-[140px]">
               <div className="flex items-center justify-between px-1">
                 <span className="text-sm text-[var(--text-secondary)] font-bold uppercase tracking-wider">不透明度</span>
-                <span className="text-sm font-mono text-blue-500 font-bold">{Math.round(opacity * 100)}%</span>
+                <span className="text-sm font-mono text-accent font-bold">{Math.round(opacity * 100)}%</span>
               </div>
               <input 
                 type="range"
@@ -348,12 +348,12 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
                 step="0.05"
                 value={opacity}
                 onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                className="w-full accent-blue-600 h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
+                className="w-full accent-accent h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 p-1 bg-white/5 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-2 p-1 bg-white/5 rounded-2xl border border-[var(--border)]">
             <ToolButton icon={<Undo2 size={18} />} onClick={undo} disabled={history.length === 0} />
             <ToolButton icon={<Redo2 size={18} />} onClick={redo} disabled={redoStack.length === 0} />
             <ToolButton icon={<RotateCcw size={18} />} onClick={() => setHistory([])} disabled={history.length === 0} />
@@ -362,7 +362,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
 
         <button 
           onClick={handleSave}
-          className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-xl active:scale-95"
+          className="flex items-center gap-2 px-8 py-2.5 bg-accent hover:bg-accent text-white rounded-2xl font-bold transition-all shadow-xl active:scale-95"
         >
           <Save size={18} />
           <span>保存修改</span>
@@ -396,7 +396,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
           >
             <input 
               autoFocus
-              className="bg-transparent border-b border-blue-500 text-[var(--text-primary)] px-2 py-1 outline-none"
+              className="bg-transparent border-b border-accent text-[var(--text-primary)] px-2 py-1 outline-none"
               style={{ color }}
               value={textInput.val}
               onChange={(e) => setTextInput({ ...textInput, val: e.target.value })}
@@ -404,7 +404,7 @@ export const AnnotationModal = ({ imageUrl, onSave, onClose }: AnnotationModalPr
             />
             <div className="flex justify-end gap-2">
               <button onClick={() => setTextInput({ show: false, x: 0, y: 0, val: '' })} className="p-1 px-3 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">取消</button>
-              <button onClick={handleTextSubmit} className="p-1 px-3 text-sm bg-blue-600 text-white rounded-lg">确定</button>
+              <button onClick={handleTextSubmit} className="p-1 px-3 text-sm bg-accent text-white rounded-lg">确定</button>
             </div>
           </div>
         )}
@@ -419,7 +419,7 @@ const ToolButton = ({ active, icon, onClick, disabled }: { active?: boolean, ico
     disabled={disabled}
     className={`p-2.5 rounded-xl transition-all ${
       active 
-        ? 'bg-blue-600 text-white shadow-lg' 
+        ? 'bg-accent text-white shadow-lg' 
         : 'text-gray-500 hover:text-white hover:bg-white/5 disabled:opacity-20'
     }`}
   >

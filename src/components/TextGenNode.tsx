@@ -18,6 +18,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { ScaleWrapper } from './ScaleWrapper';
 import { FullscreenTextEditor } from './FullscreenTextEditor';
 
 
@@ -37,9 +38,9 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
   };
   const getFontSizeClass = () => {
     if (typeof settings.inputFontSize === 'number') return '';
-    if (settings.inputFontSize === 'small') return 'text-base';
-    if (settings.inputFontSize === 'large') return 'text-lg';
-    return 'text-lg';
+    if (settings.inputFontSize === 'small') return 'text-[0.95em]';
+    if (settings.inputFontSize === 'large') return 'text-[1.125em]';
+    return 'text-[1.05em]';
   };
 
   const handleGenerate = async () => {
@@ -88,11 +89,12 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
         isVisible={selected} 
         minWidth={280}
         minHeight={300}
+        keepAspectRatio={true}
         handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid var(--accent)' }}
       />
-
-      {/* Floating Toolbar */}
-      <AnimatePresence>
+      <ScaleWrapper id={id} type="text-gen">
+        {/* Floating Toolbar */}
+        <AnimatePresence>
         {selected && (
           <motion.div 
             initial={{ opacity: 1, y: -60, scale: 1 }}
@@ -144,7 +146,7 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
           <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
             <Type size={18} />
           </div>
-          <span className="text-base font-bold tracking-wider text-[var(--text-primary)]">生成文本</span>
+          <span className="text-[1em] font-bold tracking-wider text-[var(--text-primary)]">生成文本</span>
         </div>
         <div className="flex items-center gap-2">
            <button 
@@ -177,7 +179,7 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
         />
         
         <div className="p-3 border-t border-[var(--border)] flex justify-end shrink-0 bg-[var(--bg-secondary)]/30">
-          <div className="text-sm text-[var(--text-secondary)]/50 font-mono">
+          <div className="text-[0.8em] text-[var(--text-secondary)]/50 font-mono">
              {result.length} 字
           </div>
         </div>
@@ -214,10 +216,10 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
 
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors">
-              <span className="text-sm font-bold text-[var(--text-secondary)] uppercase tracking-widest">{selectedModel}</span>
+              <span className="text-[0.75em] font-bold text-[var(--text-secondary)] uppercase tracking-widest">{selectedModel}</span>
               <ChevronDown size={10} className="text-[var(--text-secondary)]" />
            </div>
-           <div className="text-sm text-[var(--text-secondary)] italic">
+           <div className="text-[0.7em] text-[var(--text-secondary)] italic">
               (Enter 生成)
            </div>
         </div>
@@ -240,9 +242,10 @@ export const TextGenNode = ({ id, data, selected }: { id: string; data: any; sel
         </AnimatePresence>,
         document.body
       )}
+      </ScaleWrapper>
 
-      <Handle type="source" position={Position.Right} className="!bg-purple-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
-      <Handle type="target" position={Position.Left} className="!bg-purple-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+      <Handle type="target" position={Position.Left} className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
     </div>
   );
 };
@@ -253,7 +256,7 @@ const ToolbarIconButton = ({ icon, onClick, title, active = false }: { icon: Rea
     title={title}
     className={`p-2.5 rounded-xl transition-all ${
       active 
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+        ? 'bg-accent text-white shadow-lg shadow-accent/20' 
         : 'hover:bg-white/10 text-[var(--text-secondary)] hover:text-white'
     }`}
   >

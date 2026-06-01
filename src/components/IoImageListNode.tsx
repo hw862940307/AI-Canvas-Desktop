@@ -23,6 +23,7 @@ import {
   Minus
 } from 'lucide-react';
 import { useStore, FileItem } from '../store/useStore';
+import { ScaleWrapper } from './ScaleWrapper';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 
@@ -257,7 +258,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`flex flex-col bg-[#0c1016] border border-white/10 overflow-hidden relative ${containerClasses} ${isDragOver ? 'border-purple-500 ring-4 ring-purple-500/20' : ''}`}>
+        className={`flex flex-col bg-[var(--bg-secondary)] border border-[var(--border)]  relative ${containerClasses} ${isDragOver ? 'border-purple-500 ring-4 ring-purple-500/20' : ''}`}>
         
         {isDragOver && (
           <div className="absolute inset-0 bg-purple-500/10 backdrop-blur-[2px] pointer-events-none z-50 flex items-center justify-center">
@@ -267,7 +268,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
           </div>
         )}
         
-        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle">
+        <div className="p-4 border-b border-[var(--border)] flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-600/20 text-white">
               <Images size={20} />
@@ -283,7 +284,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 mr-2">
+            <div className="flex bg-black/40 p-1 rounded-xl border border-[var(--border)] mr-2">
               <button 
                 onClick={() => { setActiveTab('library'); updateStore({ activeTab: 'library' }); }}
                 className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${activeTab === 'library' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:text-white'}`}
@@ -304,7 +305,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
               </button>
             </div>
 
-            <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/5 mr-2">
+            <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-[var(--border)] mr-2">
               <button 
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
@@ -332,7 +333,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
         <div className="flex-1 flex flex-col gap-4 p-5 overflow-hidden nodrag">
           {/* Filters Bar for History */}
           {activeTab === 'history' && (
-            <div className="flex items-center justify-between gap-4 bg-black/20 p-3 rounded-2xl border border-white/5 shrink-0">
+            <div className="flex items-center justify-between gap-4 bg-black/20 p-3 rounded-2xl border border-[var(--border)] shrink-0">
                <div className="flex items-center gap-2">
                  {(['all', 'image', 'video', 'audio'] as const).map(cat => (
                    <button 
@@ -349,7 +350,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                  <input 
                    type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                    placeholder="SEARCH RECORDS..."
-                   className="w-full bg-black/40 border border-white/5 rounded-xl py-1.5 pl-8 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/40"
+                   className="w-full bg-black/40 border border-[var(--border)] rounded-xl py-1.5 pl-8 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/40"
                  />
                </div>
             </div>
@@ -357,7 +358,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
 
           {/* Materials Navigation */}
           {activeTab === 'materials' && (
-             <div className="flex items-center justify-between gap-4 bg-black/20 p-3 rounded-2xl border border-white/5 shrink-0">
+             <div className="flex items-center justify-between gap-4 bg-black/20 p-3 rounded-2xl border border-[var(--border)] shrink-0">
                 <div className="flex items-center gap-2">
                    {selectedFolderId && (
                      <button onClick={() => setSelectedFolderId(null)} className="p-2 hover:bg-white/5 rounded-lg text-gray-500 transition-colors">
@@ -382,7 +383,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                      <input 
                        type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                        placeholder="FILTER ASSETS..."
-                       className="w-full bg-black/40 border border-white/5 rounded-xl py-1.5 pl-8 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/40"
+                       className="w-full bg-black/40 border border-[var(--border)] rounded-xl py-1.5 pl-8 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/40"
                      />
                    </div>
                 </div>
@@ -392,7 +393,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
           {/* Gallery Area */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === 'library' && (
-              <div className={`flex-1 bg-black/20 rounded-2xl border border-white/5 p-4 overflow-auto custom-scrollbar ${viewMode === 'grid' ? 'grid gap-4 content-start' : 'flex flex-col gap-2'}`} 
+              <div className={`flex-1 bg-black/20 rounded-2xl border border-[var(--border)] p-4 overflow-auto custom-scrollbar ${viewMode === 'grid' ? 'grid gap-4 content-start' : 'flex flex-col gap-2'}`} 
                    style={viewMode === 'grid' ? { gridTemplateColumns: `repeat(auto-fill, minmax(${isPortal ? thumbSize * 1.5 : thumbSize}px, 1fr))` } : {}}>
                  <AnimatePresence>
                    {images.map((img, i) => (
@@ -406,7 +407,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                        onClick={() => toggleSelect(i)}
                        className={`group relative overflow-hidden cursor-pointer border-2 transition-all ${
                          viewMode === 'grid' 
-                          ? `aspect-square rounded-[20px] ${selectedIndices.includes(i) ? 'border-purple-500 scale-[0.98] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'border-white/5'}`
+                          ? `aspect-square rounded-[20px] ${selectedIndices.includes(i) ? 'border-purple-500 scale-[0.98] shadow-[0_0_30px_rgba(168,85,247,0.3)]' : 'border-[var(--border)]'}`
                           : `flex items-center gap-4 p-3 rounded-xl ${selectedIndices.includes(i) ? 'border-purple-500 bg-purple-500/10' : 'border-transparent bg-white/2 hover:bg-white/5'}`
                        }`}
                      >
@@ -438,14 +439,14 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
             )}
 
             {activeTab === 'history' && (
-              <div className={`flex-1 bg-black/20 rounded-2xl border border-white/5 p-4 overflow-auto custom-scrollbar grid gap-4 content-start`}
+              <div className={`flex-1 bg-black/20 rounded-2xl border border-[var(--border)] p-4 overflow-auto custom-scrollbar grid gap-4 content-start`}
                    style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${isPortal ? thumbSize * 1.5 : thumbSize}px, 1fr))` }}>
                  {filteredHistory.map((item) => (
                    <div 
                      key={item.id}
                      draggable
                      onDragStart={(e: any) => handleItemDragStart(e, item.url)}
-                     className="group relative aspect-square bg-black/40 rounded-[20px] border border-white/5 hover:border-purple-500/50 transition-all cursor-pointer overflow-hidden shadow-lg"
+                     className="group relative aspect-square bg-black/40 rounded-[20px] border border-[var(--border)] hover:border-purple-500/50 transition-all cursor-pointer overflow-hidden shadow-lg"
                    >
                      {item.type === 'image' ? (
                        <img draggable={false} src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
@@ -490,7 +491,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                          <div 
                            key={folder.id}
                            onClick={() => setSelectedFolderId(folder.id)}
-                           className="group flex flex-col items-center gap-3 p-6 bg-white/2 border border-white/5 rounded-[32px] hover:bg-white/5 hover:border-purple-500/30 transition-all cursor-pointer shadow-2xl active:scale-[0.98]"
+                           className="group flex flex-col items-center gap-3 p-6 bg-white/2 border border-[var(--border)] rounded-[32px] hover:bg-white/5 hover:border-purple-500/30 transition-all cursor-pointer shadow-2xl active:scale-[0.98]"
                          >
                            <div className="w-16 h-16 bg-purple-600/10 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500 group-hover:shadow-[0_20px_50px_rgba(168,85,247,0.2)] border border-purple-500/10 group-hover:border-purple-500/30">
                               <Folder size={32} className="text-purple-500" />
@@ -509,14 +510,14 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
                        ))}
                     </div>
                  ) : (
-                    <div className={`flex-1 bg-black/20 rounded-2xl border border-white/5 p-4 overflow-auto custom-scrollbar grid gap-4 content-start`}
+                    <div className={`flex-1 bg-black/20 rounded-2xl border border-[var(--border)] p-4 overflow-auto custom-scrollbar grid gap-4 content-start`}
                          style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${isPortal ? thumbSize * 1.5 : thumbSize}px, 1fr))` }}>
                        {filteredMaterials.map(item => (
                          <div 
                            key={item.id}
                            draggable
                            onDragStart={(e: any) => handleItemDragStart(e, item.url)}
-                           className="group relative aspect-square bg-black/40 rounded-[20px] border border-white/5 hover:border-purple-500/50 transition-all cursor-pointer overflow-hidden shadow-lg"
+                           className="group relative aspect-square bg-black/40 rounded-[20px] border border-[var(--border)] hover:border-purple-500/50 transition-all cursor-pointer overflow-hidden shadow-lg"
                          >
                            <img draggable={false} src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
@@ -551,7 +552,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
           </div>
 
           {/* Bottom Toolbar */}
-          <div className="flex items-center justify-between gap-6 bg-black/40 rounded-2xl p-4 border border-white/5 shrink-0">
+          <div className="flex items-center justify-between gap-6 bg-black/40 rounded-2xl p-4 border border-[var(--border)] shrink-0">
             <div className="flex items-center gap-2">
               <button 
                 onClick={() => handleImportLocal(activeTab === 'materials' ? selectedFolderId || undefined : undefined)}
@@ -598,7 +599,7 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
           </div>
         </div>
 
-        <div className="px-6 py-3 bg-black border-t border-white/5 flex items-center justify-between shrink-0">
+        <div className="px-6 py-3 bg-black border-t border-[var(--border)] flex items-center justify-between shrink-0">
            <div className="flex items-center gap-3">
              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
              <span className="text-sm text-gray-500 font-black uppercase tracking-[0.2em]">
@@ -613,12 +614,14 @@ export function IoImageListNode({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <NodeResizer minWidth={300} minHeight={400} isVisible={selected} lineClassName="border-purple-500/50" handleClassName="h-3 w-3 bg-white border-2 border-purple-500 rounded-sm" />
-      <div className={`flex flex-col w-full h-full bg-[#0c1016] rounded-3xl border-2 border-white/10 overflow-hidden shadow-2xl transition-all ${selected ? 'border-purple-500 ring-8 ring-purple-500/10' : ''}`}>
-        <Handle type="target" position={Position.Left} className="!bg-purple-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
-        <Handle type="source" position={Position.Right} className="!bg-purple-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <NodeResizer minWidth={300} minHeight={400} isVisible={selected} lineClassName="border-purple-500/50" handleClassName="h-3 w-3 bg-white border-2 border-purple-500 rounded-sm" keepAspectRatio={true} />
+      <div className={`flex flex-col w-full h-full bg-[var(--bg-secondary)] rounded-3xl border-2 border-[var(--border)] shadow-2xl transition-all ${selected ? 'border-purple-500 ring-8 ring-purple-500/10' : ''}`}>
+        <Handle type="target" position={Position.Left} className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+        <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
 
-        {ListContent(false)}
+        <ScaleWrapper id={id} type="io-image-list">
+          {ListContent(false)}
+        </ScaleWrapper>
       </div>
 
       {isOverlayOpen && createPortal(

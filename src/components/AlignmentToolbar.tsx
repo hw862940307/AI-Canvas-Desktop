@@ -110,27 +110,27 @@ export function AlignmentToolbar() {
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
         onClick={handleClick}
-        className="px-4 py-2 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 font-bold text-lg tracking-wide flex items-center gap-2 hover:bg-blue-500 hover:scale-105 active:scale-95 transition-all"
+        className="px-4 py-2 bg-accent text-white rounded-full shadow-lg shadow-accent/30 font-bold text-lg tracking-wide flex items-center gap-2 hover:bg-accent hover:scale-105 active:scale-95 transition-all"
       >
         <Maximize size={16} />
         {selectedNodes.length} Nodes Selected
       </button>
 
       {isOpen && (
-        <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl shadow-2xl flex items-center p-2 gap-1 animate-in slide-in-from-top-2 fade-in">
-          <div className="flex gap-1 border-r border-[#333] pr-2 mr-1">
-            <button onClick={() => handleAlign('left')} className="p-2 hover:bg-[#333] hover:text-white text-gray-400 rounded-lg tooltip" title="左对齐"><AlignLeft size={16} /></button>
-            <button onClick={() => handleAlign('center')} className="p-2 hover:bg-[#333] hover:text-white text-gray-400 rounded-lg tooltip" title="竖直居中"><AlignCenter size={16} /></button>
-            <button onClick={() => handleAlign('right')} className="p-2 hover:bg-[#333] hover:text-white text-gray-400 rounded-lg tooltip" title="右对齐"><AlignRight size={16} /></button>
+        <div className="bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-2xl shadow-2xl flex items-center p-2 gap-1 animate-in slide-in-from-top-2 fade-in">
+          <div className="flex gap-1 border-r border-[var(--border)] pr-2 mr-1">
+            <button onClick={() => handleAlign('left')} className="p-2 hover:bg-[var(--border)] hover:text-white text-gray-400 rounded-lg tooltip" title="左对齐"><AlignLeft size={16} /></button>
+            <button onClick={() => handleAlign('center')} className="p-2 hover:bg-[var(--border)] hover:text-white text-gray-400 rounded-lg tooltip" title="竖直居中"><AlignCenter size={16} /></button>
+            <button onClick={() => handleAlign('right')} className="p-2 hover:bg-[var(--border)] hover:text-white text-gray-400 rounded-lg tooltip" title="右对齐"><AlignRight size={16} /></button>
           </div>
-          <div className="flex gap-1 border-r border-[#333] pr-2 mr-1">
-            <button onClick={() => handleAlign('top')} className="p-2 hover:bg-[#333] hover:text-white text-gray-400 rounded-lg tooltip" title="顶对齐"><AlignStartVertical size={16} /></button>
-            <button onClick={() => handleAlign('middle')} className="p-2 hover:bg-[#333] hover:text-white text-gray-400 rounded-lg tooltip" title="水平居中"><AlignCenterVertical size={16} /></button>
-            <button onClick={() => handleAlign('bottom')} className="p-2 hover:bg-[#333] hover:text-white text-gray-400 rounded-lg tooltip" title="底对齐"><AlignEndVertical size={16} /></button>
+          <div className="flex gap-1 border-r border-[var(--border)] pr-2 mr-1">
+            <button onClick={() => handleAlign('top')} className="p-2 hover:bg-[var(--border)] hover:text-white text-gray-400 rounded-lg tooltip" title="顶对齐"><AlignStartVertical size={16} /></button>
+            <button onClick={() => handleAlign('middle')} className="p-2 hover:bg-[var(--border)] hover:text-white text-gray-400 rounded-lg tooltip" title="水平居中"><AlignCenterVertical size={16} /></button>
+            <button onClick={() => handleAlign('bottom')} className="p-2 hover:bg-[var(--border)] hover:text-white text-gray-400 rounded-lg tooltip" title="底对齐"><AlignEndVertical size={16} /></button>
           </div>
           <div className="flex gap-1">
-            <button onClick={() => handleDistribute('horizontal')} className="p-2 hover:bg-[#333] hover:text-white text-blue-400 rounded-lg tooltip" title="水平分布"><AlignHorizontalDistributeCenter size={16} /></button>
-            <button onClick={() => handleDistribute('vertical')} className="p-2 hover:bg-[#333] hover:text-white text-blue-400 rounded-lg tooltip" title="垂直分布"><AlignVerticalDistributeCenter size={16} /></button>
+            <button onClick={() => handleDistribute('horizontal')} className="p-2 hover:bg-[var(--border)] hover:text-white text-accent rounded-lg tooltip" title="水平分布"><AlignHorizontalDistributeCenter size={16} /></button>
+            <button onClick={() => handleDistribute('vertical')} className="p-2 hover:bg-[var(--border)] hover:text-white text-accent rounded-lg tooltip" title="垂直分布"><AlignVerticalDistributeCenter size={16} /></button>
           </div>
         </div>
       )}

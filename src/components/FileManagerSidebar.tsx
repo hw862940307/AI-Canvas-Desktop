@@ -129,7 +129,7 @@ export const FileManagerSidebar = () => {
       {/* Resizer Handle on the Right */}
       <div 
         onMouseDown={handleResizeStart}
-        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-500/50 transition-colors z-[100]"
+        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-[100]"
       />
 
       {/* Header */}
@@ -235,8 +235,8 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
               onClick={() => setCategory(cat)}
               className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-all border ${
                 category === cat 
-                  ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
-                  : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                  ? 'bg-accent border-accent text-white shadow-lg shadow-accent/20' 
+                  : 'bg-white/5 border-[var(--border)] text-gray-400 hover:bg-white/10'
               }`}
             >
               {cat === 'all' ? '所有' : cat === 'image' ? '图像' : cat === 'video' ? '视频' : '声音'}
@@ -251,7 +251,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜索历史文件..."
-            className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50"
+            className="w-full bg-black/20 border border-[var(--border)] rounded-xl py-2 pl-9 pr-4 text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-accent/50"
           />
         </div>
       </div>
@@ -269,7 +269,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
                 key={file.id} 
                 draggable
                 onDragStart={(e) => onDragStart(e, file)}
-                className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer"
+                className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent/30 transition-all cursor-pointer"
               >
                 {file.type === 'image' ? (
                   <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover" />
@@ -281,7 +281,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button 
                     onClick={(e) => { e.stopPropagation(); onAdd(file); }}
-                    className="p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-500 transition-colors shadow-lg"
+                    className="p-2 bg-accent rounded-lg text-white hover:bg-accent transition-colors shadow-lg"
                   >
                     <Plus size={16} />
                   </button>
@@ -399,14 +399,14 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
               </h3>
             </div>
             <div className="flex items-center gap-2">
-               <button className="flex items-center gap-1.5 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all">
+               <button className="flex items-center gap-1.5 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg border border-[var(--border)] transition-all">
                   <Plus size={14} className="text-gray-400" />
                   <span className="text-sm font-bold text-gray-400">AI 角色</span>
                </button>
                <button 
                  onClick={handleAddLocalPath}
                  title="扫描本地路径"
-                 className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all text-gray-400"
+                 className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-[var(--border)] transition-all text-gray-400"
                >
                   <FolderPlus size={16} />
                </button>
@@ -414,18 +414,18 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
          </div>
 
           {selectedFolderId && (
-           <div className="flex flex-col gap-3 p-4 bg-black/30 rounded-2xl border border-white/5 shadow-inner">
+           <div className="flex flex-col gap-3 p-4 bg-black/30 rounded-2xl border border-[var(--border)] shadow-inner">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                  <div className="w-1 h-1 bg-blue-500 rounded-full" />
+                  <div className="w-1 h-1 bg-accent rounded-full" />
                   物理路径
                 </span>
                 <button 
                   onClick={handleToggleEdit}
                   className={`px-2 py-0.5 rounded text-sm font-bold transition-all ${
                     isEditingPath 
-                      ? 'bg-blue-600 text-white hover:bg-blue-500' 
-                      : 'text-blue-500 hover:bg-blue-500/10'
+                      ? 'bg-accent text-white hover:bg-accent' 
+                      : 'text-accent hover:bg-accent/10'
                   }`}
                 >
                   {isEditingPath ? '完成' : '编辑'}
@@ -439,13 +439,13 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                     value={tempPath}
                     onChange={(e) => setTempPath(e.target.value)}
                     placeholder="输入文件夹路径..."
-                    className="w-full bg-black/40 border border-blue-500/50 rounded-xl px-3 py-2 text-base text-white focus:outline-none focus:ring-1 ring-blue-500/30 transition-all font-mono"
+                    className="w-full bg-black/40 border border-accent/50 rounded-xl px-3 py-2 text-base text-white focus:outline-none focus:ring-1 ring-accent/30 transition-all font-mono"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && handleToggleEdit()}
                   />
                 </div>
               ) : (
-                <p className="text-base font-mono text-gray-400 break-all select-all leading-relaxed bg-white/5 p-2 rounded-lg border border-white/5">
+                <p className="text-base font-mono text-gray-400 break-all select-all leading-relaxed bg-white/5 p-2 rounded-lg border border-[var(--border)]">
                   {selectedFolder?.path || '未设置路径'}
                 </p>
               )}
@@ -454,7 +454,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
 
          {!selectedFolderId && (
            <div className="flex gap-2">
-              <button className="flex-1 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm font-bold text-white shadow-sm">
+              <button className="flex-1 py-1.5 bg-white/5 border border-[var(--border)] rounded-lg text-sm font-bold text-white shadow-sm">
                 个人素材
               </button>
            </div>
@@ -467,7 +467,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索素材..."
-              className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50"
+              className="w-full bg-black/20 border border-[var(--border)] rounded-xl py-2 pl-9 pr-4 text-base text-white placeholder:text-gray-600 focus:outline-none focus:border-accent/50"
             />
          </div>
       </div>
@@ -479,7 +479,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
               <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">文件夹</span>
               <button 
                 onClick={() => addFolder(prompt('文件夹名称:') || '新文件夹')}
-                className="text-gray-500 hover:text-blue-500 transition-colors"
+                className="text-gray-500 hover:text-accent transition-colors"
               >
                 <Plus size={14} />
               </button>
@@ -489,10 +489,10 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                 <div 
                   key={folder.id}
                   onClick={() => setSelectedFolderId(folder.id)}
-                  className="flex items-center gap-4 p-4 bg-white/5 border border-white/5 hover:border-blue-500/30 hover:bg-white/10 rounded-2xl cursor-pointer group transition-all"
+                  className="flex items-center gap-4 p-4 bg-white/5 border border-[var(--border)] hover:border-accent/30 hover:bg-white/10 rounded-2xl cursor-pointer group transition-all"
                 >
-                  <div className="p-3 bg-blue-500/10 rounded-xl group-hover:scale-110 transition-transform">
-                    <Folder size={20} className="text-blue-500/60" />
+                  <div className="p-3 bg-accent/10 rounded-xl group-hover:scale-110 transition-transform">
+                    <Folder size={20} className="text-accent/60" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-base font-bold text-gray-200 truncate">{folder.name}</p>
@@ -519,7 +519,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                 </div>
              </div>
              {filteredMaterials.length === 0 ? (
-               <div className="h-64 flex flex-col items-center justify-center bg-black/10 border border-dashed border-white/5 rounded-2xl text-gray-600 opacity-50 select-none px-6 text-center">
+               <div className="h-64 flex flex-col items-center justify-center bg-black/10 border border-dashed border-[var(--border)] rounded-2xl text-gray-600 opacity-50 select-none px-6 text-center">
                   <FolderOpen size={48} strokeWidth={1} className="mb-4" />
                   <p className="text-sm font-bold tracking-widest uppercase">物理目录扫描中...</p>
                   <p className="text-sm mt-2 leading-relaxed">请确保本地后端服务已启动并连接至此路径以同步预览数据。</p>
@@ -531,13 +531,13 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                       key={file.id} 
                       draggable
                       onDragStart={(e) => onDragStart(e, file)}
-                      className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer shadow-lg active:scale-95"
+                      className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent/30 transition-all cursor-pointer shadow-lg active:scale-95"
                     >
                       <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <button 
                           onClick={(e) => { e.stopPropagation(); onAdd(file); }}
-                          className="p-2.5 bg-blue-600 rounded-xl text-white hover:bg-blue-500 transition-all hover:scale-110 active:scale-90 shadow-xl"
+                          className="p-2.5 bg-accent rounded-xl text-white hover:bg-accent transition-all hover:scale-110 active:scale-90 shadow-xl"
                         >
                           <Plus size={18} />
                         </button>
@@ -564,7 +564,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
           <button 
             onClick={handleSync}
             disabled={isSyncing}
-            className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+            className="flex-1 py-2 bg-accent hover:bg-accent disabled:bg-blue-900/50 text-white rounded-xl text-sm font-bold shadow-lg shadow-accent/20 transition-all active:scale-95 flex items-center justify-center gap-2"
           >
             {isSyncing ? (
               <>
@@ -614,7 +614,7 @@ const OutputView = ({ onAdd, onDragStart }: any) => {
           浏览 output 输出目录
         </p>
         <div className="flex items-center gap-2">
-          <button className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm font-bold text-gray-400">
+          <button className="px-3 py-1.5 bg-white/5 border border-[var(--border)] rounded-lg text-sm font-bold text-gray-400">
             output
           </button>
         </div>
@@ -623,9 +623,9 @@ const OutputView = ({ onAdd, onDragStart }: any) => {
       <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
         <div className="grid grid-cols-2 gap-4">
           {folders.map(folder => (
-            <div key={folder.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 cursor-pointer transition-all flex flex-col items-center gap-3 group">
-              <div className="p-3 bg-blue-500/10 rounded-xl group-hover:scale-110 transition-transform">
-                <Folder size={24} className="text-blue-500" />
+            <div key={folder.id} className="p-4 bg-white/5 border border-[var(--border)] rounded-2xl hover:bg-white/10 cursor-pointer transition-all flex flex-col items-center gap-3 group">
+              <div className="p-3 bg-accent/10 rounded-xl group-hover:scale-110 transition-transform">
+                <Folder size={24} className="text-accent" />
               </div>
               <span className="text-sm font-bold text-gray-400 text-center line-clamp-1">{folder.name}</span>
             </div>
@@ -635,13 +635,13 @@ const OutputView = ({ onAdd, onDragStart }: any) => {
               key={file.id} 
               draggable
               onDragStart={(e) => onDragStart(e, file)}
-              className="group relative aspect-[3/4] bg-black/20 rounded-2xl overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer"
+              className="group relative aspect-[3/4] bg-black/20 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent/30 transition-all cursor-pointer"
             >
               <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                  <button 
                     onClick={(e) => { e.stopPropagation(); onAdd(file); }}
-                    className="p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-500 transition-colors shadow-lg"
+                    className="p-2 bg-accent rounded-lg text-white hover:bg-accent transition-colors shadow-lg"
                   >
                     <Plus size={16} />
                  </button>

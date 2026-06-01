@@ -55,7 +55,8 @@ export function DoubleBoxTransformNode({ id, data, selected }: NodeProps) {
   // Base dimensions
   const initialWidth = nodeData.width || 800;
   const initialHeight = nodeData.height || 600;
-  const zoomScale = Math.max(0.4, initialWidth / 1000);
+  const fontScale = (settings?.nodeUiFontSize ?? 14) / 14;
+  const zoomScale = Math.max(0.4, initialWidth / 1000) * fontScale;
 
   // States
   const [imageUrl, setImageUrl] = useState<string | null>(nodeData.url || null);
@@ -826,30 +827,31 @@ ${annotationNotes || "无附加标注说明"}
     <>
       <NodeResizer
         minWidth={400}
-        minHeight={400}
+        minHeight={294}
         isVisible={selected}
-        lineClassName="border-blue-500/50"
-        handleClassName="h-3 w-3 bg-white border-2 border-blue-500 rounded-sm"
+        lineClassName="border-accent/50"
+        handleClassName="h-3 w-3 bg-white border-2 border-accent rounded-sm"
+        keepAspectRatio={true}
       />
 
       <div
-        className={`flex flex-col w-full h-full bg-[#0c1016] rounded-[32px] border-2 transition-all ${selected ? "border-blue-500 ring-8 ring-blue-500/10" : "border-white/10"}`}
+        className={`flex flex-col w-full h-full bg-[var(--bg-secondary)] rounded-[32px] border-2 transition-all ${selected ? "border-accent ring-8 ring-accent/10" : "border-[var(--border)]"}`}
         style={{ ["--node-zoom" as any]: zoomScale }}
       >
         <Handle
           type="target"
           position={Position.Left}
-          className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"
-        />
+          className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"
+         />
         <Handle
           type="source"
           position={Position.Right}
-          className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"
-        />
+          className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"
+         />
 
         {/* Header */}
         <div
-          className="border-b border-white/5 flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle"
+          className="border-b border-[var(--border)] flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle rounded-t-2xl"
           style={{ padding: 20 * zoomScale }}
         >
           <div className="flex items-center" style={{ gap: 16 * zoomScale }}>
@@ -928,7 +930,7 @@ ${annotationNotes || "无附加标注说明"}
           {/* Main Workspace */}
           <div
             ref={containerRef}
-            className={`flex-1 relative bg-black rounded-[24px] overflow-hidden border border-white/5 shadow-inner flex items-center justify-center ${drawMode ? "cursor-crosshair" : ""}`}
+            className={`flex-1 relative bg-black rounded-[24px] overflow-hidden border border-[var(--border)] shadow-inner flex items-center justify-center ${drawMode ? "cursor-crosshair" : ""}`}
             onMouseDown={(e) => drawMode && onMouseDown(e)}
           >
             <div
@@ -960,10 +962,10 @@ ${annotationNotes || "无附加标注说明"}
 
             {/* Drawing Feedback Overlay */}
             {drawMode && (
-              <div className="absolute inset-0 bg-blue-500/5 pointer-events-none flex items-center justify-center">
-                <div className="px-4 py-2 bg-black/80 rounded-full border border-white/10 flex items-center gap-3">
+              <div className="absolute inset-0 bg-accent/5 pointer-events-none flex items-center justify-center">
+                <div className="px-4 py-2 bg-black/80 rounded-full border border-[var(--border)] flex items-center gap-3">
                   <div
-                    className={`w-2 h-2 rounded-full animate-pulse ${drawMode === "blue" ? "bg-blue-500" : "bg-red-500"}`}
+                    className={`w-2 h-2 rounded-full animate-pulse ${drawMode === "blue" ? "bg-accent" : "bg-red-500"}`}
                   />
                   <span className="text-sm font-black text-white uppercase tracking-widest whitespace-nowrap">
                     {drawMode === "blue"
@@ -1007,7 +1009,7 @@ ${annotationNotes || "无附加标注说明"}
                     </div>
                     <button
                       onClick={() => setShowSettings(false)}
-                      className="text-gray-300 hover:text-white transition-all bg-white/10 px-3 py-1 rounded-lg text-sm font-bold uppercase tracking-widest border border-white/10 hover:border-white/30"
+                      className="text-gray-300 hover:text-white transition-all bg-white/10 px-3 py-1 rounded-lg text-sm font-bold uppercase tracking-widest border border-[var(--border)] hover:border-white/30"
                     >
                       Close
                     </button>
@@ -1018,13 +1020,13 @@ ${annotationNotes || "无附加标注说明"}
                       <div className="grid grid-cols-2 gap-3 mb-2">
                         <button
                           onClick={() => setActiveStylingTarget("blue")}
-                          className={`py-3 rounded-xl text-sm font-black uppercase transition-all border-2 ${activeStylingTarget === "blue" ? "bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]" : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"}`}
+                          className={`py-3 rounded-xl text-sm font-black uppercase transition-all border-2 ${activeStylingTarget === "blue" ? "bg-accent/20 border-accent text-accent shadow-[0_0_15px_rgba(59,130,246,0.3)]" : "bg-white/5 border-[var(--border)] text-gray-500 hover:border-[var(--border)]"}`}
                         >
                           Source (Blue)
                         </button>
                         <button
                           onClick={() => setActiveStylingTarget("red")}
-                          className={`py-3 rounded-xl text-sm font-black uppercase transition-all border-2 ${activeStylingTarget === "red" ? "bg-red-600/20 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]" : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"}`}
+                          className={`py-3 rounded-xl text-sm font-black uppercase transition-all border-2 ${activeStylingTarget === "red" ? "bg-red-600/20 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]" : "bg-white/5 border-[var(--border)] text-gray-500 hover:border-[var(--border)]"}`}
                         >
                           Target (Red)
                         </button>
@@ -1036,7 +1038,7 @@ ${annotationNotes || "无附加标注说明"}
                         填充模式{" "}
                         <span>{boxMode === "fill" ? "填充" : "线框"}</span>
                       </label>
-                      <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+                      <div className="flex gap-2 p-1 bg-white/5 border border-[var(--border)] rounded-xl">
                         {[
                           { id: "outline", label: "纯线框" },
                           { id: "fill", label: "内填充" },
@@ -1063,7 +1065,7 @@ ${annotationNotes || "无附加标注说明"}
                             : "实线"}
                         </span>
                       </label>
-                      <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+                      <div className="flex gap-2 p-1 bg-white/5 border border-[var(--border)] rounded-xl">
                         {[
                           { id: "solid", label: "实线" },
                           { id: "dashed", label: "虚线" },
@@ -1180,7 +1182,7 @@ ${annotationNotes || "无附加标注说明"}
                       />
                     </div>
 
-                    <div className="pt-4 border-t border-white/5 space-y-4">
+                    <div className="pt-4 border-t border-[var(--border)] space-y-4">
                       <h4 className="text-sm font-black text-indigo-400 uppercase tracking-[0.2em]">
                         箭头细节调整
                       </h4>
@@ -1253,7 +1255,7 @@ ${annotationNotes || "无附加标注说明"}
                               : "Straight Line"}
                           </span>
                         </label>
-                        <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+                        <div className="flex gap-2 p-1 bg-white/5 border border-[var(--border)] rounded-xl">
                           {[
                             { id: "LINE", label: "Straight" },
                             { id: "OUTLINE", label: "Wireframe" },
@@ -1278,7 +1280,7 @@ ${annotationNotes || "无附加标注说明"}
                             {arrowLineType === "dashed" ? "虚线" : "实线"}
                           </span>
                         </label>
-                        <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
+                        <div className="flex gap-2 p-1 bg-white/5 border border-[var(--border)] rounded-xl">
                           {[
                             { id: "solid", label: "实线" },
                             { id: "dashed", label: "虚线" },
@@ -1339,7 +1341,7 @@ ${annotationNotes || "无附加标注说明"}
             {/* Quick Stylers Button */}
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className={`absolute top-6 left-6 p-3 rounded-2xl transition-all shadow-xl backdrop-blur-md border border-white/10 z-[50] ${showSettings ? "bg-indigo-600 text-white" : "bg-black/60 text-gray-400 hover:text-white"}`}
+              className={`absolute top-6 left-6 p-3 rounded-2xl transition-all shadow-xl backdrop-blur-md border border-[var(--border)] z-[50] ${showSettings ? "bg-indigo-600 text-white" : "bg-black/60 text-gray-400 hover:text-white"}`}
             >
               <SlidersHorizontal size={20 * zoomScale} />
             </button>
@@ -1349,7 +1351,7 @@ ${annotationNotes || "无附加标注说明"}
           <div className="shrink-0 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
                   <Type size={16 * zoomScale} />
                 </div>
                 <span
@@ -1362,7 +1364,7 @@ ${annotationNotes || "无附加标注说明"}
               <div className="flex items-center gap-4">
                 <button
                   onClick={toggleEditing}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isEditing ? "bg-emerald-500 border-emerald-400 text-white shadow-lg" : "bg-white/5 border-white/5 text-gray-400 hover:text-white"}`}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isEditing ? "bg-emerald-500 border-emerald-400 text-white shadow-lg" : "bg-white/5 border-[var(--border)] text-gray-400 hover:text-white"}`}
                 >
                   {isEditing ? (
                     <Check size={12 * zoomScale} />
@@ -1377,7 +1379,7 @@ ${annotationNotes || "无附加标注说明"}
                   <>
                     <button
                       onClick={startNewSelection}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-white/5 border-white/5 text-gray-400 hover:text-white transition-all"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-white/5 border-[var(--border)] text-gray-400 hover:text-white transition-all"
                     >
                       <Crosshair size={12 * zoomScale} />
                       <span className="text-sm font-black uppercase tracking-tighter">
@@ -1412,7 +1414,7 @@ ${annotationNotes || "无附加标注说明"}
             </div>
 
             <div
-              className="bg-black/60 border border-white/5 rounded-[20px] relative group overflow-hidden"
+              className="bg-black/60 border border-[var(--border)] rounded-[20px] relative group overflow-hidden"
               style={{ padding: 16 * zoomScale }}
             >
               <div className="flex items-center justify-between mb-3">
@@ -1432,7 +1434,7 @@ ${annotationNotes || "无附加标注说明"}
 
               <button
                 onClick={handleCopy}
-                className="absolute top-4 right-4 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-emerald-500 hover:scale-110 active:scale-95 transition-all shadow-xl backdrop-blur-md border border-white/5"
+                className="absolute top-4 right-4 p-3 bg-white/5 hover:bg-white/10 rounded-xl text-emerald-500 hover:scale-110 active:scale-95 transition-all shadow-xl backdrop-blur-md border border-[var(--border)]"
               >
                 {copied ? (
                   <Check size={16 * zoomScale} />
@@ -1443,7 +1445,7 @@ ${annotationNotes || "无附加标注说明"}
             </div>
 
             <div
-              className="flex items-center gap-3 bg-white/[0.02] border border-white/5 rounded-2xl p-4"
+              className="flex items-center gap-3 bg-white/[0.02] border border-[var(--border)] rounded-2xl p-4"
               style={{ padding: 12 * zoomScale }}
             >
               <div className="p-2 bg-indigo-500/10 rounded-lg">
@@ -1454,7 +1456,7 @@ ${annotationNotes || "无附加标注说明"}
                 style={{ fontSize: 9 * zoomScale }}
               >
                 蓝色框为
-                <span className="text-blue-400 font-bold px-1">
+                <span className="text-accent font-bold px-1">
                   源物体选择框
                 </span>
                 ，用于锁定主体。红色框为
@@ -1485,7 +1487,7 @@ ${annotationNotes || "无附加标注说明"}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[10000] bg-[#0c1016] flex flex-col p-8"
+              className="fixed inset-0 z-[10000] bg-[var(--bg-secondary)] flex flex-col p-8"
               onPointerDown={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-8">
@@ -1522,7 +1524,7 @@ ${annotationNotes || "无附加标注说明"}
               <div className="flex-1 flex gap-12 overflow-hidden">
                 <div
                   ref={fullscreenContainerRef}
-                  className={`flex-1 relative bg-black rounded-[40px] overflow-hidden border border-white/5 shadow-[0_40px_100px_rgba(0,0,0,0.8)] flex items-center justify-center ${drawMode ? "cursor-crosshair" : ""}`}
+                  className={`flex-1 relative bg-black rounded-[40px] overflow-hidden border border-[var(--border)] shadow-[0_40px_100px_rgba(0,0,0,0.8)] flex items-center justify-center ${drawMode ? "cursor-crosshair" : ""}`}
                   onMouseDown={(e) => drawMode && onMouseDown(e)}
                 >
                   <div
@@ -1543,10 +1545,10 @@ ${annotationNotes || "无附加标注说明"}
                     {renderScalingArrow()}
                   </div>
                   {drawMode && (
-                    <div className="absolute inset-0 bg-blue-500/5 pointer-events-none flex items-center justify-center">
-                      <div className="px-8 py-4 bg-black/80 rounded-full border border-white/10 flex items-center gap-4">
+                    <div className="absolute inset-0 bg-accent/5 pointer-events-none flex items-center justify-center">
+                      <div className="px-8 py-4 bg-black/80 rounded-full border border-[var(--border)] flex items-center gap-4">
                         <div
-                          className={`w-4 h-4 rounded-full animate-pulse ${drawMode === "blue" ? "bg-blue-500" : "bg-red-500"}`}
+                          className={`w-4 h-4 rounded-full animate-pulse ${drawMode === "blue" ? "bg-accent" : "bg-red-500"}`}
                         />
                         <span className="text-lg font-black text-white uppercase tracking-widest whitespace-nowrap">
                           {drawMode === "blue"
@@ -1578,7 +1580,7 @@ ${annotationNotes || "无附加标注说明"}
                           </div>
                           <button
                             onClick={() => setShowSettings(false)}
-                            className="text-gray-300 hover:text-white transition-all bg-white/10 px-4 py-1.5 rounded-xl text-base font-bold uppercase tracking-widest border border-white/10 hover:border-white/30"
+                            className="text-gray-300 hover:text-white transition-all bg-white/10 px-4 py-1.5 rounded-xl text-base font-bold uppercase tracking-widest border border-[var(--border)] hover:border-white/30"
                           >
                             Close
                           </button>
@@ -1589,13 +1591,13 @@ ${annotationNotes || "无附加标注说明"}
                             <div className="grid grid-cols-2 gap-4 mb-4">
                               <button
                                 onClick={() => setActiveStylingTarget("blue")}
-                                className={`py-5 rounded-[24px] text-base font-black uppercase transition-all border-2 shadow-2xl ${activeStylingTarget === "blue" ? "bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_30px_rgba(59,130,246,0.2)] scale-105" : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"}`}
+                                className={`py-5 rounded-[24px] text-base font-black uppercase transition-all border-2 shadow-2xl ${activeStylingTarget === "blue" ? "bg-accent/20 border-accent text-accent shadow-[0_0_30px_rgba(59,130,246,0.2)] scale-105" : "bg-white/5 border-[var(--border)] text-gray-500 hover:border-[var(--border)]"}`}
                               >
                                 Source Box (Blue)
                               </button>
                               <button
                                 onClick={() => setActiveStylingTarget("red")}
-                                className={`py-5 rounded-[24px] text-base font-black uppercase transition-all border-2 shadow-2xl ${activeStylingTarget === "red" ? "bg-red-600/20 border-red-500 text-red-400 shadow-[0_0_30px_rgba(239,68,68,0.2)] scale-105" : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"}`}
+                                className={`py-5 rounded-[24px] text-base font-black uppercase transition-all border-2 shadow-2xl ${activeStylingTarget === "red" ? "bg-red-600/20 border-red-500 text-red-400 shadow-[0_0_30px_rgba(239,68,68,0.2)] scale-105" : "bg-white/5 border-[var(--border)] text-gray-500 hover:border-[var(--border)]"}`}
                               >
                                 Target Box (Red)
                               </button>
@@ -1609,7 +1611,7 @@ ${annotationNotes || "无附加标注说明"}
                                 {boxMode === "fill" ? "Fill" : "Outline"}
                               </span>
                             </label>
-                            <div className="flex gap-4 p-2 bg-white/5 border border-white/10 rounded-2xl">
+                            <div className="flex gap-4 p-2 bg-white/5 border border-[var(--border)] rounded-2xl">
                               {(["outline", "fill"] as const).map((mode) => (
                                 <button
                                   key={mode}
@@ -1633,7 +1635,7 @@ ${annotationNotes || "无附加标注说明"}
                                   : "Solid"}
                               </span>
                             </label>
-                            <div className="flex gap-4 p-2 bg-white/5 border border-white/10 rounded-2xl">
+                            <div className="flex gap-4 p-2 bg-white/5 border border-[var(--border)] rounded-2xl">
                               {(["solid", "dashed"] as const).map((type) => (
                                 <button
                                   key={type}
@@ -1748,7 +1750,7 @@ ${annotationNotes || "无附加标注说明"}
                             />
                           </div>
 
-                          <div className="pt-6 border-t border-white/10 space-y-6">
+                          <div className="pt-6 border-t border-[var(--border)] space-y-6">
                             <label className="text-sm font-black text-indigo-400 uppercase tracking-widest">
                               Scaling Arrow Style
                             </label>
@@ -1821,7 +1823,7 @@ ${annotationNotes || "无附加标注说明"}
                                     : "Straight Line"}
                                 </span>
                               </label>
-                              <div className="flex gap-4 p-2 bg-white/5 border border-white/10 rounded-2xl">
+                              <div className="flex gap-4 p-2 bg-white/5 border border-[var(--border)] rounded-2xl">
                                 {(["LINE", "OUTLINE"] as const).map((mode) => (
                                   <button
                                     key={mode}
@@ -1843,7 +1845,7 @@ ${annotationNotes || "无附加标注说明"}
                                     : "Solid"}
                                 </span>
                               </label>
-                              <div className="flex gap-4 p-2 bg-white/5 border border-white/10 rounded-2xl">
+                              <div className="flex gap-4 p-2 bg-white/5 border border-[var(--border)] rounded-2xl">
                                 {(["solid", "dashed"] as const).map((type) => (
                                   <button
                                     key={type}
@@ -1899,14 +1901,14 @@ ${annotationNotes || "无附加标注说明"}
                   {/* Quick Stylers Button */}
                   <button
                     onClick={() => setShowSettings(!showSettings)}
-                    className={`absolute top-10 left-10 w-20 h-20 rounded-[30px] transition-all shadow-2xl backdrop-blur-xl border border-white/10 z-[50] flex items-center justify-center ${showSettings ? "bg-indigo-600 text-white animate-pulse" : "bg-black/60 text-gray-400 hover:text-white hover:scale-110"}`}
+                    className={`absolute top-10 left-10 w-20 h-20 rounded-[30px] transition-all shadow-2xl backdrop-blur-xl border border-[var(--border)] z-[50] flex items-center justify-center ${showSettings ? "bg-indigo-600 text-white animate-pulse" : "bg-black/60 text-gray-400 hover:text-white hover:scale-110"}`}
                   >
                     <SlidersHorizontal size={32} />
                   </button>
                 </div>
 
                 <div className="flex-1 max-w-[450px] flex flex-col gap-8 h-full overflow-y-auto pr-4 scrollbar-hide">
-                  <div className="p-10 bg-white/[0.03] border border-white/10 rounded-[32px] flex flex-col gap-6 shadow-2xl shrink-0">
+                  <div className="p-10 bg-white/[0.03] border border-[var(--border)] rounded-[32px] flex flex-col gap-6 shadow-2xl shrink-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -1917,13 +1919,13 @@ ${annotationNotes || "无附加标注说明"}
                         </h4>
                       </div>
                       {/* Point Selection Helper */}
-                      <div className="flex items-center gap-2 px-2 py-1 bg-black/40 rounded-full border border-white/10">
+                      <div className="flex items-center gap-2 px-2 py-1 bg-black/40 rounded-full border border-[var(--border)]">
                         <button
                           onClick={() => {
                             setActiveStylingTarget("blue");
                             setShowSettings(true);
                           }}
-                          className={`w-6 h-6 rounded-full border transition-all ${activeStylingTarget === "blue" ? "bg-blue-600 border-white" : "bg-blue-900/30 border-blue-500/30 hover:border-blue-500"}`}
+                          className={`w-6 h-6 rounded-full border transition-all ${activeStylingTarget === "blue" ? "bg-accent border-white" : "bg-blue-900/30 border-accent/30 hover:border-accent"}`}
                           title="选择蓝框"
                         />
                         <button
@@ -1955,14 +1957,14 @@ ${annotationNotes || "无附加标注说明"}
                           });
                         }}
                         placeholder="输入对此节点的标注注释..."
-                        className={`w-full h-24 bg-black/40 border border-white/5 rounded-2xl p-4 ${getFontSizeClass()} text-white/80 focus:outline-none focus:border-indigo-500/50 resize-none transition-all placeholder:text-gray-700 font-mono`}
+                        className={`w-full h-24 bg-black/40 border border-[var(--border)] rounded-2xl p-4 ${getFontSizeClass()} text-white/80 focus:outline-none focus:border-indigo-500/50 resize-none transition-all placeholder:text-gray-700 font-mono`}
                       />
                     </div>
 
                     <div className="flex items-center gap-4">
                       <button
                         onClick={toggleEditing}
-                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-[20px] border transition-all ${isEditing ? "bg-emerald-500 border-emerald-400 text-white shadow-lg" : "bg-white/5 border-white/10 text-gray-400 hover:text-white"}`}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 rounded-[20px] border transition-all ${isEditing ? "bg-emerald-500 border-emerald-400 text-white shadow-lg" : "bg-white/5 border-[var(--border)] text-gray-400 hover:text-white"}`}
                       >
                         {isEditing ? <Check size={18} /> : <Move size={18} />}
                         <span className="text-base font-black uppercase tracking-widest">
@@ -1973,7 +1975,7 @@ ${annotationNotes || "无附加标注说明"}
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             onClick={startNewSelection}
-                            className="w-12 h-12 flex items-center justify-center rounded-2xl border bg-white/5 border-white/10 text-gray-400 hover:text-white transition-all"
+                            className="w-12 h-12 flex items-center justify-center rounded-2xl border bg-white/5 border-[var(--border)] text-gray-400 hover:text-white transition-all"
                             title="重新开始第一步"
                           >
                             <Plus size={20} />
@@ -1989,7 +1991,7 @@ ${annotationNotes || "无附加标注说明"}
                       )}
                     </div>
 
-                    <div className="bg-black/60 rounded-3xl p-8 border border-white/5 h-[300px] overflow-y-auto scrollbar-hide">
+                    <div className="bg-black/60 rounded-3xl p-8 border border-[var(--border)] h-[300px] overflow-y-auto scrollbar-hide">
                       <pre className="text-base font-mono text-emerald-400/90 whitespace-pre-wrap select-text">
                         {prompt}
                       </pre>
@@ -2010,7 +2012,7 @@ ${annotationNotes || "无附加标注说明"}
                     </button>
                   </div>
 
-                  <div className="p-8 bg-white/[0.01] border border-white/5 rounded-[32px]">
+                  <div className="p-8 bg-white/[0.01] border border-[var(--border)] rounded-[32px]">
                     <h4 className="text-sm font-black text-gray-600 uppercase tracking-[0.3em] mb-6">
                       Execution Logic
                     </h4>

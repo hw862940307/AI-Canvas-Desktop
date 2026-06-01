@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, AppSettings, MouseSize, AppTheme, BarTexture, FontSize, UploadQuality, MultiSelectMode } from '../store/useStore';
-import { generateTextWithFallback } from '../lib/gemini';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -68,7 +67,7 @@ export const SettingsModal = ({ onClose }: SettingsModalProps) => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${
                   activeTab === tab.id 
-                    ? 'bg-blue-600/10 text-blue-500 border border-blue-500/20' 
+                    ? 'bg-accent/10 text-accent border border-accent/20' 
                     : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-white'
                 }`}
               >
@@ -122,13 +121,13 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
         title="鼠标大小" 
         desc="选择光标显示大小" 
       >
-        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-[var(--border)]">
           {(['small', 'medium', 'large'] as MouseSize[]).map((size) => (
             <button
               key={size}
               onClick={() => update({ mouseSize: size })}
               className={`flex-1 px-4 py-2 rounded-lg text-lg transition-all flex items-center gap-2 ${
-                settings.mouseSize === size ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                settings.mouseSize === size ? 'bg-accent text-white shadow-lg' : 'text-gray-400 hover:text-white'
               }`}
             >
               <MousePointer size={size === 'small' ? 12 : size === 'medium' ? 16 : 20} />
@@ -142,13 +141,13 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
         title="应用主题" 
         desc="切换界面整体明暗外观" 
       >
-        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-[var(--border)]">
           {(['dark', 'mist', 'light'] as AppTheme[]).map((t) => (
             <button
               key={t}
               onClick={() => update({ theme: t })}
               className={`flex-1 px-5 py-2.5 rounded-lg text-lg transition-all flex flex-col items-center gap-1 min-w-[70px] ${
-                settings.theme === t ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                settings.theme === t ? 'bg-accent text-white shadow-lg' : 'text-gray-400 hover:text-white'
               }`}
             >
               {t === 'dark' && <Moon size={18} />}
@@ -157,6 +156,29 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
               <span className="text-sm mt-1">{t === 'dark' ? '暗夕' : t === 'mist' ? '晨雾' : '白昼'}</span>
             </button>
           ))}
+        </div>
+      </SettingRow>
+
+      <SettingRow 
+        title="自定义颜色主体" 
+        desc="设置应用全局的主题点缀色" 
+      >
+        <div className="flex gap-3 items-center">
+          {['#3b82f6', '#a855f7', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#f97316'].map((color) => (
+            <button
+              key={color}
+              onClick={() => update({ themeColor: color })}
+              className={`w-10 h-10 rounded-full border-2 transition-all shadow-md ${settings.themeColor === color ? 'border-white scale-110' : 'border-transparent hover:scale-105'}`}
+              style={{ backgroundColor: color }}
+            />
+          ))}
+          <div className="w-px h-6 bg-[var(--border)] mx-1" />
+          <input 
+            type="color" 
+            value={settings.themeColor || '#3b82f6'} 
+            onChange={(e) => update({ themeColor: e.target.value })}
+            className="w-10 h-10 rounded-xl cursor-pointer border-0 p-0 bg-transparent"
+          />
         </div>
       </SettingRow>
 
@@ -171,8 +193,8 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
               onClick={() => update({ barTexture: tex })}
               className={`px-6 py-2 rounded-xl text-lg border transition-all ${
                 settings.barTexture === tex 
-                  ? 'bg-blue-600/10 border-blue-600/50 text-blue-500' 
-                  : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                  ? 'bg-accent/10 border-accent/50 text-accent' 
+                  : 'bg-white/5 border-[var(--border)] text-gray-400 hover:text-white'
               }`}
             >
               {tex === 'transparent' ? '透明' : '毛玻璃'}
@@ -182,13 +204,13 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
       </SettingRow>
 
       <SettingRow title="网格点显示" desc="只影响显示，不影响网格吸附" shortcut=".">
-        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+        <div className="flex bg-white/5 rounded-xl border border-[var(--border)] p-1">
           {[true, false].map((v) => (
             <button 
               key={String(v)}
               className={`px-6 py-1.5 rounded-lg text-lg flex-1 transition-all ${
                 useStore.getState().isGridVisible === v 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-accent text-white' 
                   : 'text-gray-400 hover:text-white'
               }`}
               onClick={() => useStore.getState().toggleGrid()}
@@ -200,7 +222,7 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
       </SettingRow>
 
       <SettingRow title="输入字体大小 (px)" desc="手动设置节点提示词输入框的字体大小">
-        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+        <div className="flex bg-white/5 rounded-xl border border-[var(--border)] p-1">
           <input
             type="number"
             min="10"
@@ -212,15 +234,46 @@ const GeneralSettings = ({ settings, update }: { settings: AppSettings, update: 
         </div>
       </SettingRow>
 
+      <SettingRow title="节点 UI 文字大小 (px)" desc="调节所有卡片节点的 UI 文字与排版大小比例">
+        <div className="flex bg-white/5 rounded-xl border border-[var(--border)] p-1 items-center gap-4 min-w-[240px] w-full px-2">
+          <input 
+            type="range"
+            min="0"
+            max="200"
+            step="1"
+            value={settings.nodeUiFontSize ?? 14}
+            onChange={(e) => {
+              const val = parseInt(e.target.value);
+              update({ nodeUiFontSize: isNaN(val) ? 0 : val });
+            }}
+            className="flex-1 accent-accent h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
+          />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <input 
+              type="number"
+              min="0"
+              max="200"
+              value={settings.nodeUiFontSize ?? 14}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                update({ nodeUiFontSize: isNaN(val) ? 0 : Math.max(0, Math.min(200, val)) });
+              }}
+              className="w-14 py-0.5 text-center bg-black/40 text-sm font-semibold font-mono text-white rounded-lg border border-[var(--border)] focus:outline-none focus:border-accent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <span className="text-xs font-black text-white/30 font-mono">PX</span>
+          </div>
+        </div>
+      </SettingRow>
+
       <SettingRow title="图片入参上传质量" desc="生成前参考图上传的压缩档位">
-        <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/10">
+        <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-[var(--border)]">
           {(['standard', 'high', 'original'] as UploadQuality[]).map((q) => (
             <button
               key={q}
               onClick={() => update({ uploadQuality: q })}
               className={`px-4 py-2 rounded-lg text-lg transition-all ${
                 settings.uploadQuality === q 
-                  ? 'bg-blue-600/10 text-blue-500 border border-blue-600/30' 
+                  ? 'bg-accent/10 text-accent border border-accent/30' 
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -237,13 +290,13 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
   return (
     <div className="flex flex-col gap-10">
       <SettingRow title="点击节点时高亮关联节点" desc="选中节点后高亮直接连接的上下游节点和连线">
-        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+        <div className="flex bg-white/5 rounded-xl border border-[var(--border)] p-1">
           {[true, false].map((v) => (
             <button 
               key={String(v)}
               className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.highlightAssociated === v 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-accent text-white' 
                   : 'text-gray-400 hover:text-white'
               }`}
               onClick={() => update({ highlightAssociated: v })}
@@ -276,13 +329,13 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
       )}
 
       <SettingRow title="连接线显示" desc="只控制画布上的连接线可见性，不影响节点连接关系" shortcut="B">
-        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+        <div className="flex bg-white/5 rounded-xl border border-[var(--border)] p-1">
           {[true, false].map((v) => (
             <button 
               key={String(v)}
               className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.showConnections === v 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-accent text-white' 
                   : 'text-gray-400 hover:text-white'
               }`}
               onClick={() => update({ showConnections: v })}
@@ -294,13 +347,13 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
       </SettingRow>
 
       <SettingRow title="辅助线吸附" desc="开启后单节点拖拽时显示辅助线并自动吸附" shortcut=";">
-        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+        <div className="flex bg-white/5 rounded-xl border border-[var(--border)] p-1">
           {[true, false].map((v) => (
             <button 
               key={String(v)}
               className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.snapToGuidelines === v 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-accent text-white' 
                   : 'text-gray-400 hover:text-white'
               }`}
               onClick={() => update({ snapToGuidelines: v })}
@@ -312,13 +365,13 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
       </SettingRow>
 
       <SettingRow title="网格吸附" desc="开启后拖拽节点时按网格点对齐" shortcut="L">
-        <div className="flex bg-white/5 rounded-xl border border-white/10 p-1">
+        <div className="flex bg-white/5 rounded-xl border border-[var(--border)] p-1">
           {[true, false].map((v) => (
             <button 
               key={String(v)}
               className={`px-6 py-1.5 rounded-lg text-lg min-w-[60px] transition-all ${
                 settings.snapToGrid === v 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-accent text-white' 
                   : 'text-gray-400 hover:text-white'
               }`}
               onClick={() => update({ snapToGrid: v })}
@@ -330,13 +383,13 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
       </SettingRow>
 
       <SettingRow title="启动多选对齐功能" desc="可设置为长按或点击快捷触发中心对齐面板" shortcut="Tab">
-        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
+        <div className="flex gap-2 p-1 bg-white/5 rounded-xl border border-[var(--border)]">
           {(['longPress', 'click', 'disabled'] as MultiSelectMode[]).map((mode) => (
             <button
               key={mode}
               onClick={() => update({ multiSelectAlignmentMode: mode })}
               className={`px-5 py-2 rounded-lg text-lg transition-all ${
-                settings.multiSelectAlignmentMode === mode ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                settings.multiSelectAlignmentMode === mode ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'
               }`}
             >
               {mode === 'longPress' ? '长按开启' : mode === 'click' ? '点击开启' : '关闭'}
@@ -358,7 +411,7 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
               max="200"
               value={settings.alignmentSpacing}
               onChange={(e) => update({ alignmentSpacing: parseInt(e.target.value) })}
-              className="flex-1 accent-blue-600 h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
+              className="flex-1 accent-accent h-1.5 rounded-lg appearance-none bg-white/10 cursor-pointer"
             />
             <span className="text-lg font-mono text-white/50 w-8">{settings.alignmentSpacing}</span>
           </div>
@@ -373,7 +426,7 @@ const FileSettings = ({ settings, update }: { settings: AppSettings, update: (s:
     <div className="flex flex-col gap-2">
       <p className="text-lg text-gray-500 mb-6 font-medium">配置项目、素材数据和生成输出的本地保存目录。授权、API Key 和用户设置固定保存在应用数据目录。</p>
       
-      <div className="flex flex-col gap-4 p-6 bg-white/[0.02] border border-white/10 rounded-[24px]">
+      <div className="flex flex-col gap-4 p-6 bg-white/[0.02] border border-[var(--border)] rounded-[24px]">
         <PathInput 
           label="项目保存路径" 
           desc="保存画布项目文件" 
@@ -403,7 +456,7 @@ const PathInput = ({ label, desc, value, onChange }: { label: string; desc: stri
       <span className="text-lg text-[var(--text-primary)] font-bold">{label}</span>
       <span className="text-base text-[var(--text-secondary)]">{desc}</span>
     </div>
-    <div className="flex-1 flex items-center bg-white/5 border border-white/5 rounded-xl px-4 py-3 group hover:border-white/10 transition-all">
+    <div className="flex-1 flex items-center bg-white/5 border border-[var(--border)] rounded-xl px-4 py-3 group hover:border-[var(--border)] transition-all">
       <input 
         className="w-full bg-transparent text-lg text-[var(--text-secondary)] outline-none"
         value={value}
@@ -424,8 +477,37 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
   const testConnection = async () => {
     setTestStatus('testing');
     try {
-      // Simulate API test or implement a real one if needed
-      const result = await generateTextWithFallback("Hello, testing connection. Reply with exactly 'OK'.");
+      let apiKey = api.apiKey;
+      if (!apiKey && api.engine === 'gemini') {
+        const env = (import.meta as any).env;
+        apiKey = typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : (env ? env.VITE_GEMINI_API_KEY : '');
+      }
+
+      if (!apiKey) {
+        throw new Error(`API Key for ${api.engine} is missing in the settings form.`);
+      }
+
+      const messages = [{ role: 'user', content: "Hello, testing connection. Reply with exactly 'OK'." }];
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engine: api.engine,
+          baseUrl: api.baseUrl,
+          apiKey: apiKey,
+          modelId: api.modelId,
+          messages: messages
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Server connection error');
+      }
+
+      const data = await response.json();
+      const result = data.text || '';
+      
       if (!result || typeof result !== 'string' || result.trim() === '') {
         throw new Error("Received empty response from the language model.");
       }
@@ -434,7 +516,6 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
     } catch (e: any) {
       console.error("Test connection failed:", e);
       setTestStatus('error');
-      // Set to idle after error but maybe show it somehow. For now just reset after 3s
       setTimeout(() => setTestStatus('idle'), 3000);
       alert("API Connection Failed: " + (e.message || String(e)));
     }
@@ -442,7 +523,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
 
   return (
     <div className="flex flex-col gap-8 max-w-2xl mx-auto">
-      <div className="flex items-center justify-center p-1 bg-white/5 rounded-2xl border border-white/10 w-fit mx-auto mb-4">
+      <div className="flex items-center justify-center p-1 bg-white/5 rounded-2xl border border-[var(--border)] w-fit mx-auto mb-4">
         <button
           onClick={() => updateApi({ isCustom: false })}
           className={`px-8 py-2.5 rounded-xl text-lg font-bold transition-all ${
@@ -461,7 +542,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         </button>
       </div>
 
-      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
+      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-[var(--border)]">
         <div className="space-y-2">
           <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Engine</label>
           <div className="relative group">
@@ -469,7 +550,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
               value={api.engine}
               onChange={(e) => updateApi({ engine: e.target.value as any })}
               disabled={!api.isCustom}
-              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold disabled:opacity-50"
+              className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-accent/50 transition-all font-bold disabled:opacity-50"
             >
               <option value="gemini">Gemini API</option>
               <option value="openai">OpenAI API</option>
@@ -487,7 +568,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
 
         <div className="space-y-2">
           <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Base URL</label>
-          <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+          <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-accent/50 transition-all group">
             <input
               type="text"
               value={api.baseUrl}
@@ -502,7 +583,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Api Key</label>
-            <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+            <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-accent/50 transition-all group">
               <input
                 type="password"
                 value={api.apiKey}
@@ -515,7 +596,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
           </div>
           <div className="space-y-2">
             <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Model ID</label>
-            <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+            <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-accent/50 transition-all group">
               <input
                 type="text"
                 value={api.modelId}
@@ -528,7 +609,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         </div>
       </div>
 
-      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
+      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-[var(--border)]">
         <h3 className="text-lg font-bold text-white mb-4">Picture Generation Settings</h3>
         <div className="space-y-2">
           <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">Image Engine</label>
@@ -536,7 +617,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
             <select
               value={api.imageEngine}
               onChange={(e) => updateApi({ imageEngine: e.target.value as any })}
-              className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
+              className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-accent/50 transition-all font-bold"
             >
               <option value="online">Online (在线文生图)</option>
               <option value="comfyui">ComfyUI (本地生图)</option>
@@ -551,7 +632,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
               <select
                 value={api.imageModel}
                 onChange={(e) => updateApi({ imageModel: e.target.value as any })}
-                className="w-full bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-blue-500/50 transition-all font-bold"
+                className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl px-6 py-4 text-lg text-white appearance-none focus:outline-none focus:border-accent/50 transition-all font-bold"
               >
                 <option value="Nano Banana Pro">Nano Banana Pro</option>
                 <option value="Nano Banana 2">Nano Banana 2</option>
@@ -566,7 +647,7 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         {api.imageEngine === 'comfyui' && (
           <div className="space-y-2">
             <label className="text-sm font-black text-gray-500 uppercase tracking-[0.2em] ml-4">ComfyUI URL</label>
-            <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-blue-500/50 transition-all group">
+            <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl px-6 py-4 flex items-center gap-4 focus-within:border-accent/50 transition-all group">
               <input
                 type="text"
                 value={api.comfyUrl}
@@ -579,14 +660,14 @@ const ApiSettingsComponent = ({ settings, update, onClose }: { settings: AppSett
         )}
       </div>
 
-      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-white/5">
+      <div className="space-y-6 bg-black/40 p-8 rounded-[32px] border border-[var(--border)]">
         <button
           onClick={testConnection}
           disabled={testStatus === 'testing'}
           className={`w-full py-6 rounded-3xl border transition-all flex items-center justify-center gap-3 font-bold text-lg tracking-widest uppercase ${
             testStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500' :
             testStatus === 'error' ? 'bg-red-500/10 border-red-500/40 text-red-500' :
-            'bg-white/[0.02] border-white/5 text-gray-500 hover:bg-white/[0.05] hover:text-white'
+            'bg-white/[0.02] border-[var(--border)] text-gray-500 hover:bg-white/[0.05] hover:text-white'
           }`}
         >
           {testStatus === 'testing' ? (
@@ -620,7 +701,7 @@ const SettingRow = ({ title, desc, children, shortcut }: { title: string; desc: 
       <div className="flex items-center gap-3">
         <h4 className="text-[17px] font-bold text-[var(--text-primary)]">{title}</h4>
         {shortcut && (
-          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-sm text-[var(--text-secondary)] font-mono">
+          <span className="px-2 py-0.5 rounded bg-white/5 border border-[var(--border)] text-sm text-[var(--text-secondary)] font-mono">
             {shortcut}
           </span>
         )}

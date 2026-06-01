@@ -77,7 +77,7 @@ export const FullscreenTextEditor = ({
           <div className="w-px h-6 bg-[var(--border)] mx-2" />
 
           {/* Formatting Tools */}
-          <div className="flex items-center gap-1 p-1 bg-white/5 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-1 p-1 bg-white/5 rounded-2xl border border-[var(--border)]">
             <EditorToolButton onClick={() => insertText('# ', '')} icon={<Heading1 size={18} />} title="一级标题" />
             <EditorToolButton onClick={() => insertText('## ', '')} icon={<Heading2 size={18} />} title="二级标题" />
             <EditorToolButton onClick={() => insertText('### ', '')} icon={<Heading3 size={18} />} title="三级标题" />
@@ -125,7 +125,7 @@ export const FullscreenTextEditor = ({
           </button>
           <button 
             onClick={() => onSave(text, alignment)}
-            className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-xl active:scale-95"
+            className="flex items-center gap-2 px-8 py-3 bg-accent hover:bg-accent text-white rounded-2xl font-bold transition-all shadow-xl active:scale-95"
           >
             <Check size={18} />
             <span>保存变更</span>
@@ -155,7 +155,7 @@ export const FullscreenTextEditor = ({
         <div className="mt-8 flex items-center justify-between text-sm text-[var(--text-secondary)] font-mono uppercase tracking-[0.2em] border-t border-[var(--border)] pt-6">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <div className="w-1.5 h-1.5 rounded-full bg-accent" />
               <span>字符数: {text.length}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -186,7 +186,7 @@ const EditorToolButton = ({
     title={title}
     className={`p-2.5 rounded-xl transition-all ${
       active 
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+        ? 'bg-accent text-white shadow-lg shadow-accent/20' 
         : 'hover:bg-white/10 text-[var(--text-secondary)] hover:text-white'
     }`}
   >

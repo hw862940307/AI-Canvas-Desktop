@@ -7,7 +7,12 @@ export const getModelId = () => {
   return settings.apiSettings.modelId || 'gemini-1.5-flash';
 };
 
-export const generateTextWithFallback = async (prompt: string | any[], systemPrompt?: string): Promise<string> => {
+export const generateTextWithFallback = async (
+  prompt: string | any[], 
+  systemPrompt?: string,
+  attachments?: any[],
+  webSearch?: boolean
+): Promise<string> => {
   const { settings } = useStore.getState();
   const api = settings.apiSettings;
 
@@ -45,7 +50,9 @@ export const generateTextWithFallback = async (prompt: string | any[], systemPro
       baseUrl: api.baseUrl,
       apiKey: apiKey,
       modelId: api.modelId,
-      messages: messages
+      messages: messages,
+      attachments: attachments,
+      webSearch: webSearch
     })
   });
 

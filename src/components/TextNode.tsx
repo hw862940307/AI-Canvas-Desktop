@@ -1,9 +1,10 @@
 import React from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, NodeResizer } from '@xyflow/react';
 import { Type, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { ScaleWrapper } from './ScaleWrapper';
 
-export const TextNode = ({ id, data }: { id: string; data: any }) => {
+export const TextNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
   const { updateNodeData, removeNode, settings } = useStore();
 
   const getFontSizeStyle = () => {
@@ -19,40 +20,50 @@ export const TextNode = ({ id, data }: { id: string; data: any }) => {
   };
 
   return (
-    <div className={`relative group min-w-[280px] border border-[var(--border)] rounded-2xl overflow-hidden shadow-2xl transition-all ${
+    <div className={`relative group w-full h-full border ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-2xl shadow-2xl transition-all flex flex-col ${
       settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-secondary)]'
     }`}>
-      <div className={`flex items-center justify-between px-4 py-3 border-b border-[var(--border)] transition-all react-flow__node-draghandle ${
-        settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-black/40'
-      }`}>
-        <div className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
-          <Type size={16} className="text-emerald-400" />
-          <span>文本节点</span>
+      <NodeResizer 
+        color="var(--accent)" 
+        isVisible={selected} 
+        minWidth={240}
+        minHeight={200}
+        keepAspectRatio={true}
+        handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid var(--accent)' }}
+      />
+      <ScaleWrapper id={id} type="text">
+        <div className={`flex items-center justify-between px-4 py-3 border-b border-[var(--border)] transition-all react-flow__node-draghandle ${
+          settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-black/40'
+        } rounded-t-2xl`}>
+          <div className="flex items-center gap-2 text-lg font-semibold text-[var(--text-primary)]">
+            <Type size={16} className="text-emerald-400" />
+            <span>文本节点</span>
+          </div>
+          <button 
+            onClick={() => removeNode(id)}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-red-400"
+          >
+            <X size={16} />
+          </button>
         </div>
-        <button 
-          onClick={() => removeNode(id)}
-          className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-[var(--text-secondary)] hover:text-red-400"
-        >
-          <X size={16} />
-        </button>
-      </div>
 
-      <div className="p-4 nodrag">
-        <textarea
-          style={getFontSizeStyle()}
-          className={`w-full min-h-[140px] bg-black/40 border border-[var(--border)] rounded-xl p-3 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500/50 transition-all resize-y font-mono placeholder:text-[var(--text-secondary)]/50 ${getFontSizeClass()}`}
-          placeholder="在此输入文本..."
-          value={data.text || ''}
-          onChange={(e) => updateNodeData(id, { text: e.target.value })}
-        />
-        <div className="mt-2 flex justify-between items-center px-1">
-          <span className="text-sm text-[var(--text-secondary)] uppercase font-bold tracking-widest">Type Input</span>
-          <span className="text-sm text-[var(--text-secondary)]">{(data.text || '').length} 字符</span>
+        <div className="p-4 flex-1 flex flex-col justify-between nodrag">
+          <textarea
+            style={getFontSizeStyle()}
+            className={`w-full h-full min-h-[140px] bg-black/40 border border-[var(--border)] rounded-xl p-3 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500/50 transition-all resize-none font-mono placeholder:text-[var(--text-secondary)]/50 ${getFontSizeClass()}`}
+            placeholder="在此输入文本..."
+            value={data.text || ''}
+            onChange={(e) => updateNodeData(id, { text: e.target.value })}
+          />
+          <div className="mt-2 flex justify-between items-center px-1">
+            <span className="text-xs text-[var(--text-secondary)] uppercase font-bold tracking-widest">Type Input</span>
+            <span className="text-xs text-[var(--text-secondary)]">{(data.text || '').length} 字符</span>
+          </div>
         </div>
-      </div>
+      </ScaleWrapper>
 
-      <Handle type="target" position={Position.Left} className="!bg-emerald-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
-      <Handle type="source" position={Position.Right} className="!bg-emerald-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="target" position={Position.Left} className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
     </div>
   );
 };

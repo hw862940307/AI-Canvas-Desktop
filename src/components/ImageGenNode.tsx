@@ -1,37 +1,41 @@
-import React, { useState, useRef } from 'react';
-import { Handle, Position } from '@xyflow/react';
-import { Sparkles, Loader2, X, Maximize2, ChevronDown, Plus, ArrowUp, Download } from 'lucide-react';
-import { useStore } from '../store/useStore';
-import { getGenAI } from '../lib/gemini';
+import React, { useState, useRef, useEffect } from 'react';
+import { Handle, Position, NodeResizer } from '@xyflow/react';
+import { Sparkles, Loader2, X, Plus, Download } from 'lucide-react';
+import { useStore, useNodeIncomingData } from '../store/useStore';
 import { downloadImage } from '../lib/download';
+import { ScaleWrapper } from './ScaleWrapper';
 
-export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
+const MODELS = ['Nano Banana 2', 'Nano Banana Pro', 'chatgptimage', 'dall-e-3', 'imagen-3.0-generate-001'];
+const RESOLUTIONS = ['1:1 (1024x1024)', '4:3 (1024x768)', '3:4 (768x1024)', '4:5 (819x1024)', '5:5 (1024x1024)', '16:9 (1024x576)', '9:16 (576x1024)'];
+const QUALITIES = ['1K', '2K', '4K'];
+const BATCH_SIZES = [1, 2, 4];
+
+export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const dragCounter = useRef(0);
+  
   const [selectedModel, setSelectedModel] = useState(data.model || 'Nano Banana 2');
-  const [resolution, setResolution] = useState(data.resolution || '自适应 · 2K');
-  const [batchSize, setBatchSize] = useState(data.batch || '1x');
+  const [resolution, setResolution] = useState(data.resolution || '1:1 (1024x1024)');
+  const [quality, setQuality] = useState(data.quality || '1K');
+  const [batchSize, setBatchSize] = useState<number>(data.batch || 1);
   const [prompt, setPrompt] = useState(data.prompt || '');
-  const [previewUrl, setPreviewUrl] = useState(data.imageUrl || null);
+  const [previewUrls, setPreviewUrls] = useState<string[]>(data.images || (data.imageUrl ? [data.imageUrl] : []));
   
   const { updateNodeData, removeNode, settings, addFile } = useStore();
-  const [currentImageUrl, setCurrentImageUrl] = useState(data.imageUrl || null);
+  const incomingData = useNodeIncomingData(id);
 
-  // Sync state with data changes (e.g. from global paste)
-  React.useEffect(() => {
-    if (data.imageUrl !== undefined) {
-      setPreviewUrl(data.imageUrl);
-      setCurrentImageUrl(data.imageUrl);
+  useEffect(() => {
+    if (data.images && data.images.length > 0) {
+      setPreviewUrls(data.images);
+    } else if (data.imageUrl) {
+      setPreviewUrls([data.imageUrl]);
     }
-  }, [data.imageUrl]);
+  }, [data.images, data.imageUrl]);
 
   const handleGenerate = async () => {
-    const { getIncomingData } = useStore.getState();
-    const incomingData = getIncomingData(id);
-    const incomingText = incomingData.map(d => d.result || d.output || d.text || '').filter(Boolean).join(' ');
+    const incomingText = incomingData.map((d: any) => d.result || d.output || d.text || '').filter(Boolean).join(' ');
     
-    // Process final prompt
     let finalPrompt = prompt || '';
     if (incomingText) {
       finalPrompt = finalPrompt ? `${finalPrompt}, ${incomingText}` : incomingText;
@@ -47,8 +51,14 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
       if (apiSettings.imageEngine === 'comfyui') {
         const comfyUrl = apiSettings.comfyUrl || 'http://127.0.0.1:8188';
         
-        // Basic ComfyUI Default SDXL/SD1.5 API Prompt payload 
-        // We inject the user prompt into a basic graph
+        let width = 512;
+        let height = 512;
+        if (resolution.includes('1024x768')) { width = 1024; height = 768; }
+        else if (resolution.includes('768x1024')) { width = 768; height = 1024; }
+        else if (resolution.includes('819x1024')) { width = 819; height = 1024; }
+        else if (resolution.includes('1024x576')) { width = 1024; height = 576; }
+        else if (resolution.includes('576x1024')) { width = 576; height = 1024; }
+
         const payload = {
           "prompt": {
             "3": {
@@ -72,7 +82,7 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
             },
             "5": {
               "class_type": "EmptyLatentImage",
-              "inputs": { "batch_size": 1, "width": 512, "height": 512 }
+              "inputs": { "batch_size": batchSize, "width": width, "height": height }
             },
             "6": {
               "class_type": "CLIPTextEncode",
@@ -98,14 +108,11 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        
         if (!res.ok) throw new Error('ComfyUI request failed');
-        
         const data = await res.json();
         const promptId = data.prompt_id;
         
-        // Simple polling for result
-        let imgUrl = '';
+        const newUrls = [];
         for (let i = 0; i < 30; i++) {
           await new Promise(r => setTimeout(r, 2000));
           const historyRes = await fetch(`${comfyUrl}/history/${promptId}`);
@@ -113,61 +120,54 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
           if (historyData[promptId]) {
             const outputs = historyData[promptId].outputs;
             if (outputs && outputs['9'] && outputs['9'].images.length > 0) {
-              const imageInfo = outputs['9'].images[0];
-              imgUrl = `${comfyUrl}/view?filename=${imageInfo.filename}&subfolder=${imageInfo.subfolder}&type=${imageInfo.type}`;
+              outputs['9'].images.forEach((img: any) => {
+                newUrls.push(`${comfyUrl}/view?filename=${img.filename}&subfolder=${img.subfolder}&type=${img.type}`);
+              });
               break;
             }
           }
         }
         
-        if (!imgUrl) throw new Error('Generation timeout or failed in ComfyUI');
+        if (newUrls.length === 0) throw new Error('Generation timeout or failed in ComfyUI');
         
-        setPreviewUrl(imgUrl);
-        setCurrentImageUrl(imgUrl);
-        updateNodeData(id, { imageUrl: imgUrl, prompt });
-        addFile({ name: `ComfyUI - ${new Date().toLocaleTimeString()}`, type: 'image', url: imgUrl });
+        setPreviewUrls(newUrls);
+        updateNodeData(id, { images: newUrls, imageUrl: newUrls[0], prompt, model: selectedModel, resolution, batch: batchSize });
+        newUrls.forEach(url => addFile({ name: `ComfyUI - ${new Date().toLocaleTimeString()}`, type: 'image', url: url }));
         
       } else {
-        // Online Image Generation via OpenAI compatible API
         const response = await fetch('/api/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            engine: apiSettings.engine || 'openai',
             baseUrl: apiSettings.baseUrl,
             apiKey: apiSettings.apiKey,
-            modelId: apiSettings.imageModel,
-            prompt: finalPrompt
+            modelId: selectedModel,
+            prompt: finalPrompt,
+            n: batchSize,
+            size: resolution,
+            quality: quality,
           })
         });
 
         if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || 'Server connection error');
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'API request failed');
         }
 
         const data = await response.json();
-        const imgUrl = data.imageUrl;
-        
-        if (!imgUrl) throw new Error('No image URL returned from API');
+        const newUrls = data.urls || (data.imageUrl ? [data.imageUrl] : []);
 
-        setPreviewUrl(imgUrl);
-        setCurrentImageUrl(imgUrl);
-        
-        updateNodeData(id, { imageUrl: imgUrl, prompt });
-        
-        addFile({
-          name: `${apiSettings.imageModel} - ${new Date().toLocaleTimeString()}`,
-          type: 'image',
-          url: imgUrl,
-        });
+        if (newUrls.length === 0) throw new Error('No image URLs returned from API');
+
+        setPreviewUrls(newUrls);
+        updateNodeData(id, { images: newUrls, imageUrl: newUrls[0], prompt, model: selectedModel, resolution, batch: batchSize });
+        newUrls.forEach((url, idx) => addFile({ name: `${selectedModel} (${idx + 1}) - ${new Date().toLocaleTimeString()}`, type: 'image', url: url }));
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Generation failed:', error);
-      // Fallback to picsum on error to not block UI completely for demo
-      const errImageUrl = 'https://picsum.photos/seed/error/800/600';
-      setPreviewUrl(errImageUrl);
-      updateNodeData(id, { imageUrl: errImageUrl, prompt });
+      alert(`图片生成失败: ${error.message || '未知错误'}`);
     } finally {
       setLoading(false);
     }
@@ -183,18 +183,14 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current++;
-    if (dragCounter.current === 1) {
-      setIsDragOver(true);
-    }
+    if (dragCounter.current === 1) setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current--;
-    if (dragCounter.current === 0) {
-      setIsDragOver(false);
-    }
+    if (dragCounter.current === 0) setIsDragOver(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -204,8 +200,6 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
     setIsDragOver(false);
 
     const dataTransfer = e.dataTransfer;
-    
-    // 1. Try to get files directly
     const files = dataTransfer.files;
     if (files && files.length > 0) {
       Array.from(files).forEach((file: File) => {
@@ -213,9 +207,8 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
           const reader = new FileReader();
           reader.onload = (ev) => {
             const url = ev.target?.result as string;
-            setPreviewUrl(url);
-            setCurrentImageUrl(url);
-            updateNodeData(id, { imageUrl: url });
+            setPreviewUrls([url]);
+            updateNodeData(id, { imageUrl: url, images: [url] });
           };
           reader.readAsDataURL(file);
         }
@@ -223,55 +216,34 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
       return;
     }
 
-    // 2. Handle data from other nodes
     const rfDataRaw = dataTransfer.getData('application/reactflow/data');
-    const rfDataOldRaw = dataTransfer.getData('application/reactflow');
-    
     if (rfDataRaw) {
       try {
         const d = JSON.parse(rfDataRaw);
-        if (d.imageUrl || d.url) {
-          const url = d.imageUrl || d.url;
-          setPreviewUrl(url);
-          setCurrentImageUrl(url);
-          updateNodeData(id, { imageUrl: url });
-          return;
-        }
-      } catch (err) {}
-    }
-
-    if (rfDataOldRaw) {
-      try {
-        const nodeData = JSON.parse(rfDataOldRaw);
-        const url = nodeData.imageUrl || nodeData.url;
-        if (url) {
-          setPreviewUrl(url);
-          setCurrentImageUrl(url);
-          updateNodeData(id, { imageUrl: url });
-          return;
+        if (d.imageUrl || d.url || d.images) {
+           const urls = d.images || [d.imageUrl || d.url];
+           setPreviewUrls(urls);
+           updateNodeData(id, { imageUrl: urls[0], images: urls });
+           return;
         }
       } catch (err) {}
     }
 
     const url = dataTransfer.getData('text/plain') || dataTransfer.getData('url');
     if (url && (url.startsWith('http') || url.startsWith('data:'))) {
-      setPreviewUrl(url);
-      setCurrentImageUrl(url);
-      updateNodeData(id, { imageUrl: url });
+      setPreviewUrls([url]);
+      updateNodeData(id, { imageUrl: url, images: [url] });
     }
   };
 
-  const getFontSizeStyle = () => {
-    return typeof settings.inputFontSize === 'number' 
-      ? { fontSize: `${settings.inputFontSize}px` } 
-      : {};
-  };
+  const getFontSizeStyle = () => (typeof settings.inputFontSize === 'number' ? { fontSize: `${settings.inputFontSize}px` } : {});
   const getFontSizeClass = () => {
     if (typeof settings.inputFontSize === 'number') return '';
-    if (settings.inputFontSize === 'small') return 'text-base';
-    if (settings.inputFontSize === 'large') return 'text-lg';
-    return 'text-lg';
+    if (settings.inputFontSize === 'small') return 'text-[0.95em]';
+    return 'text-[1.05em]';
   };
+
+  const containerAspect = resolution.split(' ')[0].replace(':', '/');
 
   return (
     <div 
@@ -279,24 +251,33 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`border border-[var(--border)] rounded-3xl shadow-2xl overflow-hidden min-w-[340px] max-w-[420px] group/node transition-all relative ${
-        isDragOver ? 'border-blue-500 ring-4 ring-blue-500/10' : ''
+      className={`relative border w-full h-full ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl shadow-2xl overflow-visible group/node transition-all flex flex-col ${
+        isDragOver ? 'ring-4 ring-accent/10' : ''
       } ${
         settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-secondary)]'
       }`}
     >
-      {/* Header */}
-      <div className={`p-4 border-b border-[var(--border)] flex items-center justify-between transition-all rounded-t-3xl shrink-0 react-flow__node-draghandle ${
+      <NodeResizer 
+        color="var(--accent)" 
+        isVisible={selected} 
+        minWidth={340}
+        minHeight={450}
+        keepAspectRatio={true}
+        handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid var(--accent)' }}
+      />
+      <ScaleWrapper id={id} type="image-gen">
+        <div className={`p-4 border-b border-[var(--border)] flex items-center justify-between transition-all rounded-t-3xl shrink-0 react-flow__node-draghandle ${
         settings.barTexture === 'frosted' ? 'frosted-glass border-b-white/5' : 'bg-gradient-to-r from-[var(--bg-tertiary)] to-[var(--bg-secondary)]'
       }`}>
         <div className="flex items-center gap-2.5 text-[var(--text-primary)]">
-          <Sparkles size={18} className="text-blue-400" />
-          <span className="text-base font-bold tracking-wider">生成图像</span>
+          <Sparkles size={18} className="text-accent" />
+          <span className="text-[1em] font-bold tracking-wider">生成图像</span>
         </div>
         <div className="flex items-center gap-2">
            <button 
-             onClick={(e) => { e.stopPropagation(); data.imageUrl && downloadImage(data.imageUrl, `generated-image-\${id}.png`); }}
-             className="p-1.5 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors hover:text-blue-400"
+             onClick={(e) => { e.stopPropagation(); previewUrls.forEach((url, idx) => downloadImage(url, `generated-image-\${id}-\${idx}.png`)); }}
+             disabled={previewUrls.length === 0}
+             className="p-1.5 disabled:opacity-50 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors hover:text-accent"
            >
               <Download size={14} />
            </button>
@@ -309,37 +290,36 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
         </div>
       </div>
 
-      {/* Preview Area */}
-      <div className={`p-4 min-h-[240px] flex items-center justify-center relative border-b border-[var(--border)] ${
+      <div className={`p-4 min-h-[240px] flex items-center justify-center relative border-b border-[var(--border)] pt-8 pb-8 ${
         settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-[var(--bg-primary)]'
       }`}>
-        <div className="absolute left-1/2 top-11 -translate-x-1/2 w-[240px] h-[240px] border border-[var(--border)] rounded-3xl overflow-hidden flex items-center justify-center bg-[var(--bg-secondary)] relative">
-          {previewUrl ? (
-            <img draggable={false} src={previewUrl} alt="Generated" className="w-full h-full object-cover" />
+        <div className={`grid gap-4 w-full h-full relative z-10 ${
+          previewUrls.length === 1 ? 'grid-cols-1' :
+          previewUrls.length === 2 ? 'grid-cols-2' :
+          previewUrls.length === 4 ? 'grid-cols-2' : 'grid-cols-1'
+        }`}>
+          {previewUrls.length > 0 ? (
+            previewUrls.map((url, idx) => (
+              <div key={idx} style={{ aspectRatio: containerAspect }} className="w-full flex items-center justify-center overflow-hidden border border-[var(--border)] rounded-2xl bg-[var(--bg-secondary)]">
+                <img draggable={false} src={url} alt={`Generated \${idx}`} className="w-full h-full object-cover" />
+              </div>
+            ))
           ) : (
-            <div className="flex flex-col items-center gap-4 text-[var(--text-secondary)]/30">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-[var(--text-secondary)]/30">
               <Sparkles size={48} strokeWidth={1} />
             </div>
           )}
+        </div>
 
-          {/* Drop Overlay */}
-          {isDragOver && (
-            <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-[2px] pointer-events-none z-50 flex items-center justify-center">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-2xl animate-bounce">
-                <Plus size={32} className="text-white" />
-              </div>
+        {isDragOver && (
+          <div className="absolute inset-0 bg-accent/10 backdrop-blur-[2px] pointer-events-none z-[100] flex items-center justify-center">
+            <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center shadow-2xl animate-bounce">
+              <Plus size={32} className="text-white" />
             </div>
-          )}
-        </div>
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
-           <Plus size={16} />
-        </div>
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer">
-           <Plus size={16} />
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Input Section */}
       <div className={`p-4 transition-all rounded-b-3xl ${
         settings.barTexture === 'frosted' ? 'bg-white/5 border-t-white/5' : 'bg-[var(--bg-secondary)]'
       }`}>
@@ -348,39 +328,58 @@ export const ImageGenNode = ({ id, data }: { id: string; data: any }) => {
             style={getFontSizeStyle()}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className={`w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-2xl p-4 pr-12 text-[var(--text-primary)] focus:outline-none focus:border-blue-500/50 resize-none min-h-[100px] placeholder:text-[var(--text-secondary)]/50 transition-all ${getFontSizeClass()}`}
-            placeholder="描述任何你想要生成的内容，按 @ 引用素材，/呼出指令 (Enter 生成, Shift+Enter 换行)"
+            className={`w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-2xl p-4 pr-12 text-[var(--text-primary)] focus:outline-none focus:border-accent/50 resize-none min-h-[100px] placeholder:text-[var(--text-secondary)]/50 transition-all custom-scrollbar ${getFontSizeClass()}`}
+            placeholder="描述任何你想要生成的内容..."
           />
           <button
             onClick={handleGenerate}
-            disabled={loading || !prompt}
-            className="absolute right-3 bottom-3 p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white rounded-xl shadow-lg transition-all active:scale-90"
+            disabled={loading || (!prompt && incomingData.length === 0)}
+            className="absolute right-3 bottom-3 p-3 bg-accent hover:bg-accent/80 disabled:opacity-30 text-white rounded-xl shadow-lg transition-all active:scale-90"
           >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} />}
+            {loading ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
           </button>
         </div>
 
-        <div className="flex items-center justify-between">
-           <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors group">
-                 <span className="text-sm font-bold text-[var(--text-secondary)] uppercase group-hover:text-[var(--text-primary)]">MDL</span>
-                 <span className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest max-w-[100px] truncate">{settings.apiSettings.imageEngine === 'comfyui' ? 'ComfyUI' : settings.apiSettings.imageModel}</span>
-                 <ChevronDown size={10} className="text-[var(--text-secondary)] shrink-0" />
-              </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors group">
-                 <span className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest">{resolution}</span>
-                 <ChevronDown size={10} className="text-[var(--text-secondary)]" />
-              </div>
-           </div>
-           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg hover:bg-[var(--bg-primary)] cursor-pointer transition-colors group">
-              <span className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-widest">{batchSize}</span>
-              <ChevronDown size={10} className="text-[var(--text-secondary)]" />
-           </div>
-        </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 nodrag">
+               <select 
+                 value={selectedModel} 
+                 onChange={(e) => { setSelectedModel(e.target.value); updateNodeData(id, { model: e.target.value }); }}
+                 className="px-2.5 py-1.5 text-[0.75em] font-bold bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] cursor-pointer outline-none focus:border-accent"
+               >
+                 {MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+               </select>
+               <select 
+                 value={resolution} 
+                 onChange={(e) => { setResolution(e.target.value); updateNodeData(id, { resolution: e.target.value }); }}
+                 className="px-2.5 py-1.5 text-[0.75em] font-bold bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] cursor-pointer outline-none focus:border-accent"
+               >
+                 {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+               </select>
+               <select 
+                 value={quality} 
+                 onChange={(e) => { setQuality(e.target.value); updateNodeData(id, { quality: e.target.value }); }}
+                 className="px-2.5 py-1.5 text-[0.75em] font-bold bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] cursor-pointer outline-none focus:border-accent"
+               >
+                 {QUALITIES.map(q => <option key={q} value={q}>{q}</option>)}
+               </select>
+            </div>
+            <div className="nodrag">
+               <select 
+                 value={batchSize} 
+                 onChange={(e) => { setBatchSize(Number(e.target.value)); updateNodeData(id, { batch: Number(e.target.value) }); }}
+                 className="px-2.5 py-1.5 text-[0.75em] font-bold bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] cursor-pointer outline-none focus:border-accent"
+               >
+                 {BATCH_SIZES.map(b => <option key={b} value={b}>{b} 张</option>)}
+               </select>
+            </div>
+         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
-      <Handle type="target" position={Position.Left} className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      </ScaleWrapper>
+
+      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+      <Handle type="target" position={Position.Left} className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
     </div>
   );
 };

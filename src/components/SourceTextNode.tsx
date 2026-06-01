@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FullscreenTextEditor } from './FullscreenTextEditor';
+import { ScaleWrapper } from './ScaleWrapper';
 
 export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
   const { updateNodeData, removeNode, settings } = useStore();
@@ -70,11 +71,12 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         isVisible={selected} 
         minWidth={200}
         minHeight={150}
+        keepAspectRatio={true}
         handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid var(--accent)' }}
       />
-
-      {/* Floating Toolbar */}
-      <AnimatePresence>
+      <ScaleWrapper id={id} type="text-source">
+        {/* Floating Toolbar */}
+        <AnimatePresence>
         {selected && (
           <motion.div 
             initial={{ opacity: 1, y: -60, scale: 1 }}
@@ -123,7 +125,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         settings.barTexture === 'frosted' ? 'frosted-glass border-b-white/5' : 'bg-gradient-to-r from-[var(--bg-tertiary)] to-[var(--bg-secondary)]'
       }`}>
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+          <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
             <Type size={18} />
           </div>
           <span className="text-base font-bold tracking-wider text-[var(--text-primary)]">源文本</span>
@@ -181,8 +183,9 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         </AnimatePresence>,
         document.body
       )}
+      </ScaleWrapper>
 
-      <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
     </div>
   );
 };
@@ -193,7 +196,7 @@ const ToolbarIconButton = ({ icon, onClick, title, active = false }: { icon: Rea
     title={title}
     className={`p-2.5 rounded-xl transition-all ${
       active 
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+        ? 'bg-accent text-white shadow-lg shadow-accent/20' 
         : 'hover:bg-white/10 text-[var(--text-secondary)] hover:text-white'
     }`}
   >

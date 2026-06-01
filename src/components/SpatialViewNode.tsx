@@ -26,6 +26,7 @@ import { OrbitControls, PerspectiveCamera, Environment, Grid, Html, ContactShado
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../store/useStore';
+import { ScaleWrapper } from './ScaleWrapper';
 
 // --- Data Tables ---
 
@@ -309,7 +310,7 @@ function ControlSlider({ label, min, max, step = 1, value, onChange, unit = '', 
       <div className="flex items-center justify-between">
         <label className="text-sm text-gray-500 group-hover:text-gray-300 transition-colors font-bold uppercase tracking-widest">{label}</label>
         <div className="flex items-center gap-1">
-          <span className="text-base font-mono font-bold text-white group-hover:text-blue-500 transition-colors">{prefix}{value}{unit}</span>
+          <span className="text-base font-mono font-bold text-white group-hover:text-accent transition-colors">{prefix}{value}{unit}</span>
           {suffix && <span className="text-sm text-gray-600 font-mono italic ml-1">({suffix})</span>}
         </div>
       </div>
@@ -321,7 +322,7 @@ function ControlSlider({ label, min, max, step = 1, value, onChange, unit = '', 
           step={step}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute w-full h-1 bg-[#1a1a1a] rounded-full appearance-none cursor-pointer accent-blue-500"
+          className="absolute w-full h-1 bg-[var(--bg-tertiary)] rounded-full appearance-none cursor-pointer accent-accent"
           style={{
             background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(value - min) / (max - min) * 100}%, #1a1a1a ${(value - min) / (max - min) * 100}%, #1a1a1a 100%)`
           }}
@@ -354,11 +355,12 @@ const NodeUI = ({
   setShowGrid,
   onDelete,
   isActive = true,
-  isInPortal = false
+  isInPortal = false,
+  selected = false
 }: any) => {
   const containerClasses = isInPortal 
-    ? "fixed inset-0 z-[999999] bg-[#0c0e12] flex flex-col overflow-hidden"
-    : `flex flex-col w-full h-full overflow-hidden bg-[#0A0A0A] rounded-[32px] border-2 border-white/10 ${data?.selected ? 'border-blue-500 ring-8 ring-blue-500/10' : ''}`;
+    ? "fixed inset-0 z-[999999] bg-[var(--bg-secondary)] flex flex-col overflow-hidden"
+    : `flex flex-col w-full h-full bg-[var(--bg-primary)] rounded-[32px] border-2 border-[var(--border)] ${selected ? 'border-accent ring-8 ring-accent/10' : ''}`;
 
   return (
     <div className={containerClasses} id="spatial-view-container">
@@ -366,40 +368,41 @@ const NodeUI = ({
         <NodeResizer 
           minWidth={640} 
           minHeight={500} 
-          isVisible={data?.selected} 
+          isVisible={selected} 
           lineClassName="border-transparent" 
-          handleClassName="h-3 w-3 bg-white border-2 border-blue-500 rounded-full"
+          handleClassName="h-3 w-3 bg-white border-2 border-accent rounded-full"
+          keepAspectRatio={true}
         />
       )}
       
       {!isInPortal && (
         <>
-          <Handle type="target" position={Position.Left} className="!bg-blue-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
-          <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[#222] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none" />
+          <Handle type="target" position={Position.Left} className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+          <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
         </>
       )}
 
-      <div className={`p-4 border-b border-white/5 flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle ${isInPortal ? '' : 'spatial-node-header'}`}>
+      <div className={`p-4 border-b border-[var(--border)] flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle ${isInPortal ? '' : 'spatial-node-header'} rounded-t-2xl`}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/20">
             <Move3d size={20} className="text-white" />
           </div>
           <div>
             <h3 className="text-lg font-bold text-white tracking-tight uppercase">3D 空间视角控制器</h3>
             <div className="flex items-center gap-2">
               <span className="text-sm font-mono text-gray-500 tracking-widest">V1.0 SPATIAL VIEW</span>
-              <div className="w-1 h-1 rounded-full bg-blue-500" />
-              <span className="text-sm font-mono text-blue-500/80">DYNAMIC PROMPT</span>
+              <div className="w-1 h-1 rounded-full bg-accent" />
+              <span className="text-sm font-mono text-accent/80">DYNAMIC PROMPT</span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {isActive && !isInPortal && (
-            <div className="flex items-center bg-white/5 p-1 rounded-xl border border-white/10 mr-2">
+            <div className="flex items-center bg-white/5 p-1 rounded-xl border border-[var(--border)] mr-2">
               <button 
                 id="btn-subject-product"
                 onClick={() => setParams((p: any) => ({ ...p, subjectType: 'product' }))}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${params.subjectType === 'product' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-white'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${params.subjectType === 'product' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-gray-500 hover:text-white'}`}
               >
                 <Box size={14} />
                 产品 (PRODUCT)
@@ -407,7 +410,7 @@ const NodeUI = ({
               <button 
                 id="btn-subject-person"
                 onClick={() => setParams((p: any) => ({ ...p, subjectType: 'person' }))}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${params.subjectType === 'person' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-white'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${params.subjectType === 'person' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-gray-500 hover:text-white'}`}
               >
                 <User size={14} />
                 人物 (PERSON)
@@ -417,7 +420,7 @@ const NodeUI = ({
           <button 
             id="btn-fullscreen"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className={`p-2 rounded-lg transition-all ${isFullscreen ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-gray-500 hover:text-white'}`}
+            className={`p-2 rounded-lg transition-all ${isFullscreen ? 'bg-accent text-white' : 'hover:bg-white/5 text-gray-500 hover:text-white'}`}
           >
             {isInPortal ? <X size={20} /> : <Maximize2 size={16} />}
           </button>
@@ -433,8 +436,8 @@ const NodeUI = ({
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0 bg-[#0c0e12] overflow-hidden h-full">
-        <div className="flex-1 bg-[#0c0e12] relative nodrag overflow-hidden group nowheel w-full h-full">
+      <div className="flex flex-1 min-h-0 bg-[var(--bg-secondary)] overflow-hidden h-full">
+        <div className="flex-1 bg-[var(--bg-secondary)] relative nodrag overflow-hidden group nowheel w-full h-full">
           <div className="absolute inset-0 w-full h-full flex">
              {isActive && (
                <Canvas 
@@ -458,8 +461,8 @@ const NodeUI = ({
                   <Suspense fallback={
                     <Html center>
                       <div className="flex flex-col items-center gap-2">
-                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-sm text-blue-500 font-bold uppercase tracking-widest">Loading 3D View...</span>
+                        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                        <span className="text-sm text-accent font-bold uppercase tracking-widest">Loading 3D View...</span>
                       </div>
                     </Html>
                   }>
@@ -480,14 +483,14 @@ const NodeUI = ({
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-3 w-full pointer-events-none">
              <div className="text-white/40 font-bold text-sm tracking-widest drop-shadow-md select-none bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm uppercase">拖拽正方体改变角度</div>
              <div className="flex items-center gap-2 pointer-events-auto">
-                <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/10 flex items-center gap-2 shadow-2xl">
-                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-[var(--border)] flex items-center gap-2 shadow-2xl">
+                   <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                    <span className="text-sm font-bold text-gray-300 uppercase tracking-tighter">View Locked</span>
                 </div>
                 <button 
                   id="btn-toggle-grid"
                   onClick={() => setShowGrid(!showGrid)}
-                  className={`px-3 py-1 backdrop-blur-md border border-white/10 rounded-lg transition-all text-sm font-bold shadow-2xl flex items-center gap-1.5 uppercase ${showGrid ? 'bg-blue-600/20 text-blue-400 border-blue-500/30' : 'bg-white/10 text-white/60 hover:text-white'}`}
+                  className={`px-3 py-1 backdrop-blur-md border border-[var(--border)] rounded-lg transition-all text-sm font-bold shadow-2xl flex items-center gap-1.5 uppercase ${showGrid ? 'bg-accent/20 text-accent border-accent/30' : 'bg-white/10 text-white/60 hover:text-white'}`}
                 >
                   <Box size={10} />
                   Grid: {showGrid ? 'ON' : 'OFF'}
@@ -495,7 +498,7 @@ const NodeUI = ({
                 <button 
                   id="btn-reset-view"
                   onClick={handleReset}
-                  className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-lg text-white/80 hover:text-white transition-all text-sm font-bold hover:bg-white/20 active:scale-95 shadow-2xl flex items-center gap-1.5 uppercase"
+                  className="px-3 py-1 bg-white/10 backdrop-blur-md border border-[var(--border)] rounded-lg text-white/80 hover:text-white transition-all text-sm font-bold hover:bg-white/20 active:scale-95 shadow-2xl flex items-center gap-1.5 uppercase"
                 >
                   <RotateCcw size={10} />
                   Reset
@@ -511,13 +514,13 @@ const NodeUI = ({
                 </div>
              </div>
              <div className="flex flex-col items-end gap-1">
-                <span className={`font-bold text-blue-500 uppercase drop-shadow-lg ${isInPortal ? 'text-lg' : 'text-sm'}`}>{vData?.name}</span>
+                <span className={`font-bold text-accent uppercase drop-shadow-lg ${isInPortal ? 'text-lg' : 'text-sm'}`}>{vData?.name}</span>
                 <span className={`font-mono text-gray-400 drop-shadow-lg ${isInPortal ? 'text-lg' : 'text-[10px]'}`}>{hData?.name}</span>
              </div>
           </div>
         </div>
 
-        <div className={`${isInPortal ? 'w-[480px]' : 'w-[360px]'} flex flex-col bg-[#0A0A0A] overflow-y-auto nodrag custom-scrollbar border-l border-white/5 shadow-2xl`}>
+        <div className={`${isInPortal ? 'w-[480px]' : 'w-[360px]'} flex flex-col bg-[var(--bg-primary)] overflow-y-auto nodrag custom-scrollbar border-l border-[var(--border)] shadow-2xl`}>
           <div className="p-6 space-y-6">
             <div className="space-y-6">
               <ControlSlider 
@@ -556,7 +559,7 @@ const NodeUI = ({
               />
             </div>
 
-            <div className={`space-y-4 pt-2 border-t border-white/5`}>
+            <div className={`space-y-4 pt-2 border-t border-[var(--border)]`}>
                <div className="flex items-center justify-between">
                  <label className="text-base font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
                     <Camera size={14} />
@@ -566,7 +569,7 @@ const NodeUI = ({
                    <button 
                     id="btn-show-presets"
                     onClick={() => setShowPresets(!showPresets)}
-                    className="text-base text-blue-500 hover:text-blue-400 flex items-center gap-1 font-bold"
+                    className="text-base text-accent hover:text-accent flex items-center gap-1 font-bold"
                    >
                      PRESET <ChevronDown size={12} />
                    </button>
@@ -576,7 +579,7 @@ const NodeUI = ({
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
-                        className="absolute right-0 top-full mt-2 w-48 bg-[#151515] border border-white/10 rounded-xl shadow-2xl z-50 py-2"
+                        className="absolute right-0 top-full mt-2 w-48 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl shadow-2xl z-50 py-2"
                        >
                          {LENS_PRESETS.map(preset => (
                            <button 
@@ -615,7 +618,7 @@ const NodeUI = ({
                           
                           setParams((p: any) => ({ ...p, ...updates }));
                         }}
-                        className="w-full h-10 bg-[#151515] hover:bg-[#1a1a1a] border border-white/5 rounded-xl px-3 text-base text-white font-mono focus:outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all pr-8"
+                        className="w-full h-10 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl px-3 text-base text-white font-mono focus:outline-none focus:border-accent/50 appearance-none cursor-pointer transition-all pr-8"
                        >
                          <option value="front_view">正面平视</option>
                          <option value="left_front_45">左前45°</option>
@@ -639,7 +642,7 @@ const NodeUI = ({
                         id="select-focus"
                         value={params.focusAnchor}
                         onChange={(e) => setParams((p: any) => ({ ...p, focusAnchor: e.target.value }))}
-                        className="w-full h-10 bg-[#151515] hover:bg-[#1a1a1a] border border-white/5 rounded-xl px-3 text-base text-white font-mono focus:outline-none focus:border-blue-500/50 appearance-none cursor-pointer transition-all pr-8"
+                        className="w-full h-10 bg-[var(--bg-tertiary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl px-3 text-base text-white font-mono focus:outline-none focus:border-accent/50 appearance-none cursor-pointer transition-all pr-8"
                        >
                          <option value="主体中心">主体中心</option>
                          <option value="画面中心">画面中心</option>
@@ -658,7 +661,7 @@ const NodeUI = ({
                <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-2">
                     <span className="text-base text-gray-600 font-bold flex items-center gap-1"><Focus size={12} /> Focal</span>
-                    <div className="h-10 bg-white/2 border border-white/5 rounded-xl flex items-center px-3 justify-between group-hover:border-white/10 transition-all">
+                    <div className="h-10 bg-white/2 border border-[var(--border)] rounded-xl flex items-center px-3 justify-between group-hover:border-[var(--border)] transition-all">
                        <input 
                         id="input-focal-length"
                         type="number" 
@@ -671,7 +674,7 @@ const NodeUI = ({
                  </div>
                  <div className="space-y-2">
                     <span className="text-base text-gray-600 font-bold flex items-center gap-1"><ApertureIcon size={12} /> Aperture</span>
-                    <div className="h-10 bg-white/2 border border-white/5 rounded-xl flex items-center px-3 justify-between group-hover:border-white/10 transition-all">
+                    <div className="h-10 bg-white/2 border border-[var(--border)] rounded-xl flex items-center px-3 justify-between group-hover:border-[var(--border)] transition-all">
                        <span className="text-sm text-gray-500 italic">f/</span>
                        <input 
                         id="input-aperture"
@@ -689,16 +692,16 @@ const NodeUI = ({
         </div>
       </div>
 
-      <div className={`p-6 bg-black/40 border-t border-white/5 space-y-4 shrink-0`}>
+      <div className={`p-6 bg-black/40 border-t border-[var(--border)] space-y-4 shrink-0`}>
         <div className="flex items-center justify-between">
            <div className="flex items-center gap-3">
-              <span className="text-base font-black text-blue-500 uppercase tracking-widest text-shadow-glow">Output Prompt</span>
-              <div className="px-2 py-0.5 bg-blue-500/10 rounded border border-blue-500/20 text-[10px] font-bold text-blue-500 italic">DYNAMIC GENERATED</div>
+              <span className="text-base font-black text-accent uppercase tracking-widest text-shadow-glow">Output Prompt</span>
+              <div className="px-2 py-0.5 bg-accent/10 rounded border border-accent/20 text-[10px] font-bold text-accent italic">DYNAMIC GENERATED</div>
            </div>
            <button 
              id="btn-copy-prompt"
              onClick={() => handleCopy(generatedPrompts.full)}
-             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-base font-black transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+             className="flex items-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent text-white rounded-xl text-base font-black transition-all shadow-lg shadow-accent/20 active:scale-95"
            >
              {copied ? <Check size={16} /> : <Copy size={16} />}
              {copied ? 'COPIED' : 'COPY PROMPT'}
@@ -708,25 +711,25 @@ const NodeUI = ({
         <div className="grid grid-cols-2 gap-4">
            <div className="space-y-2">
               <span className="text-base text-gray-600 font-bold uppercase tracking-widest">Full Narrative Description</span>
-              <div className={`bg-white/2 border border-white/5 rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto text-base text-gray-400 font-sans leading-relaxed custom-scrollbar italic`}>
+              <div className={`bg-white/2 border border-[var(--border)] rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto text-base text-gray-400 font-sans leading-relaxed custom-scrollbar italic`}>
                  {generatedPrompts.full}
               </div>
            </div>
            <div className="space-y-2">
               <span className="text-base text-gray-600 font-bold uppercase tracking-widest">Compact Tag List</span>
-              <div className={`bg-white/2 border border-white/5 rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto font-mono text-base text-blue-500/70 leading-relaxed custom-scrollbar`}>
+              <div className={`bg-white/2 border border-[var(--border)] rounded-2xl p-4 ${isInPortal ? 'h-48' : 'h-32'} overflow-y-auto font-mono text-base text-accent/70 leading-relaxed custom-scrollbar`}>
                  {generatedPrompts.compact}
               </div>
            </div>
         </div>
       </div>
 
-      <div className="px-6 py-3 bg-[#080808] border-t border-white/5 flex items-center justify-between shrink-0">
+      <div className="px-6 py-3 bg-[var(--bg-primary)] border-t border-[var(--border)] flex items-center justify-between shrink-0">
          <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
                <Info size={14} className="text-gray-500" />
                <span className="text-sm text-gray-500 font-bold uppercase tracking-widest">Subject DNA:</span>
-               <span className="text-base text-blue-500/80 font-mono italic">ACTIVE PROTECT</span>
+               <span className="text-base text-accent/80 font-mono italic">ACTIVE PROTECT</span>
             </div>
             <div className="w-px h-3 bg-white/10" />
             <div className="flex items-center gap-1.5">
@@ -742,7 +745,7 @@ const NodeUI = ({
   );
 };
 
-export const SpatialViewNode = React.memo(({ id, data }: { id: string; data: any }) => {
+export const SpatialViewNode = React.memo(({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
   const { updateNodeData } = useStore();
   const { deleteElements } = useReactFlow();
   const edges = useEdges();
@@ -921,13 +924,15 @@ ${NEGATIVE_SPATIAL_CONSTRAINTS.join('，')}。`;
     hData, vData, dData, fData, aData, generatedPrompts,
     connectedImageUrl, data, handleCopy, copied, applyPreset,
     showPresets, setShowPresets, showGrid, setShowGrid,
-    onDelete: handleDelete
+    onDelete: handleDelete, selected
   };
 
   return (
     <>
       <div style={{ width: '100%', height: '100%', visibility: isFullscreen ? 'hidden' : 'visible' }}>
-        <NodeUI {...nodeProps} isActive={!isFullscreen} isInPortal={false} />
+        <ScaleWrapper id={id} type="spatial-view">
+          <NodeUI {...nodeProps} isActive={!isFullscreen} isInPortal={false} />
+        </ScaleWrapper>
       </div>
       {isFullscreen && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black flex items-center justify-center">

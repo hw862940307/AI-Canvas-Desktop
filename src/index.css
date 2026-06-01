@@ -2,6 +2,10 @@
 @import "@xyflow/react/dist/style.css";
 @import 'react-image-crop/dist/ReactCrop.css';
 
+@theme {
+  --color-accent: var(--accent);
+}
+
 :root {
   --bg-primary: #0a0a0a;
   --bg-secondary: #0d0d0d;
@@ -101,16 +105,17 @@ body {
 }
 
 .react-flow__node {
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  border-radius: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
   cursor: default !important;
 }
 
 .react-flow__node.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .react-flow__node-draghandle {
@@ -138,104 +143,7 @@ body {
   user-drag: none;
 }
 
-/* Custom Click-on-hover Handles */
-.react-flow__node .react-flow__handle {
-  width: 50px !important;
-  height: 70px !important;
-  border-radius: 6px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  background-color: rgba(15, 15, 15, 0.8) !important;
-  background-image: none !important;
-  
-  /* Initial hidden state */
-  opacity: 0 !important;
-  transform: scale(0.9) !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
 
-.react-flow__node:hover .react-flow__handle,
-.react-flow__node.selected .react-flow__handle,
-.react-flow__handle:hover,
-.react-flow__handle.connecting {
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-  transform: scale(1) !important;
-  z-index: 100 !important;
-}
-
-.react-flow__handle:hover {
-  background-color: rgba(30, 30, 30, 0.9) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-.react-flow__node .react-flow__handle::after {
-  content: "" !important;
-  width: 24px !important;
-  height: 24px !important;
-  border-radius: 50% !important;
-  border: 2px solid rgba(255,255,255,0.4) !important;
-  background: 
-    linear-gradient(rgba(255,255,255,0.8), rgba(255,255,255,0.8)) center/12px 2px no-repeat,
-    linear-gradient(rgba(255,255,255,0.8), rgba(255,255,255,0.8)) center/2px 12px no-repeat !important;
-  transition: transform 0.2s ease !important;
-}
-
-.react-flow__node .react-flow__handle:hover::after {
-  transform: scale(1.15) !important;
-  border-color: rgba(255,255,255,0.9) !important;
-}
-
-/* Position left and right far out of the node bounds */
-.react-flow__node .react-flow__handle-left {
-  left: -65px !important;
-}
-.react-flow__node .react-flow__handle-right {
-  right: -65px !important;
-}
-
-.react-flow__node .react-flow__handle::before {
-  content: "" !important;
-  position: absolute !important;
-  width: 15px !important;
-  height: 2px !important;
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  z-index: -1 !important;
-}
-.react-flow__node .react-flow__handle-left::before {
-  right: -15px !important;
-}
-.react-flow__node .react-flow__handle-right::before {
-  left: -15px !important;
-}
-
-.theme-light .react-flow__node .react-flow__handle {
-  background-color: rgba(250, 250, 250, 0.9) !important;
-  border: 1px solid rgba(0, 0, 0, 0.1) !important;
-}
-.theme-light .react-flow__node .react-flow__handle:hover {
-  background-color: rgba(255, 255, 255, 1) !important;
-  border: 1px solid rgba(0, 0, 0, 0.2) !important;
-}
-.theme-light .react-flow__node .react-flow__handle::before {
-  background-color: rgba(0, 0, 0, 0.15) !important;
-}
-.theme-light .react-flow__node .react-flow__handle::after {
-  border-color: rgba(0,0,0,0.3) !important;
-  background: 
-    linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)) center/12px 2px no-repeat,
-    linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)) center/2px 12px no-repeat !important;
-}
-.theme-light .react-flow__node .react-flow__handle:hover::after {
-  border-color: rgba(0,0,0,0.6) !important;
-}
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
@@ -259,3 +167,51 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* Universal dynamic font sizing inside ScaleWrapper */
+.scale-container {
+  font-size: var(--node-ui-fs, 14px) !important;
+  /* Redefine Tailwind spacing unit to scale proportionally with the configured font size */
+  --node-scale-factor: calc(var(--node-ui-fs, 14px) / 14px);
+  --spacing: calc(0.25rem * var(--node-scale-factor, 1)) !important;
+}
+/* Ensure Lucide icons scale proportionally with the surrounding font size */
+.scale-container svg.lucide {
+  width: 1.15em !important;
+  height: 1.15em !important;
+}
+.scale-container .text-xs, .scale-container .text-\[10px\], .scale-container .text-\[11px\] {
+  font-size: calc(var(--node-ui-fs, 14px) * 0.78) !important;
+}
+.scale-container .text-sm, .scale-container .text-\[13px\] {
+  font-size: calc(var(--node-ui-fs, 14px) * 0.88) !important;
+}
+.scale-container .text-base {
+  font-size: var(--node-ui-fs, 14px) !important;
+}
+.scale-container .text-lg, .scale-container .text-md {
+  font-size: calc(var(--node-ui-fs, 14px) * 1.15) !important;
+}
+.scale-container .text-xl {
+  font-size: calc(var(--node-ui-fs, 14px) * 1.35) !important;
+}
+.scale-container .text-2xl {
+  font-size: calc(var(--node-ui-fs, 14px) * 1.6) !important;
+}
+.scale-container .text-3xl {
+  font-size: calc(var(--node-ui-fs, 14px) * 2) !important;
+}
+
+/* Enforce proportional, aspect-ratio-only scaling by hiding un-needed edge resizer handles */
+.react-flow__resize-control.handle.top:not(.left):not(.right),
+.react-flow__resize-control.handle.right:not(.top):not(.bottom),
+.react-flow__resize-control.handle.bottom:not(.left):not(.right),
+.react-flow__resize-control.handle.left:not(.top):not(.bottom) {
+  display: none !important;
+}
+
+/* Clear pointer elements on lines to prevent mouse trigger drag outside of corners */
+.react-flow__resize-control.line {
+  pointer-events: none !important;
+}
+
