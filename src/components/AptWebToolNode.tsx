@@ -1045,7 +1045,28 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
       }
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || error.message || String(error);
-      addLog(`❌ 连接失败: ${errorMsg}`);
+      
+      if (isLocal) {
+        addLog(`⚠️ 直接获取高级连接性能指标失败: [${errorMsg}]。正在尝试启动跨域免疫穿透检测 (CORS-immune probe)...`);
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
+          await fetch(`${cleanUrl}/`, {
+            mode: 'no-cors',
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          addLog('✅ 穿透检测判定成功：本地 ComfyUI 在您电脑端响应活跃，确定已在后台成功开启运行！');
+          setStatus('✨ 本地连接测试成功！');
+          setComfyStatus('ready');
+          setShowLocalHelp(false);
+          return;
+        } catch (pierceError) {
+          addLog('❌ 穿透检测最终失败：本地电脑上可能并未开启 ComfyUI 软件，或者未监听该端口。');
+        }
+      } else {
+        addLog(`❌ 远程连接服务线路中断: ${errorMsg}`);
+      }
       
       if (isLocal) {
         setShowLocalHelp(true);

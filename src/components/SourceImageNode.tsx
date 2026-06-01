@@ -64,6 +64,14 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   const [isDragOver, setIsDragOver] = useState(false);
   const dragCounter = useRef(0);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (errorText) {
+      const timer = setTimeout(() => setErrorText(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorText]);
 
   // Resize when original dimensions are provided (e.g. from global paste / drag drops)
   useEffect(() => {
@@ -106,7 +114,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
     // Intelligently resize node style directly in the store to fit the natural aspect ratio
     if (naturalWidth && naturalHeight) {
       const ratio = naturalWidth / naturalHeight;
-      const currentNode = nodes.find(n => n.id === id);
+      const freshNodes = useStore.getState().nodes;
+      const currentNode = freshNodes.find(n => n.id === id);
       if (currentNode) {
         // Fallback to active style width, or measured width, or base width (300)
         const currentW = currentNode.style?.width 
@@ -122,7 +131,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
           : 0;
 
         if (Math.abs(currentH - targetH) > 2 || !currentNode.style?.width) {
-          const updatedNodes = nodes.map(n => {
+          const updatedNodes = freshNodes.map(n => {
             if (n.id === id) {
               return {
                 ...n,
@@ -155,69 +164,89 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   };
 
   const processFile = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
+    if (!file.type.startsWith('image/')) {
+      setErrorText("上传失败：选择的文件不是支持的图像格式 (应为 PNG, JPG, WEBP 等)！");
+      return;
+    }
     
     const reader = new FileReader();
+    reader.onerror = () => {
+      setErrorText("上传失败：读取图像文件时出错！");
+    };
     reader.onload = (ev) => {
       const imageUrl = ev.target?.result as string;
+      if (!imageUrl) {
+        setErrorText("上传失败：读取到的媒体文件内容为空！");
+        return;
+      }
       const img = new Image();
+      img.onerror = () => {
+        setErrorText("上传失败：图像文件损坏或无法被系统解析加载！");
+      };
       img.onload = () => {
-        // Calculate scale based on quality setting
-        let qualityScale = 1.0;
-        let webpQuality = 0.9;
-        
-        if (settings.uploadQuality === 'standard') {
-          qualityScale = 0.5;
-          webpQuality = 0.7;
-        } else if (settings.uploadQuality === 'high') {
-          qualityScale = 0.75;
-          webpQuality = 0.85;
-        } else {
-          qualityScale = 1.0;
-          webpQuality = 1.0;
-        }
-        
-        const targetWidth = img.width * qualityScale;
-        const targetHeight = img.height * qualityScale;
-        
-        const canvas = document.createElement('canvas');
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        const ctx = canvas.getContext('2d');
-        
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-          const finalUrl = canvas.toDataURL('image/webp', webpQuality);
+        try {
+          // Calculate scale based on quality setting
+          let qualityScale = 1.0;
+          let webpQuality = 0.9;
           
-          const maxWidth = 400;
-          const ratio = targetWidth / targetHeight;
-          const displayWidth = Math.min(targetWidth, maxWidth);
+          if (settings.uploadQuality === 'standard') {
+            qualityScale = 0.5;
+            webpQuality = 0.7;
+          } else if (settings.uploadQuality === 'high') {
+            qualityScale = 0.75;
+            webpQuality = 0.85;
+          } else {
+            qualityScale = 1.0;
+            webpQuality = 1.0;
+          }
           
-          const targetH = Math.round(displayWidth / ratio);
+          const targetWidth = img.width * qualityScale;
+          const targetHeight = img.height * qualityScale;
           
-          updateNodeData(id, { 
-            url: finalUrl,
-            name: file.name,
-            aspectRatio: ratio,
-            width: displayWidth,
-            height: targetH
-          });
-
-          // Also update the physical style dimensions of the node directly for instant layout match
-          const updatedNodes = nodes.map(n => {
-            if (n.id === id) {
-              return {
-                ...n,
-                style: {
-                  ...(n.style || {}),
-                  width: displayWidth,
-                  height: targetH
-                }
-              };
-            }
-            return n;
-          });
-          setNodes(updatedNodes);
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+            const finalUrl = canvas.toDataURL('image/webp', webpQuality);
+            
+            const maxWidth = 400;
+            const ratio = targetWidth / targetHeight;
+            const displayWidth = Math.min(targetWidth, maxWidth);
+            
+            const targetH = Math.round(displayWidth / ratio);
+            
+            // Atomically update both data and style parameters using the fresh node state to prevent state overwrites
+            const freshNodes = useStore.getState().nodes;
+            const updatedNodes = freshNodes.map(n => {
+              if (n.id === id) {
+                return {
+                  ...n,
+                  style: {
+                    ...(n.style || {}),
+                    width: displayWidth,
+                    height: targetH
+                  },
+                  data: {
+                    ...n.data,
+                    url: finalUrl,
+                    name: file.name,
+                    aspectRatio: ratio,
+                    width: displayWidth,
+                    height: targetH
+                  }
+                };
+              }
+              return n;
+            });
+            setNodes(updatedNodes);
+          } else {
+            setErrorText("上传失败：无法创建 Canvas 2D 绘图上下文环境！");
+          }
+        } catch (error: any) {
+          setErrorText(`上传失败：处理图像时发生错误: ${error?.message || "未知异常"}`);
         }
       };
       img.src = imageUrl;
@@ -260,11 +289,16 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
     // 1. Try to get files directly
     const files = dataTransfer.files;
     if (files && files.length > 0) {
+      let containsImage = false;
       Array.from(files).forEach((file: File) => {
         if (file.type.startsWith('image/')) {
+          containsImage = true;
           processFile(file);
         }
       });
+      if (!containsImage) {
+        setErrorText("上传失败：拖入的文件格式不正确，必须为图片文件！");
+      }
       return;
     }
 
@@ -341,13 +375,22 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   };
     
   const clearImage = () => {
-    updateNodeData(id, { url: null, width: 300, height: 350 });
-    const updatedNodes = nodes.map(n => {
+    // Atomically reset both data and style using the fresh node list
+    const freshNodes = useStore.getState().nodes;
+    const updatedNodes = freshNodes.map(n => {
       if (n.id === id) {
         return {
           ...n,
           style: {
             ...(n.style || {}),
+            width: 300,
+            height: 350
+          },
+          data: {
+            ...n.data,
+            url: null,
+            name: undefined,
+            aspectRatio: undefined,
             width: 300,
             height: 350
           }
@@ -527,7 +570,31 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
           </div>
         )}
 
-        <div className={`relative w-full flex-1 flex flex-col min-h-0 ${data.url ? 'p-0 pb-0' : 'p-5'}`}>
+        <div className={`relative w-full flex-1 flex flex-col min-h-0 nodrag ${data.url ? 'p-0 pb-0' : 'p-5'}`}>
+          {/* Elegant inside-node error notification banner */}
+          <AnimatePresence>
+            {errorText && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                className="absolute top-3 left-3 right-3 bg-red-950/95 border border-red-500/60 text-red-200 px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2 shadow-2xl z-[250] backdrop-blur-md"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                  <span className="font-semibold truncate">{errorText}</span>
+                </div>
+                <button 
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setErrorText(null); }} 
+                  className="p-1 hover:bg-white/10 rounded-lg text-red-400 hover:text-white transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Main content body with exact visual framing and dashed border */}
           <div 
             className={`w-full flex-1 overflow-hidden flex flex-col items-center justify-center relative ${
@@ -535,6 +602,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                 ? 'bg-transparent h-full' 
                 : 'rounded-[18px] border-2 border-dashed border-[var(--border)] hover:border-green-500/50 cursor-pointer bg-[var(--bg-primary)]/24 flex flex-col items-center justify-center gap-3 p-6 min-h-[200px] nodrag'
             }`}
+            onMouseDown={(e) => { e.stopPropagation(); }}
+            onPointerDown={(e) => { e.stopPropagation(); }}
             onClick={(e) => {
               if (!data.url) {
                 e.stopPropagation();
@@ -554,6 +623,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                 />
                 <button 
                   type="button"
+                  onMouseDown={(e) => { e.stopPropagation(); }}
+                  onPointerDown={(e) => { e.stopPropagation(); }}
                   onClick={(e) => { 
                     e.stopPropagation(); 
                     e.preventDefault();
@@ -566,6 +637,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                 </button>
                 <button 
                   type="button"
+                  onMouseDown={(e) => { e.stopPropagation(); }}
+                  onPointerDown={(e) => { e.stopPropagation(); }}
                   onClick={(e) => { 
                     e.stopPropagation(); 
                     e.preventDefault();

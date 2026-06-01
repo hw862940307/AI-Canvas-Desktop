@@ -78,6 +78,8 @@ import {
   RotateCw,
   MoreHorizontal,
   Check,
+  LogOut,
+  Pin,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -180,6 +182,16 @@ const getNodeDimensions = (node: any) => {
 };
 
 function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [isExited, setIsExited] = useState(false);
+
+  const [isLeftSidebarHovered, setIsLeftSidebarHovered] = useState(false);
+  const [isTopHeaderHovered, setIsTopHeaderHovered] = useState(false);
+  const [isBottomHovered, setIsBottomHovered] = useState(false);
+  const [isBottomPinned, setIsBottomPinned] = useState(true);
+  const [isAssistantHovered, setIsAssistantHovered] = useState(false);
+
   const {
     nodes,
     setNodes,
@@ -225,6 +237,32 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     setViewport,
     getViewport,
   } = useReactFlow();
+
+  if (isExited) {
+    return (
+      <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-[#0d0d0f] font-sans text-center px-6">
+        <div className="flex flex-col items-center gap-6 max-w-sm">
+          <div className="w-16 h-16 bg-gradient-to-br from-accent via-accent to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-accent/20 mb-2 animate-pulse font-black text-2xl italic tracking-tighter">
+            NV
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-white leading-tight">工作区已安全关闭</h1>
+            <p className="text-xs text-gray-400 mt-2 tracking-wide leading-relaxed">
+              您所有修改已妥善保存至本地存储。
+              <br />
+              现在可以安全地关闭此窗口，或者点击下方按钮重新唤醒画布。
+            </p>
+          </div>
+          <button
+            onClick={() => setIsExited(false)}
+            className="w-full py-3 px-6 rounded-xl bg-accent hover:opacity-90 text-white font-bold text-xs transition-all shadow-lg active:scale-95 border-none cursor-pointer"
+          >
+            重新唤醒工作流画布
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const [activeOp, setActiveOp] = useState<'move' | 'scale' | null>(null);
   const [showHotkeyGuide, setShowHotkeyGuide] = useState(true);
@@ -1351,9 +1389,21 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     <>
       {/* Main Workspace */}
       <div className="flex-1 flex flex-col relative h-full">
+        {/* Top Hover Sensor */}
+        <div 
+          onMouseEnter={() => setIsTopHeaderHovered(true)}
+          className="fixed top-0 left-0 right-0 h-3 z-40 pointer-events-auto"
+        />
+
         {/* Top Header */}
         <header
-          className={`h-16 border-b border-[var(--border)] flex items-center justify-between px-6 z-40 transition-all ${
+          onMouseEnter={() => setIsTopHeaderHovered(true)}
+          onMouseLeave={() => setIsTopHeaderHovered(false)}
+          className={`fixed top-0 left-0 right-0 h-16 border-b border-[var(--border)] flex items-center justify-between px-6 z-40 transition-all duration-300 ease-in-out ${
+            isTopHeaderHovered
+              ? "translate-y-0 opacity-100 shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
+              : "translate-y-[-100%] opacity-0 pointer-events-none"
+          } ${
             settings.barTexture === "frosted"
               ? "frosted-glass border-b-white/5"
               : "bg-[var(--bg-secondary)]"
@@ -1407,7 +1457,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
               : "border-transparent"
           }`}
           style={{
-            paddingLeft: (showFileManager ? fileManagerWidth : 0) + 72,
+            paddingLeft: showFileManager ? fileManagerWidth : 0,
           }}
         >
           <ReactFlow
@@ -1483,9 +1533,21 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
               />
             )}
 
+            {/* Bottom Hover Sensor */}
+            <div 
+              onMouseEnter={() => setIsBottomHovered(true)}
+              className="fixed bottom-0 left-0 right-0 h-10 z-30 pointer-events-auto"
+            />
+
             <Panel position="bottom-left" className="m-6 flex flex-col gap-4">
               <div
-                className={`flex items-center gap-2 p-1.5 border border-[var(--border)] rounded-2xl shadow-2xl transition-all ${
+                onMouseEnter={() => setIsBottomHovered(true)}
+                onMouseLeave={() => setIsBottomHovered(false)}
+                className={`flex items-center gap-2 p-1.5 border border-[var(--border)] rounded-2xl shadow-2xl transition-all duration-300 ease-in-out ${
+                  (isBottomHovered || isBottomPinned)
+                    ? "translate-y-0 opacity-100 pointer-events-auto shadow-black/50"
+                    : "translate-y-[150%] opacity-0 pointer-events-none"
+                } ${
                   settings.barTexture === "frosted"
                     ? "frosted-glass border-[var(--border)] shadow-black/20"
                     : "bg-[var(--bg-tertiary)]"
@@ -1518,17 +1580,24 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                 <ZoomDisplay />
                 <div className="w-px h-4 bg-[#333] mx-1" />
                 <ToolbarButton
-                  icon={<Trash2 size={18} />}
-                  onClick={clearCanvas}
-                  className="text-red-500 hover:bg-red-500/10"
-                  title="清空画布"
+                  icon={<Pin size={18} />}
+                  onClick={() => setIsBottomPinned(!isBottomPinned)}
+                  active={isBottomPinned}
+                  className={isBottomPinned ? "text-[#5cb0ff] hover:bg-[#5cb0ff]/10" : "text-gray-400 hover:bg-gray-400/10"}
+                  title={isBottomPinned ? "取消固定底部栏" : "固定底部栏"}
                 />
               </div>
             </Panel>
 
             <Panel position="bottom-right" className="m-6">
               <div
-                className={`flex items-center gap-2 p-1 border border-[var(--border)] rounded-2xl shadow-2xl transition-all ${
+                onMouseEnter={() => setIsBottomHovered(true)}
+                onMouseLeave={() => setIsBottomHovered(false)}
+                className={`flex items-center gap-2 p-1 border border-[var(--border)] rounded-2xl shadow-2xl transition-all duration-300 ease-in-out ${
+                  (isBottomHovered || isBottomPinned)
+                    ? "translate-y-0 opacity-100 pointer-events-auto shadow-black/50"
+                    : "translate-y-[150%] opacity-0 pointer-events-none"
+                } ${
                   settings.barTexture === "frosted"
                     ? "frosted-glass border-[var(--border)] shadow-black/20"
                     : "bg-[var(--bg-tertiary)]"
@@ -1541,7 +1610,16 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
             </Panel>
 
             <Panel position="bottom-center" className="mb-6 z-[99] pointer-events-auto">
-              <AnimatePresence mode="wait">
+              <div
+                onMouseEnter={() => setIsBottomHovered(true)}
+                onMouseLeave={() => setIsBottomHovered(false)}
+                className={`transition-all duration-300 ease-in-out ${
+                  (isBottomHovered || isBottomPinned)
+                    ? "translate-y-0 opacity-100"
+                    : "translate-y-[150%] opacity-0 pointer-events-none"
+                }`}
+              >
+                <AnimatePresence mode="wait">
                 {activeOp ? (
                   <motion.div
                     key="active-op"
@@ -1611,6 +1689,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                   </motion.div>
                 ) : null}
               </AnimatePresence>
+              </div>
             </Panel>
 
             {/* Context Menu */}
@@ -1766,12 +1845,21 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
       {/* Right Assistant Panel */}
       <AnimatePresence>
         {showAssistant && (
-          <motion.div
-            initial={{ x: 400 }}
-            animate={{ x: 0 }}
-            exit={{ x: 400 }}
-            className="w-[400px] bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col z-50 overflow-hidden shadow-[-20px_0_40px_rgba(0,0,0,0.5)]"
-          >
+          <>
+            {/* Right Assistant Hover Sensor */}
+            <div 
+              onMouseEnter={() => setIsAssistantHovered(true)}
+              className="fixed right-0 top-0 bottom-0 w-3 z-40 pointer-events-auto"
+            />
+            <motion.div
+              onMouseEnter={() => setIsAssistantHovered(true)}
+              onMouseLeave={() => setIsAssistantHovered(false)}
+              initial={{ x: 400 }}
+              animate={{ x: isAssistantHovered ? 0 : 400 }}
+              exit={{ x: 400 }}
+              transition={{ type: "tween", duration: 0.3 }}
+              className="fixed right-0 top-0 bottom-0 w-[400px] bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col z-50 overflow-hidden shadow-[-20px_0_40px_rgba(0,0,0,0.5)]"
+            >
             <div
               className={`p-6 flex items-center justify-between border-b border-[var(--border)] transition-all ${
                 settings.barTexture === "frosted"
@@ -2317,6 +2405,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
               </div>
             </div>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -2519,9 +2608,126 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
         )}
       </AnimatePresence>
 
+      {/* Custom Confirmation Modals */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowClearConfirm(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-[#18181b] border border-[#27272a] rounded-2xl p-6 w-full max-w-sm shadow-2xl z-10 flex flex-col gap-4 text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto">
+                <Trash2 size={24} />
+              </div>
+              <div className="flex flex-col gap-1 text-center items-center">
+                <h3 className="text-lg font-bold text-white">确定清空画布吗？</h3>
+                <p className="text-xs text-gray-400">此操作将清空画布上所有的节点和连接线，并且不可撤销。</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-gray-300 font-medium text-xs transition-colors border-none cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearCanvas();
+                    setShowClearConfirm(false);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-red-650 hover:bg-red-600 text-white font-medium text-xs transition-colors border-none cursor-pointer"
+                >
+                  确认清空
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showExitConfirm && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowExitConfirm(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-[#18181b] border border-[#27272a] rounded-2xl p-6 w-full max-w-sm shadow-2xl z-10 flex flex-col gap-4 text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
+                <LogOut size={24} />
+              </div>
+              <div className="flex flex-col gap-1 text-center items-center">
+                <h3 className="text-lg font-bold text-white">确定退出系统？</h3>
+                <p className="text-xs text-gray-400">系统已自动为您保存所有数据和画布。您随时可以重新进入。</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowExitConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-gray-350 font-medium text-xs transition-colors border-none cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExitConfirm(false);
+                    setIsExited(true);
+                    try {
+                      window.close();
+                    } catch (_) {}
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-accent hover:opacity-90 text-white font-medium text-xs transition-colors border-none cursor-pointer"
+                >
+                  安全退出
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Left Sidebar Hover Sensor */}
+      <div 
+        onMouseEnter={() => setIsLeftSidebarHovered(true)}
+        className="fixed left-0 top-0 bottom-0 w-3 z-45 pointer-events-auto"
+      />
+
       {/* Main Sidebar - FIXED LEFT */}
-      <div className="fixed left-0 top-0 bottom-0 z-50">
-        <SidebarWrapper onOpenSettings={onOpenSettings} />
+      <div 
+        onMouseEnter={() => setIsLeftSidebarHovered(true)}
+        onMouseLeave={() => setIsLeftSidebarHovered(false)}
+        className={`fixed left-0 top-0 bottom-0 z-50 transition-all duration-300 ease-in-out pointer-events-auto ${
+          isLeftSidebarHovered 
+            ? "translate-x-0 opacity-100 shadow-[10px_0_30px_rgba(0,0,0,0.5)]" 
+            : "translate-x-[-100%] opacity-0 pointer-events-none"
+        }`}
+      >
+        <SidebarWrapper 
+          onOpenSettings={onOpenSettings} 
+          onTriggerClear={() => setShowClearConfirm(true)}
+          onTriggerExit={() => setShowExitConfirm(true)}
+          isLeftSidebarHovered={isLeftSidebarHovered}
+        />
       </div>
 
       {/* Grid view/canvas already handles main area */}
@@ -2597,7 +2803,17 @@ export default function App() {
   );
 }
 
-function SidebarWrapper({ onOpenSettings }: { onOpenSettings: () => void }) {
+function SidebarWrapper({ 
+  onOpenSettings,
+  onTriggerClear,
+  onTriggerExit,
+  isLeftSidebarHovered = false,
+}: { 
+  onOpenSettings: () => void;
+  onTriggerClear: () => void;
+  onTriggerExit: () => void;
+  isLeftSidebarHovered?: boolean;
+}) {
   const {
     addNode,
     showAssistant,
@@ -2612,6 +2828,7 @@ function SidebarWrapper({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [startY, setStartY] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
+  const isHovered = isLeftSidebarHovered;
 
   const handleAddNode = (type: any) => {
     const zoom = getZoom();
@@ -2642,90 +2859,132 @@ function SidebarWrapper({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   return (
     <div
-      className={`w-[72px] h-full border-r border-[var(--border)] flex flex-col items-center py-6 gap-8 z-50 transition-all pointer-events-auto ${
+      className={`h-full border-r border-[var(--border)] flex flex-col items-center py-6 gap-8 z-50 transition-all duration-300 ease-in-out pointer-events-auto ${
+        isHovered ? "w-[240px]" : "w-[72px]"
+      } ${
         settings.barTexture === "frosted"
           ? "frosted-glass border-r-white/5"
           : "bg-[var(--bg-secondary)]"
       }`}
     >
-      <div className="w-12 h-12 bg-gradient-to-br from-accent via-accent to-purple-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-accent/20 active:scale-95 transition-all cursor-pointer hover:rotate-3 font-black text-xl italic tracking-tighter">
-        NV
+      <div className={`w-full flex items-center transition-all duration-200 ${isHovered ? 'px-6 gap-3.5 justify-start' : 'justify-center'} shrink-0 h-12`}>
+        <div className="w-12 h-12 bg-gradient-to-br from-accent via-accent to-purple-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-accent/20 active:scale-95 transition-all cursor-pointer hover:rotate-3 font-black text-xl italic tracking-tighter">
+          NV
+        </div>
+        {isHovered && (
+          <div className="flex flex-col select-none transition-opacity duration-300">
+            <span className="text-white font-black tracking-widest text-[13px] leading-none uppercase">WORKFLOW</span>
+            <span className="text-[10px] text-gray-500 font-bold tracking-wider leading-none mt-1">CANVAS PRO</span>
+          </div>
+        )}
       </div>
 
       <div
         ref={scrollRef}
-        className="flex-1 flex flex-col gap-6 overflow-y-auto scrollbar-hide py-2 w-full items-center"
+        className={`flex-1 flex flex-col gap-4 overflow-y-auto overflow-x-hidden scrollbar-hide py-2 w-full transition-all duration-200 ${
+          isHovered ? 'items-start' : 'items-center'
+        }`}
       >
         <SidebarButton
           icon={<Plus size={22} />}
           onClick={() => handleAddNode("image-gen")}
           label="生成图像"
           active={active === "image-gen"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<Sparkles size={22} />}
           onClick={() => handleAddNode("text-gen")}
           label="生成文本"
           active={active === "text-gen"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<Brain size={22} />}
           onClick={() => handleAddNode("logic-engine")}
           label="逻辑引擎"
           active={active === "logic-engine"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<Languages size={22} />}
           onClick={() => handleAddNode("translate-engine")}
           label="翻译引擎"
           active={active === "translate-engine"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<LayoutGrid size={22} />}
           onClick={() => handleAddNode("fusion-master")}
           label="Fusion Master"
           active={active === "fusion-master"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<Move3d size={22} />}
           onClick={() => handleAddNode("spatial-view")}
           label="3D 空间视角"
           active={active === "spatial-view"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<ImageIcon size={22} />}
           onClick={() => handleAddNode("image-source")}
           label="源图像"
           active={active === "image-source"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<Type size={22} />}
           onClick={() => handleAddNode("text-source")}
           label="源文本"
           active={active === "text-source"}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<FolderOpen size={22} />}
           onClick={toggleFileManager}
           label="资产库"
           active={showFileManager}
+          expanded={isHovered}
         />
         <SidebarButton
           icon={<MessageSquare size={22} />}
           onClick={toggleAssistant}
           label="AI 助手"
           active={showAssistant}
+          expanded={isHovered}
+        />
+
+        {/* Separator line inside sidebar */}
+        <div className="w-[85%] self-center border-t border-[var(--border)] shrink-0 opacity-40 my-1" />
+
+        <SidebarButton
+          icon={<Trash2 size={20} />}
+          onClick={onTriggerClear}
+          label="清空画布"
+          active={false}
+          expanded={isHovered}
+          hoverClass="text-red-400/80 hover:text-red-400 hover:bg-red-500/10"
+        />
+        <SidebarButton
+          icon={<LogOut size={20} />}
+          onClick={onTriggerExit}
+          label="安全退出"
+          active={false}
+          expanded={isHovered}
+          hoverClass="text-amber-400/80 hover:text-amber-400 hover:bg-amber-500/10"
         />
       </div>
 
-      <div className="flex flex-col gap-6 items-center">
+      <div className={`flex ${isHovered ? 'flex-row w-full px-5 justify-between' : 'flex-col'} items-center gap-6 shrink-0`}>
         <button
           onClick={onOpenSettings}
-          className="w-12 h-12 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/5 transition-all group"
+          className="w-12 h-12 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/5 transition-all group shrink-0"
         >
           <FlowerIcon />
         </button>
-        <div className="w-10 h-10 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent transition-colors cursor-pointer group">
+        <div className="w-10 h-10 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent transition-colors cursor-pointer group shrink-0">
           <img
             src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
             alt="User"
@@ -2820,23 +3079,47 @@ function SidebarButton({
   onClick,
   label,
   active = false,
+  expanded = false,
+  hoverClass = "",
 }: {
   icon: React.ReactNode;
   onClick: () => void;
   label: string;
   active?: boolean;
+  expanded?: boolean;
+  hoverClass?: string;
 }) {
   return (
-    <div className="group relative flex items-center justify-center">
+    <div className="group w-full px-3 flex justify-center relative select-none">
       <button
+        type="button"
         onClick={onClick}
-        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${active ? "bg-accent/10 text-accent shadow-[0_0_15px_rgba(59,130,246,0.2)] border border-accent/30" : "text-gray-500 hover:text-gray-300 hover:bg-[var(--bg-tertiary)]"}`}
+        className={`h-12 rounded-2xl flex items-center transition-all duration-200 active:scale-95 ${
+          expanded 
+            ? "w-full px-4 gap-4 justify-start text-left" 
+            : "w-12 justify-center"
+        } ${
+          active 
+            ? "bg-accent/10 text-accent shadow-[0_0_15px_rgba(59,130,246,0.15)] border border-accent/20" 
+            : hoverClass || "text-gray-400 hover:text-white hover:bg-[var(--bg-tertiary)]"
+        }`}
       >
-        {icon}
+        <div className="shrink-0 flex items-center justify-center w-5 h-5">
+          {icon}
+        </div>
+        {expanded && (
+          <span className="text-[13px] font-semibold tracking-wide whitespace-nowrap overflow-hidden text-ellipsis select-none">
+            {label}
+          </span>
+        )}
       </button>
-      <div className="absolute left-16 px-2.5 py-1.5 bg-[var(--bg-tertiary)] border border-[var(--border)] text-gray-300 text-base rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-2 group-hover:translate-x-0 whitespace-nowrap z-50 shadow-xl">
-        {label}
-      </div>
+
+      {/* Tooltip only shown when NOT expanded */}
+      {!expanded && (
+        <div className="absolute left-16 px-2.5 py-1.5 bg-[#18181b] border border-[#27272a] text-gray-300 text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-2 group-hover:translate-x-0 whitespace-nowrap z-50 shadow-xl">
+          {label}
+        </div>
+      )}
     </div>
   );
 }

@@ -82,6 +82,25 @@ export interface ApiSettings {
     | "SDXL"
     | "custom";
   comfyUrl: string;
+
+  // New fields
+  universalProvider?: string;
+  rhEnterpriseKey?: string;
+  rhConsumerKey?: string;
+  rhAppId?: string;
+  rhApps?: Array<{ id: string; name: string }>;
+  jimengApiKey?: string;
+  comfyLauncherPath?: string;
+  comfyWorkflowPath?: string;
+  comfyWorkflows?: string[];
+  comfyWorkflowsDetails?: Array<{
+    id: string;
+    name: string;
+    size?: string;
+    date?: string;
+    content?: string;
+    isCustom?: boolean;
+  }>;
 }
 
 export interface AppSettings {
@@ -294,6 +313,115 @@ export const useStore = create<AppState>()(
           imageEngine: "online",
           imageModel: "Nano Banana Pro",
           comfyUrl: "http://127.0.0.1:8188",
+          universalProvider: "OpenAI",
+          rhEnterpriseKey: "",
+          rhConsumerKey: "",
+          rhAppId: "暂无AI应用",
+          rhApps: [
+            { id: "text-2-image-v2", name: "全能文生图 V2" },
+            { id: "style-ref-v1", name: "风格参考设计" },
+            { id: "all-in-one-image", name: "全能图片生成器" }
+          ],
+          jimengApiKey: "",
+          comfyLauncherPath: "E:\\BaiduNetdiskDownload\\ComfyUI-aki-v2\\ComfyUI\\启动网卡-启动.bat",
+          comfyWorkflowPath: "E:\\ComfyUI_Workflows\\workflows",
+          comfyWorkflows: [
+            "▶▶F2K-一致性图像细化+编辑.json",
+            "Flux2+Klein【产品移除】.json",
+            "Flux2+Klein+超强多功能工作流(2).json",
+            "Flux2+Klein单图编辑.json",
+            "flux2-klein-材质替换-材质渲染.json",
+            "Flux2-klein移除流V5版本2026年1月18日(1).json",
+            "Klein-一致性 (3).json",
+            "Klein-一致性.json",
+            "YZ金鱼-InfiniteTalk超自然数字人对口型单人-v1.json",
+            "YZ金鱼-Qwen-image超真实生图&图像反推.json",
+            "提取线稿——Klein.json",
+            "提示词反推.json",
+            "自定义测试节点.json"
+          ],
+          comfyWorkflowsDetails: [
+            {
+              id: "wf-1",
+              name: "▶▶F2K-一致性图像细化+编辑.json",
+              size: "34 KB",
+              date: "2026/04/14 13:18",
+              isCustom: false,
+              content: `{\n  "3": {\n    "class_type": "KSampler",\n    "inputs": {\n      "seed": 86321946,\n      "steps": 25,\n      "cfg": 7.5,\n      "sampler_name": "dpmpp_2m_sde",\n      "scheduler": "karras",\n      "denoise": 0.35,\n      "model": ["4", 0],\n      "positive": ["6", 0],\n      "negative": ["7", 0],\n      "latent_image": ["10", 0]\n    }\n  },\n  "4": {\n    "class_type": "CheckpointLoaderSimple",\n    "inputs": {\n      "ckpt_name": "F2K_Realistic_Concept_v2.safetensors"\n    }\n  },\n  "10": {\n    "class_type": "VAEEncodeForInpaint",\n    "inputs": {\n      "pixels": ["12", 0],\n      "mask": ["13", 0],\n      "grow_mask_by": 6\n    }\n  }\n}`
+            },
+            {
+              id: "wf-2",
+              name: "Flux2+Klein【产品移除】.json",
+              size: "33 KB",
+              date: "2026/04/09 09:46",
+              isCustom: false,
+              content: `{\n  "8": {\n    "class_type": "KSampler",\n    "inputs": {\n      "seed": 523196412,\n      "steps": 20,\n      "cfg": 1.0,\n      "sampler_name": "uni_pc",\n      "scheduler": "normal",\n      "denoise": 1.0,\n      "model": ["12", 0]\n    }\n  },\n  "12": {\n    "class_type": "UNETLoader",\n    "inputs": {\n      "unet_name": "flux1-schnell.safetensors"\n    }\n  }\n}`
+            },
+            {
+              id: "wf-3",
+              name: "Flux2+Klein+超强多功能工作流(2).json",
+              size: "59 KB",
+              date: "2026/03/31 14:00",
+              isCustom: false,
+              content: `{\n  "sampler": {\n    "class_type": "KSampler",\n    "inputs": {\n      "steps": 30,\n      "cfg": 3.5,\n      "sampler_name": "euler_ancestral"\n    }\n  },\n  "model": {\n    "class_type": "FluxModelLoader",\n    "inputs": {\n      "model_type": "dev"\n    }\n  }\n}`
+            },
+            {
+              id: "wf-4",
+              name: "Flux2+Klein单图编辑.json",
+              size: "36 KB",
+              date: "2026/04/20 15:46",
+              isCustom: false,
+              content: `{\n  "edit_node": {\n    "class_type": "ImageOnlyCheckpointLoader",\n    "inputs": {\n      "ckpt_name": "flux1-dev-fp8.safetensors"\n    }\n  }\n}`
+            },
+            {
+              id: "wf-5",
+              name: "flux2-klein-材质替换-材质渲染.json",
+              size: "37 KB",
+              date: "2026/04/02 11:34",
+              isCustom: false,
+              content: `{\n  "render_node": {\n    "class_type": "ControlNetApplyAdvanced",\n    "inputs": {\n      "strength": 0.85\n    }\n  }\n}`
+            },
+            {
+              id: "wf-6",
+              name: "YZ金鱼-InfiniteTalk超自然数字人对口型单人-v1.json",
+              size: "61 KB",
+              date: "2025/12/31 03:16",
+              isCustom: false,
+              content: `{\n  "lip_sync": {\n    "class_type": "InfiniteTalkLipsyncNode",\n    "inputs": {\n      "audio_path": "E:\\\\audio\\\\speech.mp3",\n      "face_image": "E:\\\\images\\\\avatar.png"\n    }\n  }\n}`
+            },
+            {
+              id: "wf-7",
+              name: "YZ金鱼-Qwen-image超真实生图&图像反推.json",
+              size: "86 KB",
+              date: "2025/12/31 03:32",
+              isCustom: false,
+              content: `{\n  "qwen_node": {\n    "class_type": "Qwen2VLGenerate",\n    "inputs": {\n      "prompt": "Describe this image in detail for ComfyUI prompt generation",\n      "image": ["12", 0]\n    }\n  }\n}`
+            },
+            {
+              id: "wf-8",
+              name: "提取线稿——Klein.json",
+              size: "24 KB",
+              date: "2026/03/23 13:09",
+              isCustom: false,
+              content: `{\n  "lineart": {\n    "class_type": "LineartEdgeDetector",\n    "inputs": {\n      "resolution": 512\n    }\n  }\n}`
+            },
+            {
+              id: "wf-9",
+              name: "提示词反推.json",
+              size: "9 KB",
+              date: "2026/04/20 15:56",
+              isCustom: false,
+              content: `{\n  "wd14_tagger": {\n    "class_type": "WD14Tagger",\n    "inputs": {\n      "threshold": 0.35\n    }\n  }\n}`
+            },
+            {
+              id: "wf-10",
+              name: "自定义测试节点.json",
+              size: "60 KB",
+              date: "2026/05/14 13:36",
+              isCustom: false,
+              content: `{\n  "test_node": {\n    "class_type": "CustomDebugNode",\n    "inputs": {\n      "value": "debugging"\n    }\n  }\n}`
+            }
+          ],
         },
       },
       takeSnapshot: () => {

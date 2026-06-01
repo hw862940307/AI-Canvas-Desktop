@@ -172,6 +172,57 @@ async function startServer() {
     }
   });
 
+  // 6. Launch ComfyUI via local .bat (Runs only when server is running on the local machine)
+  app.post('/api/comfy/launch', async (req, res) => {
+    const { launcherPath } = req.body;
+    if (!launcherPath) {
+      return res.status(400).json({ ok: false, error: '启动器路径不能为空' });
+    }
+
+    try {
+      const fs = await import('fs');
+      const cp = await import('child_process');
+      
+      if (!fs.existsSync(launcherPath)) {
+        return res.status(404).json({ 
+          ok: false, 
+          error: `无法在当前宿主机上找到该启动文件: "${launcherPath}"。\n\n💡 解决办法:\n1. 网页云预览中无法直接运行您的本地电脑文件。请在您的本地电脑终端上手动双击运行该 .bat 文件启动 ComfyUI。\n2. 如果您已下载应用到本地运行，请在设置中对该路径进行微调，确认该路径在您本地电脑上是否 100% 正确。` 
+        });
+      }
+
+      const workingDir = path.dirname(launcherPath);
+      const isWin = process.platform === 'win32';
+      let proc;
+
+      if (isWin) {
+        proc = cp.spawn('cmd.exe', ['/c', launcherPath], {
+          cwd: workingDir,
+          detached: true,
+          stdio: 'ignore'
+        });
+        proc.unref();
+      } else {
+        proc = cp.spawn('sh', [launcherPath], {
+          cwd: workingDir,
+          detached: true,
+          stdio: 'ignore'
+        });
+        proc.unref();
+      }
+
+      res.json({ 
+        ok: true, 
+        message: `已经为您成功调用本地启动器指令！\n路径: [${launcherPath}]\n\n请查看您本地后台控制台终端，ComfyUI 正在火速加载并拉起，大约 10-30 秒启动完成后，您可以再次尝试测试连接服务！` 
+      });
+    } catch (err: any) {
+      console.error('Launch execution failed:', err);
+      res.status(500).json({ 
+        ok: false, 
+        error: `调用本地启动器程序发生异常: ${err.message || String(err)}`
+      });
+    }
+  });
+
   // Keep-alive agent pooling to tremendously slash SSL handshake times
   const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 10, timeout: 60000 });
   const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 10, timeout: 60000, rejectUnauthorized: false });
