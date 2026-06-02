@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import { useUpdateNodeInternals } from '@xyflow/react';
 
 interface ScaleWrapperProps {
   id: string;
@@ -13,6 +14,7 @@ interface ScaleWrapperProps {
 export const ScaleWrapper: React.FC<ScaleWrapperProps> = ({ id, type, baseWidth: customBaseWidth, baseHeight: customBaseHeight, disableDynamicHeight = true, children }) => {
   const node = useStore((state) => state.nodes.find((n) => n.id === id));
   const innerRef = useRef<HTMLDivElement>(null);
+  const updateNodeInternals = useUpdateNodeInternals();
   
   const getBaseDimensions = (nodeType: string) => {
     switch (nodeType) {
@@ -69,43 +71,50 @@ export const ScaleWrapper: React.FC<ScaleWrapperProps> = ({ id, type, baseWidth:
 
   // Dynamic Height Sync to make sure the drag border perfectly wraps the scaled content
   useEffect(() => {
-    if (disableDynamicHeight) return;
-
     const element = innerRef.current;
     if (!element) return;
 
-    const updateHeight = () => {
-      const parentCard = element.parentElement;
-      const rfNode = element.closest('.react-flow__node') as HTMLElement;
-      
-      // Get unscaled height of inside content
-      const unscaledHeight = element.scrollHeight;
-      const visualHeight = unscaledHeight * scale;
-      
-      if (parentCard) {
-        parentCard.style.height = `${visualHeight}px`;
+    const updateHeightAndInternals = () => {
+      if (!disableDynamicHeight) {
+        const parentCard = element.parentElement;
+        const rfNode = element.closest('.react-flow__node') as HTMLElement;
+        
+        // Get unscaled height of inside content
+        const unscaledHeight = element.scrollHeight;
+        const visualHeight = unscaledHeight * scale;
+        
+        if (parentCard) {
+          parentCard.style.height = `${visualHeight}px`;
+        }
+        if (rfNode) {
+          rfNode.style.height = `${visualHeight}px`;
+        }
       }
-      if (rfNode) {
-        rfNode.style.height = `${visualHeight}px`;
+      
+      // Always notify React Flow about node size & handle updates to prevent drifting lines
+      try {
+        updateNodeInternals(id);
+      } catch (err) {
+        console.warn("Failed to update node internals:", err);
       }
     };
 
-    updateHeight();
+    updateHeightAndInternals();
 
     const observer = new ResizeObserver(() => {
-      updateHeight();
+      updateHeightAndInternals();
     });
 
     observer.observe(element);
     
     // Periodically sync to handle dynamic content loads (like images load)
-    const timer = setInterval(updateHeight, 500);
+    const timer = setInterval(updateHeightAndInternals, 500);
 
     return () => {
       observer.disconnect();
       clearInterval(timer);
     };
-  }, [scale, nodeUiFontSize, disableDynamicHeight]);
+  }, [id, scale, nodeUiFontSize, disableDynamicHeight, updateNodeInternals]);
 
   // Render content with smooth subpixel scaling
   return (

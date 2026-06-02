@@ -101,6 +101,29 @@ export interface ApiSettings {
     content?: string;
     isCustom?: boolean;
   }>;
+  profiles?: Array<{
+    id: string;
+    name: string;
+    engine: "gemini" | "openai" | "claude" | "doubao" | "qianwen" | "deepseek" | "custom";
+    baseUrl: string;
+    apiKey: string;
+    modelId: string;
+  }>;
+  activeProfileId?: string;
+  // ModelScope specific fields
+  modelscopeApiKey?: string;
+  modelscopeBaseUrl?: string;
+  modelscopeModelUrl?: string;
+  modelscopeImageModels?: string[];
+  modelscopeChatModels?: string[];
+  modelscopeSelectedImageModel?: string;
+  modelscopeSelectedChatModel?: string;
+  modelscopeLoraEnabled?: boolean;
+  modelscopeLoraModelId?: string;
+  modelscopeLoraWeight?: number;
+  modelscopeLoraTriggerWord?: string;
+  modelscopeLoraVersion?: string;
+  modelscopeLoras?: Array<{ id: string; modelId: string; weight: number; triggerWord?: string; version?: string }>;
 }
 
 export interface AppSettings {
@@ -310,6 +333,15 @@ export const useStore = create<AppState>()(
           apiKey: "",
           modelId: "gemini-1.5-flash",
           isCustom: false,
+          profiles: [
+            { id: "gemini", name: "Gemini 官方", engine: "gemini", baseUrl: "https://generativelanguage.googleapis.com", apiKey: "", modelId: "gemini-2.5-flash" },
+            { id: "openai", name: "OpenAI 官方", engine: "openai", baseUrl: "https://api.openai.com/v1", apiKey: "", modelId: "gpt-4o-mini" },
+            { id: "claude", name: "Claude 官方", engine: "claude", baseUrl: "https://api.openai.com/v1", apiKey: "", modelId: "claude-3-5-sonnet-20241022" },
+            { id: "deepseek", name: "DeepSeek 官方", engine: "deepseek", baseUrl: "https://api.deepseek.com", apiKey: "", modelId: "deepseek-chat" },
+            { id: "doubao", name: "火山引擎 (豆包)", engine: "doubao", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", apiKey: "", modelId: "doubao-pro-32k" },
+            { id: "qianwen", name: "通义千问", engine: "qianwen", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: "", modelId: "qwen-max" }
+          ],
+          activeProfileId: "gemini",
           imageEngine: "online",
           imageModel: "Nano Banana Pro",
           comfyUrl: "http://127.0.0.1:8188",
@@ -323,6 +355,32 @@ export const useStore = create<AppState>()(
             { id: "all-in-one-image", name: "全能图片生成器" }
           ],
           jimengApiKey: "",
+          modelscopeApiKey: "",
+          modelscopeBaseUrl: "https://api-inference.modelscope.cn/v1",
+          modelscopeModelUrl: "https://api-inference.modelscope.cn/v1/models",
+          modelscopeImageModels: [
+            "Tongyi-MAI/Z-Image-Turbo",
+            "Qwen/Qwen-Image-2512",
+            "Qwen/Qwen-Image-Edit-2511",
+            "black-forest-labs/FLUX.2-klein-9B"
+          ],
+          modelscopeChatModels: [
+            "Qwen/Qwen3-235B-A22B",
+            "Qwen/Qwen3-VL-235B-A22B-Instruct",
+            "MiniMax/MiniMax-M2.7:MiniMax"
+          ],
+          modelscopeSelectedImageModel: "Tongyi-MAI/Z-Image-Turbo",
+          modelscopeSelectedChatModel: "Qwen/Qwen3-235B-A22B",
+          modelscopeLoraEnabled: false,
+          modelscopeLoraModelId: "",
+          modelscopeLoraWeight: 0.8,
+          modelscopeLoraTriggerWord: "",
+          modelscopeLoraVersion: "v1.0",
+          modelscopeLoras: [
+            { id: "Daniel8152/film", modelId: "Qwen/Qwen-Image-2512", weight: 0.8 },
+            { id: "Daniel8152/Qwen-Image-2512-Film", modelId: "Tongyi-MAI/Z-Image-Turbo", weight: 0.8 },
+            { id: "Daniel8152/Klein-enhance", modelId: "black-forest-labs/FLUX.2-klein-9B", weight: 0.8 }
+          ],
           comfyLauncherPath: "E:\\BaiduNetdiskDownload\\ComfyUI-aki-v2\\ComfyUI\\启动网卡-启动.bat",
           comfyWorkflowPath: "E:\\ComfyUI_Workflows\\workflows",
           comfyWorkflows: [
@@ -582,7 +640,7 @@ export const useStore = create<AppState>()(
           const sourceNode = nodes.find((n) => n.id === e.source);
           return sourceNode?.data;
         });
-        return incomingData;
+        return incomingData.filter((d): d is any => !!d);
       },
       clearCanvas: () => {
         get().takeSnapshot();
@@ -885,8 +943,8 @@ export const useStore = create<AppState>()(
 export const useNodeIncomingData = (nodeId: string) => {
   return useStore(useShallow((state) => {
     const incomingEdges = state.edges.filter((e) => e.target === nodeId);
-    return incomingEdges.map(
-      (e) => state.nodes.find((n) => n.id === e.source)?.data,
-    );
+    return incomingEdges
+      .map((e) => state.nodes.find((n) => n.id === e.source)?.data)
+      .filter((d): d is any => !!d);
   }));
 };

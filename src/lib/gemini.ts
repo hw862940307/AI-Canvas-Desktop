@@ -16,7 +16,20 @@ export const generateTextWithFallback = async (
   const { settings } = useStore.getState();
   const api = settings.apiSettings;
 
+  // Dynamically resolve parameters from active API profile to prevent mismatch
   let apiKey = api.apiKey;
+  let baseUrl = api.baseUrl;
+  let modelId = api.modelId;
+
+  if (api.profiles && api.activeProfileId) {
+    const activeProf = (api.profiles as any[]).find((p: any) => p.id === api.activeProfileId);
+    if (activeProf) {
+      apiKey = activeProf.apiKey || apiKey;
+      baseUrl = activeProf.baseUrl || baseUrl;
+      modelId = activeProf.modelId || modelId;
+    }
+  }
+
   if (!apiKey && api.engine === 'gemini') {
     const env = (import.meta as any).env;
     apiKey = typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : (env ? env.VITE_GEMINI_API_KEY : '');
@@ -47,9 +60,9 @@ export const generateTextWithFallback = async (
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       engine: api.engine,
-      baseUrl: api.baseUrl,
+      baseUrl: baseUrl,
       apiKey: apiKey,
-      modelId: api.modelId,
+      modelId: modelId,
       messages: messages,
       attachments: attachments,
       webSearch: webSearch

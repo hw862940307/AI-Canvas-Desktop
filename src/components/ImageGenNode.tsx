@@ -24,10 +24,12 @@ const ENGINE_TABS = [
   { id: 'runninghub', name: 'RunningHub', icon: Zap },
   { id: 'jimeng', name: '即梦', icon: Send },
   { id: 'comfyui', name: 'ComfyUI', icon: Cable },
+  { id: 'modelscope', name: 'ModelScope', icon: Images },
 ];
 
 export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
   const [loading, setLoading] = useState(false);
+  const [executionError, setExecutionError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const dragCounter = useRef(0);
   
@@ -88,6 +90,63 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   const [jmResolution, setJmResolution] = useState<string>(data.jmResolution || '2K');
   const [jmRatio, setJmRatio] = useState<string>(data.jmRatio || '1:1');
   const [jmBatch, setJmBatch] = useState<number>(data.jmBatch || 1);
+
+  // --- ModelScope Tab Specific States ---
+  const [msModel, setMsModel] = useState<string>(data.msModel || 'Tongyi-MAI/Z-Image-Turbo');
+  const [msRatio, setMsRatio] = useState<string>(data.msRatio || '1:1');
+  const [msResolution, setMsResolution] = useState<string>(data.msResolution || '1K');
+  const [msBatch, setMsBatch] = useState<number>(data.msBatch || 1);
+  const [msAsync, setMsAsync] = useState<boolean>(data.msAsync !== undefined ? data.msAsync : false);
+
+  // --- ModelScope LoRA States adapted for model selection ---
+  const [msLoraEnabled, setMsLoraEnabled] = useState<boolean>(data.msLoraEnabled !== undefined ? data.msLoraEnabled : false);
+  const [msSelectedLoraId, setMsSelectedLoraId] = useState<string>(data.msSelectedLoraId || '');
+  const [msLoraWeight, setMsLoraWeight] = useState<number>(data.msLoraWeight !== undefined ? data.msLoraWeight : 0.8);
+
+  // Memoize active ModelScope image model pool synced from global settings
+  const msModelsAvailable = useMemo(() => {
+    const saved = settings.apiSettings.modelscopeImageModels || [];
+    if (saved.length > 0) return saved;
+    return [
+      "Tongyi-MAI/Z-Image-Turbo",
+      "Qwen/Qwen-Image-2512",
+      "Qwen/Qwen-Image-Edit-2511",
+      "black-forest-labs/FLUX.2-klein-9B"
+    ];
+  }, [settings.apiSettings.modelscopeImageModels]);
+
+  // Synchronize choice to local model scope node config
+  useEffect(() => {
+    if (msModelsAvailable.length > 0 && !msModelsAvailable.includes(msModel)) {
+      setMsModel(msModelsAvailable[0]);
+      updateNodeData(id, { msModel: msModelsAvailable[0] });
+    }
+  }, [msModelsAvailable]);
+
+  // Matching LoRAs list from global settings
+  const matchingLoras = useMemo(() => {
+    const loras = settings.apiSettings.modelscopeLoras || [];
+    return loras.filter((lora: any) => lora.modelId === msModel && lora.id);
+  }, [settings.apiSettings.modelscopeLoras, msModel]);
+
+  // Synchronize active matching LoRA on model change
+  useEffect(() => {
+    if (matchingLoras.length > 0) {
+      const currentExists = matchingLoras.some((l: any) => l.id === msSelectedLoraId);
+      if (!currentExists) {
+        setMsSelectedLoraId(matchingLoras[0].id);
+        const wVal = matchingLoras[0].weight !== undefined ? matchingLoras[0].weight : 0.8;
+        setMsLoraWeight(wVal);
+        updateNodeData(id, { 
+          msSelectedLoraId: matchingLoras[0].id, 
+          msLoraWeight: wVal 
+        });
+      }
+    } else {
+      setMsSelectedLoraId('');
+      updateNodeData(id, { msSelectedLoraId: '' });
+    }
+  }, [matchingLoras]);
 
   // Sync state with store save
   const handleUpdateField = (key: string, val: any) => {
@@ -181,12 +240,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     if (loading) return;
 
     setLoading(true);
+    setExecutionError(null);
     
     try {
       const apiSettings = settings.apiSettings;
 
       // Extract options according to active tab
-      let engine = apiSettings.engine || 'openai';
+      let engine: any = apiSettings.engine || 'openai';
       let selectedModel = gptModel;
       let batchSize = gptBatch;
       let resolution = gptRatio;
@@ -208,6 +268,12 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         batchSize = jmBatch;
         resolution = jmRatio;
         quality = jmResolution;
+      } else if (activeTab === 'modelscope') {
+        engine = 'modelscope';
+        selectedModel = msModel;
+        batchSize = msBatch;
+        resolution = msRatio;
+        quality = msResolution;
       }
 
       if (activeTab === 'comfyui') {
@@ -331,27 +397,71 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         newUrls.forEach(url => addFile({ name: `ComfyUI - ${new Date().toLocaleTimeString()}`, type: 'image', url: url }));
         
       } else {
+        let imgApiKey = apiSettings.apiKey;
+        let imgBaseUrl = apiSettings.baseUrl;
+        let loraConfig = null;
+        
+        if (activeTab === 'modelscope') {
+          imgApiKey = apiSettings.modelscopeApiKey || '';
+          imgBaseUrl = apiSettings.modelscopeBaseUrl || 'https://api-inference.modelscope.cn/v1';
+          if (msLoraEnabled && msSelectedLoraId) {
+            const foundLora = matchingLoras.find((l: any) => l.id === msSelectedLoraId);
+            loraConfig = {
+              enabled: true,
+              modelId: msSelectedLoraId,
+              weight: msLoraWeight,
+              triggerWord: foundLora?.triggerWord || '',
+              version: foundLora?.version || 'v1.0'
+            };
+          } else {
+            loraConfig = null;
+          }
+        } else if (apiSettings.profiles && apiSettings.activeProfileId) {
+          const activeProf = (apiSettings.profiles as any[]).find((p: any) => p.id === apiSettings.activeProfileId);
+          if (activeProf) {
+            imgApiKey = activeProf.apiKey || imgApiKey;
+            imgBaseUrl = activeProf.baseUrl || imgBaseUrl;
+          }
+        } else {
+          const imgEngineConfig = (apiSettings as any).engineConfigs?.[engine];
+          imgApiKey = imgEngineConfig?.apiKey || imgApiKey;
+          imgBaseUrl = imgEngineConfig?.baseUrl || imgBaseUrl;
+        }
+
         const response = await fetch('/api/images', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             engine,
-            baseUrl: apiSettings.baseUrl,
-            apiKey: apiSettings.apiKey,
+            baseUrl: imgBaseUrl,
+            apiKey: imgApiKey,
             modelId: selectedModel,
             prompt: finalPrompt,
             n: batchSize,
             size: resolution,
             quality,
+            lora: loraConfig,
+            msAsync: activeTab === 'modelscope' ? msAsync : false
           })
         });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'API request failed');
+        const responseText = await response.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonErr) {
+          console.error('Failed to parse image API response JSON:', responseText);
+          if (responseText.toLowerCase().includes('<!doctypehtml') || responseText.toLowerCase().includes('<html') || responseText.toLowerCase().includes('<!doctype html')) {
+            throw new Error('服务器超时或网关拦截错误 (504 Gateway Timeout)。\n请在右侧侧栏的「设置 (Settings)」中确认您输入的 API 密钥及接口地址是否正确，或是检查网络状况。');
+          } else {
+            throw new Error(`无法解析服务器返回内容 (Invalid JSON): ${responseText.substring(0, 150)}...`);
+          }
         }
 
-        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || `接口请求失败 (HTTP ${response.status})`);
+        }
+
         const newUrls = data.urls || (data.imageUrl ? [data.imageUrl] : []);
 
         if (newUrls.length === 0) throw new Error('No image URLs returned from API');
@@ -363,16 +473,23 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
     } catch (error: any) {
       console.error('Generation failed:', error);
+      let errMsg = '';
       if (activeTab === 'comfyui') {
         const comfyUrl = settings.apiSettings.comfyUrl || 'http://127.0.0.1:8188';
         const isLocal = comfyUrl.includes('127.0.0.1') || comfyUrl.includes('localhost') || comfyUrl.includes('192.168.') || comfyUrl.includes('10.');
         if (isLocal) {
-          alert(`ComfyUI 本地图片生成失败：\n${error.message || '未知错误'}\n\n💡 诊断建议：\n1. 请确认您的本地 ComfyUI 服务已正常打开运行，且监听了 8188 端口。\n2. 跨域拦截: 请在本地命令行启动 ComfyUI 时附带 "--allow-cors" 参数以支持跨域访问。\n3. HTTPS 限制: 在侧栏“设置”中，点击「在浏览器中打开」，弹出的新页面可能会拦截不安全内容，可以在浏览器地址栏左侧的“网站设置”中，将“不安全内容”设为“允许”。`);
+          errMsg = `ComfyUI 本地图片生成失败：\n${error.message || '未知错误'}\n\n💡 诊断建议：\n1. 请确认您的本地 ComfyUI 服务已正常打开运行，且监听了 8188 端口。\n2. 跨域拦截: 请在本地命令行启动 ComfyUI 时附带 "--allow-cors" 参数以支持跨域访问。\n3. HTTPS 限制: 在侧栏“设置”中，点击「在浏览器中打开」，弹出的新页面可能会拦截不安全内容，可以在浏览器地址栏左侧的“网站设置”中，将“不安全内容”设为“允许”。`;
         } else {
-          alert(`ComfyUI 远程图片生成失败：\n${error.message || '未知错误'}\n\n💡 诊断建议：\n1. 请检查您的 ComfyUI 远程服务地址 (URL) 输入是否完全正确。\n2. 如果使用了公网代理（如 ngrok 等），请确保代理隧道处于 ACTIVE 在线状态，并且服务端已被正确映射启动。`);
+          errMsg = `ComfyUI 远程图片生成失败：\n${error.message || '未知错误'}\n\n💡 诊断建议：\n1. 请检查您的 ComfyUI 远程服务地址 (URL) 输入是否完全正确。\n2. 如果使用了公网代理（如 ngrok 等），请确保代理隧道处于 ACTIVE 在线状态，并且服务端已被正确映射启动。`;
         }
       } else {
-        alert(`图片生成失败: ${error.message || '未知错误'}`);
+        errMsg = `图片生成失败: ${error.message || '未知错误'}`;
+      }
+      setExecutionError(errMsg);
+      try {
+        alert(errMsg);
+      } catch (alertErr) {
+        console.warn('alert dialog blocked by iframe sandbox:', alertErr);
       }
     } finally {
       setLoading(false);
@@ -455,6 +572,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     else if (activeTab === 'banana') ratioStr = bananaRatio;
     else if (activeTab === 'runninghub') ratioStr = rhRatio;
     else if (activeTab === 'jimeng') ratioStr = jmRatio;
+    else if (activeTab === 'modelscope') ratioStr = msRatio;
     
     if (!ratioStr || ratioStr === '自动' || ratioStr === 'auto') {
       return '1/1';
@@ -834,6 +952,177 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
             </div>
           </div>
         );
+      case 'modelscope':
+        return (
+          <div className="grid grid-cols-2 gap-3 mb-4 text-[11px] nodrag">
+            <div className="flex flex-col gap-1 col-span-2">
+              <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">ModelScope 选择模型</span>
+              <select 
+                value={msModel} 
+                onChange={(e) => { e.stopPropagation(); setMsModel(e.target.value); handleUpdateField('msModel', e.target.value); }}
+                className="px-3 py-2 bg-[#121214]/60 border border-white/5 rounded-xl text-zinc-300 font-medium focus:border-indigo-500 hover:border-zinc-700 outline-none w-full cursor-pointer h-9 text-[11px]"
+              >
+                {msModelsAvailable.map((m: string) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              {(() => {
+                const isDashScopeProxied = msModel.toLowerCase().includes('tongyi') || msModel.toLowerCase().includes('qwen') || msModel.toLowerCase().includes('wanx');
+                if (isDashScopeProxied) {
+                  return (
+                    <div className="text-red-400 bg-red-950/20 px-2.5 py-2 rounded-xl border border-red-500/10 mt-1 leading-normal text-[10px]">
+                      ⚠️ <strong>阿里托管模型：</strong>魔搭网关暂不支持极简 Token 轮询托管模型任务（轮询常伴随 500 报错）。如果使用普通魔搭 Key，<strong>强烈推荐切换为下方的 FLUX.2-klein-9B</strong>，或更换为 sk- 开头的阿里云 DashScope 官方密钥。
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="text-emerald-400 bg-emerald-950/20 px-2.5 py-2 rounded-xl border border-emerald-500/10 mt-1 leading-normal text-[10px]">
+                      ✨ <strong>魔搭原生模型：</strong>支持原生魔搭 Token 高速同步取得图片，无需异步轮询，高稳定性，<strong>极力推荐！</strong>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">比例</span>
+              <select 
+                value={msRatio} 
+                onChange={(e) => { e.stopPropagation(); setMsRatio(e.target.value); handleUpdateField('msRatio', e.target.value); }}
+                className="px-3 py-2 bg-[#121214]/60 border border-white/5 rounded-xl text-zinc-300 font-medium focus:border-indigo-500 hover:border-zinc-700 outline-none w-full cursor-pointer h-9 text-[11px]"
+              >
+                <option value="1:1">1:1</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="自动">自动 (Auto)</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">分辨率</span>
+              <select 
+                value={msResolution} 
+                onChange={(e) => { e.stopPropagation(); setMsResolution(e.target.value); handleUpdateField('msResolution', e.target.value); }}
+                className="px-3 py-2 bg-[#121214]/60 border border-white/5 rounded-xl text-zinc-300 font-medium focus:border-indigo-500 hover:border-zinc-700 outline-none w-full cursor-pointer h-9 text-[11px]"
+              >
+                <option value="1K">1K</option>
+                <option value="2K">2K</option>
+                <option value="512x512">512x512</option>
+                <option value="768x768">768x768</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 col-span-2 mt-1">
+              <div className="flex justify-between items-center bg-black/25 px-3 py-2 rounded-xl border border-white/5">
+                <span className="text-gray-400 font-extrabold text-[10px]">异步轮询 (Async)</span>
+                <button 
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setMsAsync(!msAsync); handleUpdateField('msAsync', !msAsync); }}
+                  className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer border-none ${msAsync ? 'bg-red-500' : 'bg-zinc-700'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${msAsync ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Model-Adaptive LoRA Block */}
+            <div className="col-span-2 bg-red-500/5 border border-red-500/10 rounded-xl p-2.5 mt-1 font-sans space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="font-extrabold text-[10px] text-red-500 flex items-center gap-1">
+                  <span>🧬 适配 LoRA 插件</span>
+                  {matchingLoras.length > 0 && (
+                    <span className="bg-red-500/10 text-red-400 text-[8px] px-1 rounded-full font-mono">
+                      {matchingLoras.length}
+                    </span>
+                  )}
+                </span>
+                
+                {matchingLoras.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setMsLoraEnabled(!msLoraEnabled); 
+                      handleUpdateField('msLoraEnabled', !msLoraEnabled); 
+                    }}
+                    className={`w-7 h-4 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer border-none flex items-center ${msLoraEnabled ? 'bg-red-650' : 'bg-zinc-700'}`}
+                  >
+                    <div className={`w-3 h-3 rounded-full bg-white transition-transform duration-200 ${msLoraEnabled ? 'translate-x-3' : 'translate-x-0'}`} />
+                  </button>
+                )}
+              </div>
+
+              {matchingLoras.length > 0 ? (
+                <>
+                  {/* Select active LoRA if multiple exist */}
+                  {matchingLoras.length > 1 ? (
+                    <div className="flex flex-col gap-1 mt-1">
+                      <span className="text-[9px] text-zinc-500 uppercase font-bold">选择可用 LoRA</span>
+                      <select
+                        value={msSelectedLoraId}
+                        disabled={!msLoraEnabled}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const val = e.target.value;
+                          setMsSelectedLoraId(val);
+                          handleUpdateField('msSelectedLoraId', val);
+                          const targetObj = matchingLoras.find(l => l.id === val);
+                          if (targetObj) {
+                            setMsLoraWeight(targetObj.weight || 0.8);
+                            handleUpdateField('msLoraWeight', targetObj.weight || 0.8);
+                          }
+                        }}
+                        className="px-2 py-1 bg-zinc-900 border border-white/5 rounded-lg text-zinc-300 font-mono text-[9.5px] disabled:opacity-50 h-7"
+                      >
+                        {matchingLoras.map((lora) => (
+                          <option key={lora.id} value={lora.id}>
+                            {lora.id}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="text-[9.5px] text-zinc-400 font-mono truncate">
+                      自动适配: <span className="text-zinc-200">{msSelectedLoraId}</span>
+                    </div>
+                  )}
+
+                  {msLoraEnabled && (
+                    <div className="space-y-1 mt-1 animate-fadeIn">
+                      <div className="flex justify-between text-[9px] text-zinc-500 font-bold">
+                        <span>调整融合权重</span>
+                        <span className="text-red-400 font-mono font-bold">{msLoraWeight.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.05"
+                        value={msLoraWeight}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const val = parseFloat(e.target.value);
+                          setMsLoraWeight(val);
+                          handleUpdateField('msLoraWeight', val);
+                        }}
+                        className="w-full accent-red-500 h-1 cursor-pointer"
+                      />
+                      
+                      {matchingLoras.find(l => l.id === msSelectedLoraId)?.triggerWord && (
+                        <div className="text-[9px] text-zinc-400">
+                          触发词: <span className="text-red-450 font-extrabold">{matchingLoras.find(l => l.id === msSelectedLoraId)?.triggerWord}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-[9.5px] text-zinc-500 italic py-1 border border-dashed border-white/5 rounded-lg text-center bg-black/10">
+                  ⚠️ 未检索到当前模型的适配 LoRA。可在设置中配置绑定。
+                </div>
+              )}
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -991,6 +1280,23 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
               placeholder="描述你想要生成的内容，输入 @ 可引用已连接的参考图..."
             />
           </div>
+          
+          {/* 4.5 Visually display error message inside the Node UI to keep UX pristine */}
+          {executionError && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-200 text-[11px] p-3 rounded-xl flex items-start gap-2 mb-4 select-text nodrag max-h-[140px] overflow-y-auto custom-scrollbar">
+              <span className="text-red-400 mt-0.5">⚠️</span>
+              <div className="flex-1 leading-relaxed">
+                <span className="font-bold">生成失败:</span> {executionError}
+              </div>
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setExecutionError(null); }} 
+                className="text-red-400/60 hover:text-red-300 text-[10px] bg-transparent border-none p-0 cursor-pointer self-start ml-1"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* 5. Giga Generate Trigger Button [Fig 2-6 bottom] */}
           <button

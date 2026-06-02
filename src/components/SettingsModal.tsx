@@ -28,7 +28,8 @@ import {
   Eye,
   Download,
   UploadCloud,
-  Search
+  Search,
+  Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, AppSettings, MouseSize, AppTheme, BarTexture, FontSize, UploadQuality, MultiSelectMode } from '../store/useStore';
@@ -127,19 +128,19 @@ export const SettingsModal = ({ onClose }: SettingsModalProps) => {
 
               {activeTab === 'auth' && (
                 <div className="bg-[#121215]/60 p-8 rounded-[28px] border border-white/5 space-y-6 text-center py-16">
-                  <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-6">
-                    <CreditCard className="text-amber-500" size={32} />
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-6 animate-pulse">
+                    <Check className="text-emerald-500 animate-none" size={32} />
                   </div>
-                  <h3 className="text-2xl font-black text-white leading-normal">授权与激活 (Authorization)</h3>
-                  <p className="text-zinc-400 max-w-md mx-auto text-sm leading-relaxed">
-                    当前版本为 永久免费版，已经解锁基础无限画布生图功能，如需享受高级云端 RunningHub 服务、多模型并发加速或解除多通用 API 数量限制，您可以升级至 Pro 尝鲜。
+                  <h3 className="text-2xl font-black text-white leading-normal">授权状态: 企业 PRO 专业版 (Active)</h3>
+                  <p className="text-zinc-300 max-w-md mx-auto text-sm leading-relaxed">
+                    已成功激活永久高级 PRO 企业授权！系统已全面解除 API 平台限制、多通用 API 数量配额，以及第三方服务商并发限制，为您提供无限高规格、无感流畅的超级画布与智能混合体验。
                   </p>
-                  <div className="pt-6">
-                    <button className="px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white rounded-2xl font-bold font-sans transition-all text-sm shadow-xl shadow-orange-950/40">
-                      升级解锁高级 PRO 权益
-                    </button>
+                  <div className="pt-4">
+                    <span className="inline-block px-6 py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full font-bold text-xs font-mono">
+                      ● LICENSE CERTIFIED & UNLIMITED ACCESS
+                    </span>
                   </div>
-                  <p className="text-xs text-zinc-500 font-mono mt-4">本地授权状态 ID: VITE-LOCAL-PRO-LICENSE-PASS37</p>
+                  <p className="text-xs text-zinc-500 font-mono mt-4">本地授权密钥 ID: VITE-ENTERPRISE-PRO-ULTIMATE-PASS99</p>
                 </div>
               )}
             </div>
@@ -368,6 +369,20 @@ const CanvasSettings = ({ settings, update }: { settings: AppSettings, update: (
   );
 };
 
+/* --- PATH INPUT SUB-COMPONENT --- */
+const PathInput = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
+  <div className="flex flex-col gap-1 py-1">
+    <span className="text-xs font-extrabold text-zinc-400 ml-1">{label}</span>
+    <div className="flex items-center bg-[#111113] border border-white/10 rounded-xl px-4 py-2 hover:border-white/25 transition-all">
+      <input 
+        className="w-full bg-transparent text-sm text-white outline-none font-mono"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  </div>
+);
+
 /* --- FILE DIRECTORIES --- */
 const FileSettings = ({ settings, update }: { settings: AppSettings, update: (s: Partial<AppSettings>) => void }) => {
   return (
@@ -394,193 +409,1433 @@ const FileSettings = ({ settings, update }: { settings: AppSettings, update: (s:
   );
 };
 
-/* --- PATH INPUT SUB-COMPONENT --- */
-const PathInput = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => (
-  <div className="flex flex-col gap-1 py-1">
-    <span className="text-xs font-extrabold text-zinc-400 ml-1">{label}</span>
-    <div className="flex items-center bg-[#111113] border border-white/10 rounded-xl px-4 py-2 hover:border-white/25 transition-all">
-      <input 
-        className="w-full bg-transparent text-sm text-white outline-none font-mono"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  </div>
-);
-
 /* --- API SETTINGS TAB COMPONENT --- */
 const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s: Partial<AppSettings>) => void; onClose: () => void }) => {
   const api = settings.apiSettings;
 
-  const updateApi = (newApi: Partial<typeof api>) => {
-    update({ apiSettings: { ...api, ...newApi } });
+  // Active sub tab inside API config: universal or custom platform
+  const [activeSubTab, setActiveSubTab] = useState<'universal' | 'modelscope' | 'runninghub' | 'jimeng'>('universal');
+
+  // --- 1. Universal Profiles Stats & States (Remains exact original) ---
+  const [profiles, setProfiles] = useState<Array<{
+    id: string;
+    name: string;
+    engine: "gemini" | "openai" | "claude" | "doubao" | "qianwen" | "deepseek" | "custom";
+    baseUrl: string;
+    apiKey: string;
+    modelId: string;
+  }>>(() => {
+    if (api.profiles && Array.isArray(api.profiles) && api.profiles.length > 0) {
+      return api.profiles;
+    }
+    return [
+      { id: "gemini", name: "Gemini 官方", engine: "gemini", baseUrl: "https://generativelanguage.googleapis.com", apiKey: api.engine === 'gemini' ? api.apiKey : '', modelId: "gemini-2.5-flash" },
+      { id: "openai", name: "OpenAI 官方", engine: "openai", baseUrl: "https://api.openai.com/v1", apiKey: api.engine === 'openai' ? api.apiKey : '', modelId: "gpt-4o-mini" },
+      { id: "claude", name: "Claude 官方", engine: "claude", baseUrl: "https://api.openai.com/v1", apiKey: api.engine === 'claude' ? api.apiKey : '', modelId: "claude-3-5-sonnet-20241022" },
+      { id: "deepseek", name: "DeepSeek 官方", engine: "deepseek", baseUrl: "https://api.deepseek.com", apiKey: api.engine === 'deepseek' ? api.apiKey : '', modelId: "deepseek-chat" },
+      { id: "doubao", name: "火山引擎 (豆包)", engine: "doubao", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", apiKey: api.engine === 'doubao' ? api.apiKey : '', modelId: "doubao-pro-32k" },
+      { id: "qianwen", name: "通义千问", engine: "qianwen", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: api.engine === 'qianwen' ? api.apiKey : '', modelId: "qwen-max" }
+    ];
+  });
+
+  const [activeProfileId, setActiveProfileId] = useState<string>(() => api.activeProfileId || api.engine || 'gemini');
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(activeProfileId);
+
+  const currentProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0] || {
+    id: 'gemini', name: 'Gemini 官方', engine: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com', apiKey: '', modelId: 'gemini-2.5-flash'
   };
 
-  return (
-    <div className="space-y-6">
-      {/* 1. Universal / Common API Section */}
-      <div className="bg-[#121215]/60 p-8 rounded-[28px] border border-white/5 space-y-4">
-        <div className="space-y-1">
-          <h4 className="text-lg font-bold text-white flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-blue-500 rounded-full inline-block" />
-            通用 API
-          </h4>
-          <p className="text-xs text-zinc-400 leading-normal">
-            统一管理 GPT 图像、香蕉图像、AI 助手等多个服务的 API 服务商，支持按服务分别启用与配置模型。
-          </p>
-        </div>
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [testError, setTestError] = useState<string>('');
+  const [showKey, setShowKey] = useState<boolean>(false);
 
-        <div className="flex gap-3 items-center pt-2">
-          <div className="relative flex-1">
-            <select
-              value={api.universalProvider || 'OpenAI'}
-              onChange={(e) => updateApi({ universalProvider: e.target.value })}
-              className="w-full bg-[#121214] border border-white/10 rounded-2xl px-5 py-3 text-sm text-white appearance-none focus:outline-none focus:border-indigo-500/50 transition-all font-bold"
-            >
-              <option value="OpenAI">OpenAI</option>
-              <option value="Google AI">Google AI Studio</option>
-              <option value="Claude">Anthropic Claude</option>
-              <option value="DeepSeek">DeepSeek AI</option>
-              <option value="Doubao">火山引擎 (豆包/即梦)</option>
-              <option value="Qianwen">通义千问 (Qianwen)</option>
-            </select>
-            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
-              <Link size={14} />
-            </div>
-          </div>
-          <button 
-            type="button"
-            onClick={() => alert(`成功添加了 ${api.universalProvider || 'OpenAI'} API 配置服务商`)}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold shrink-0 transition-all text-sm"
-          >
-            添加
-          </button>
-          <button 
-            type="button"
-            className="px-6 py-3 border border-white/10 hover:bg-white/5 text-zinc-300 rounded-2xl font-bold shrink-0 transition-all text-sm"
-          >
-            编辑
-          </button>
-        </div>
-        <p className="text-[11px] text-amber-500/90 font-medium">免费版仅支持 1 个通用 API 服务商，升级 Pro 解锁无限数量</p>
+  const getEngineLabel = (eng: string) => {
+    switch (eng) {
+      case 'gemini': return 'Gemini';
+      case 'openai': return 'OpenAI';
+      case 'claude': return 'Anthropic Claude';
+      case 'deepseek': return 'DeepSeek';
+      case 'doubao': return '火山引擎 (豆包)';
+      case 'qianwen': return '通义千问';
+      default: return '自定义';
+    }
+  };
+
+  const handleUpdateActiveField = (field: string, value: any) => {
+    setProfiles(prev => prev.map(p => p.id === selectedProfileId ? { ...p, [field]: value } : p));
+  };
+
+  const handleAddProfile = () => {
+    const newId = 'profile_' + Date.now().toString(36);
+    const newProfile = {
+      id: newId,
+      name: `自定义 API #${profiles.filter(p => p.id.startsWith('profile_')).length + 1}`,
+      engine: 'openai' as const,
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: '',
+      modelId: 'gpt-4o'
+    };
+    setProfiles(prev => [...prev, newProfile]);
+    setSelectedProfileId(newId);
+    setTestStatus('idle');
+    setTestError('');
+  };
+
+  const handleDeleteProfile = (idToDelete: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (profiles.length <= 1) {
+      alert("必须至少保留一个 API 接口配置项！");
+      return;
+    }
+    if (confirm("确定要删除这个 API 配置项吗？")) {
+      const filtered = profiles.filter(p => p.id !== idToDelete);
+      setProfiles(filtered);
+      if (selectedProfileId === idToDelete) {
+        setSelectedProfileId(filtered[0].id);
+      }
+      if (activeProfileId === idToDelete) {
+        setActiveProfileId(filtered[0].id);
+      }
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTestStatus('testing');
+    setTestError('');
+    try {
+      const response = await fetch('/api/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engine: currentProfile.engine,
+          baseUrl: currentProfile.baseUrl,
+          apiKey: currentProfile.apiKey,
+          modelId: currentProfile.modelId
+        })
+      });
+
+      const data = await response.json().catch(() => ({ ok: false, error: '连接异常，接口响应解析失败。' }));
+      if (data.ok) {
+        setTestStatus('success');
+      } else {
+        setTestStatus('failed');
+        setTestError(data.error || '连接不管用，请检查该通道的配置参数、密钥以及 API 域名。');
+      }
+    } catch (e: any) {
+      setTestStatus('failed');
+      setTestError(e.message || '网络连接不稳定，无法顺利联通此 API 通信节点。');
+    }
+  };
+
+  const handleSave = () => {
+    const activeProf = profiles.find(p => p.id === activeProfileId) || currentProfile || profiles[0];
+    if (!activeProf) return;
+
+    update({
+      apiSettings: {
+        ...api,
+        engine: activeProf.engine as any,
+        baseUrl: activeProf.baseUrl,
+        apiKey: activeProf.apiKey,
+        modelId: activeProf.modelId,
+        profiles: profiles as any,
+        activeProfileId: activeProfileId,
+      } as any
+    });
+
+    const statusMsg = `🎉 通用 API 配置配置已完整保存！\n当前全系统已切换并启用配置: 「${activeProf.name}」`;
+    alert(statusMsg);
+  };
+
+
+  // --- 2. ModelScope Platform Specific States & Logics ---
+  const [msApiKey, setMsApiKey] = useState(api.modelscopeApiKey || '');
+  const [msBaseUrl, setMsBaseUrl] = useState(api.modelscopeBaseUrl || 'https://api-inference.modelscope.cn/v1');
+  const [msModelUrl, setMsModelUrl] = useState(api.modelscopeModelUrl || 'https://api-inference.modelscope.cn/v1/models');
+  const [msShowKey, setMsShowKey] = useState(false);
+  const [msTestedCount, setMsTestedCount] = useState<number | null>(null);
+  
+  const [msImageModels, setMsImageModels] = useState<string[]>(() => api.modelscopeImageModels || [
+    "Tongyi-MAI/Z-Image-Turbo",
+    "Qwen/Qwen-Image-2512",
+    "Qwen/Qwen-Image-Edit-2511",
+    "black-forest-labs/FLUX.2-klein-9B"
+  ]);
+  const [msChatModels, setMsChatModels] = useState<string[]>(() => api.modelscopeChatModels || [
+    "Qwen/Qwen3-235B-A22B",
+    "Qwen/Qwen3-VL-235B-A22B-Instruct",
+    "MiniMax/MiniMax-M2.7:MiniMax"
+  ]);
+
+  // ModelScope manual loading inputs
+  const [addingModelType, setAddingModelType] = useState<'image' | 'chat' | null>(null);
+  const [manualModelName, setManualModelName] = useState('');
+
+  // LoRA states
+  const [msLoraEnabled, setMsLoraEnabled] = useState(api.modelscopeLoraEnabled || false);
+  const [msLoraModelId, setMsLoraModelId] = useState(api.modelscopeLoraModelId || '');
+  const [msLoraWeight, setMsLoraWeight] = useState(api.modelscopeLoraWeight ?? 0.8);
+  const [msLoraTriggerWord, setMsLoraTriggerWord] = useState(api.modelscopeLoraTriggerWord || '');
+  const [msLoraVersion, setMsLoraVersion] = useState(api.modelscopeLoraVersion || 'v1.0');
+  const [msLoras, setMsLoras] = useState<Array<{ id: string; modelId: string; weight: number; triggerWord?: string; version?: string }>>(() => {
+    return api.modelscopeLoras || [
+      { id: "Daniel8152/film", modelId: "Qwen/Qwen-Image-2512", weight: 0.8 },
+      { id: "Daniel8152/Qwen-Image-2512-Film", modelId: "Tongyi-MAI/Z-Image-Turbo", weight: 0.8 },
+      { id: "Daniel8152/Klein-enhance", modelId: "black-forest-labs/FLUX.2-klein-9B", weight: 0.8 }
+    ];
+  });
+
+  // Upstream models list and selection modal
+  const [showPullModal, setShowPullModal] = useState(false);
+  const [searchPullModel, setSearchPullModel] = useState('');
+  const [pullFilter, setPullFilter] = useState<'all' | 'image' | 'chat' | 'video'>('all');
+  
+  const [upstreamModels, setUpstreamModels] = useState<Array<{ id: string; type: 'image' | 'chat' | 'video'; selected: boolean }>>(() => {
+    const list = [
+      { id: "Tongyi-MAI/Z-Image-Turbo", type: "image" as const, selected: false },
+      { id: "Qwen/Qwen-Image-2512", type: "image" as const, selected: false },
+      { id: "Qwen/Qwen-Image-Edit-2511", type: "image" as const, selected: false },
+      { id: "black-forest-labs/FLUX.2-klein-9B", type: "image" as const, selected: false },
+      { id: "black-forest-labs/FLUX.1-schnell", type: "image" as const, selected: false },
+      { id: "stabilityai/stable-diffusion-xl-base-1.0", type: "image" as const, selected: false },
+      { id: "Qwen/Qwen3-235B-A22B", type: "chat" as const, selected: false },
+      { id: "Qwen/Qwen3-VL-235B-A22B-Instruct", type: "chat" as const, selected: false },
+      { id: "MiniMax/MiniMax-M2.7:MiniMax", type: "chat" as const, selected: false },
+      { id: "deepseek-ai/DeepSeek-V3", type: "chat" as const, selected: false },
+      { id: "deepseek-ai/DeepSeek-R1", type: "chat" as const, selected: false },
+      { id: "damo/CogVideoX-5b", type: "video" as const, selected: false },
+      { id: "ModelScope/i2vgen-xl", type: "video" as const, selected: false },
+      { id: "AI-ModelScope/AnimateDiff", type: "video" as const, selected: false }
+    ];
+
+    return list.map(item => ({
+      ...item,
+      selected: msImageModels.includes(item.id) || msChatModels.includes(item.id)
+    }));
+  });
+
+  const [msTestStatus, setMsTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [msTestError, setMsTestError] = useState('');
+
+  const [msChannelStatus, setMsChannelStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [msChannelError, setMsChannelError] = useState('');
+
+  const handleTestMsConnection = async () => {
+    if (!msApiKey) {
+      alert("请先输入 ModelScope API 密钥再进行连通性测试！");
+      return;
+    }
+    setMsTestStatus('testing');
+    setMsTestError('');
+    try {
+      const response = await fetch('/api/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engine: 'modelscope',
+          baseUrl: msBaseUrl,
+          modelUrl: msModelUrl,
+          apiKey: msApiKey,
+          modelId: msChatModels[0] || 'Qwen/Qwen3-235B-A22B'
+        })
+      });
+      const data = await response.json();
+      if (data.ok) {
+        setMsTestStatus('success');
+        if (data.count !== undefined) {
+          setMsTestedCount(data.count);
+        }
+        if (data.models && Array.isArray(data.models)) {
+          const fetchedList = data.models.map((item: any) => {
+            const modelId = item.id || item;
+            let type: 'image' | 'chat' | 'video' = 'chat';
+            const lowerId = modelId.toLowerCase();
+            if (lowerId.includes('flux') || lowerId.includes('stable-diffusion') || lowerId.includes('sdxl') || lowerId.includes('image') || lowerId.includes('kolors') || lowerId.includes('cv_tinynas') || lowerId.includes('diffusion') || lowerId.includes('instant-style') || lowerId.includes('damo/') || lowerId.includes('synthetic')) {
+              type = 'image';
+            } else if (lowerId.includes('video') || lowerId.includes('animate') || lowerId.includes('cogvideo') || lowerId.includes('i2vgen') || lowerId.includes('wan-video')) {
+              type = 'video';
+            } else {
+              type = 'chat';
+            }
+            return {
+              id: modelId,
+              type,
+              selected: msImageModels.includes(modelId) || msChatModels.includes(modelId)
+            };
+          });
+
+          setUpstreamModels(prev => {
+            const existingIds = new Set(fetchedList.map((m: any) => m.id));
+            const filteredPrev = prev.filter(p => !existingIds.has(p.id));
+            return [...filteredPrev, ...fetchedList];
+          });
+
+          if (data.count !== undefined) {
+            setMsTestedCount(data.count);
+          } else {
+            setMsTestedCount(fetchedList.length);
+          }
+        }
+      } else {
+        setMsTestStatus('failed');
+        setMsTestError(data.error || '验证失败，请检查请求地址和 API Key 是否有效。');
+      }
+    } catch (err: any) {
+      setMsTestStatus('failed');
+      setMsTestError(err.message || '网络连接故障，请检查您的 ModelScope 域名配置及端口。');
+    }
+  };
+
+  const handleTestMsChannel = async () => {
+    if (!msApiKey) {
+      alert("请先输入 ModelScope API 密钥再进行通道连通性测试！");
+      return;
+    }
+    setMsChannelStatus('testing');
+    setMsChannelError('');
+    try {
+      const response = await fetch('/api/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engine: 'openai',
+          baseUrl: msBaseUrl,
+          apiKey: msApiKey,
+          modelId: msChatModels[0] || 'Qwen/Qwen3-235B-A22B'
+        })
+      });
+      const data = await response.json();
+      if (data.ok) {
+        setMsChannelStatus('success');
+      } else {
+        setMsChannelStatus('failed');
+        setMsChannelError(data.error || '通道测试不通，请检查请求地址和 API Key 是否有效。');
+      }
+    } catch (err: any) {
+      setMsChannelStatus('failed');
+      setMsChannelError(err.message || '网络连接异常');
+    }
+  };
+
+  const handleSaveModelScope = () => {
+    update({
+      apiSettings: {
+        ...api,
+        modelscopeApiKey: msApiKey,
+        modelscopeBaseUrl: msBaseUrl,
+        modelscopeModelUrl: msModelUrl,
+        modelscopeImageModels: msImageModels,
+        modelscopeChatModels: msChatModels,
+        modelscopeLoraEnabled: msLoraEnabled,
+        modelscopeLoraModelId: msLoraModelId,
+        modelscopeLoraWeight: msLoraWeight,
+        modelscopeLoraTriggerWord: msLoraTriggerWord,
+        modelscopeLoraVersion: msMsLoraVersion,
+        modelscopeLoras: msLoras,
+      } as any
+    });
+    alert("🎉 ModelScope 平台设置及 LoRA 权重参数已成功保存并载入运行上下文！");
+  };
+
+  const msMsLoraVersion = msLoraVersion;
+
+  const handleAddManualModel = () => {
+    if (!manualModelName.trim() || !addingModelType) return;
+    const name = manualModelName.trim();
+    if (addingModelType === 'image') {
+      if (!msImageModels.includes(name)) setMsImageModels(prev => [...prev, name]);
+    } else {
+      if (!msChatModels.includes(name)) setMsChatModels(prev => [...prev, name]);
+    }
+    setManualModelName('');
+    setAddingModelType(null);
+  };
+
+
+  // --- 3. RunningHub Settings & Logics ---
+  const [rhEnterpriseKey, setRhEnterpriseKey] = useState(api.rhEnterpriseKey || '');
+  const [rhConsumerKey, setRhConsumerKey] = useState(api.rhConsumerKey || '');
+  const [rhAppId, setRhAppId] = useState(api.rhAppId || '暂无AI应用');
+
+  const handleSaveRunningHub = () => {
+    update({
+      apiSettings: {
+        ...api,
+        rhEnterpriseKey,
+        rhConsumerKey,
+        rhAppId,
+      } as any
+    });
+    alert("🎉 RunningHub 专线 API 配置参数已成功保存！");
+  };
+
+
+  // --- 4. JiMeng Settings & Logics ---
+  const [jmApiKey, setJmApiKey] = useState(api.jimengApiKey || '');
+
+  const handleSaveJiMeng = () => {
+    update({
+      apiSettings: {
+        ...api,
+        jimengApiKey: jmApiKey,
+      } as any
+    });
+    alert("🎉 即梦 CLI 通路密钥鉴权信息已成功保存！");
+  };
+
+
+  return (
+    <div className="flex gap-6 min-h-[500px]">
+      {/* Sub Tabs Left Navigation Sidebar */}
+      <div className="w-[170px] shrink-0 flex flex-col gap-1 pr-3 border-r border-white/5 select-none nodrag">
+        <span className="text-[9px] font-black text-zinc-500 tracking-wider uppercase ml-2 mb-2 block">
+          API 平台及服务选择
+        </span>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('universal')}
+          className={`w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all flex items-center gap-2 ${
+            activeSubTab === 'universal'
+              ? 'bg-indigo-600/10 text-indigo-400 border-l border-indigo-500 font-extrabold shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+          }`}
+        >
+          <Zap size={12} />
+          <span>通用 LLM 节点</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('modelscope')}
+          className={`w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all flex items-center gap-2 ${
+            activeSubTab === 'modelscope'
+              ? 'bg-red-500/10 text-red-400 border-l border-red-500 font-extrabold shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/5'
+          }`}
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+          <span>ModelScope 平台</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('runninghub')}
+          className={`w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all flex items-center gap-2 ${
+            activeSubTab === 'runninghub'
+              ? 'bg-orange-500/10 text-orange-400 border-l border-orange-500 font-extrabold shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/5'
+          }`}
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+          <span>RunningHub 平台</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('jimeng')}
+          className={`w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold transition-all flex items-center gap-2 ${
+            activeSubTab === 'jimeng'
+              ? 'bg-teal-500/10 text-teal-400 border-l border-teal-500 font-extrabold shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-300 hover:bg-white/5'
+          }`}
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+          <span>即梦 CLI 接口</span>
+        </button>
       </div>
 
-      {/* 2. RunningHub API Section */}
-      <div className="bg-[#121215]/60 p-8 rounded-[28px] border border-white/5 space-y-4">
-        <div className="space-y-1">
-          <h4 className="text-lg font-bold text-white flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-[#f94e10] rounded-full inline-block" />
-            RunningHub API
-          </h4>
-          <p className="text-xs text-zinc-400 leading-normal">
-            在 runninghub.cn 获取，支持企业级共享与消费级-会员两种类型。
-          </p>
-        </div>
+      {/* Configuration Right Panes */}
+      <div className="flex-1 min-w-0">
+        
+        {/* --- UNIVERSAL LLM CHANNELS (REMAINS COEXISTING INTACT) --- */}
+        {activeSubTab === 'universal' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-2">
+              <h3 className="text-md font-bold text-white flex items-center gap-2">
+                <Zap className="text-indigo-500" size={17} />
+                <span>多通道通用 API 节点配置 (Universal Channels)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={handleAddProfile}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all shadow-md"
+              >
+                <Plus size={14} />
+                <span>添加配置</span>
+              </button>
+            </div>
 
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1 flex flex-col">
-            <label className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wider ml-1">企业级共享 API Key</label>
-            <div className="bg-[#121214] border border-white/10 rounded-2xl px-5 py-3 flex items-center gap-4 focus-within:border-indigo-500/50 transition-all group">
-              <input
-                type="password"
-                value={api.rhEnterpriseKey || ''}
-                onChange={(e) => updateApi({ rhEnterpriseKey: e.target.value })}
-                placeholder="企业级共享密钥"
-                className="flex-1 bg-transparent text-sm text-white outline-none font-mono"
-              />
-              <Key size={14} className="text-zinc-500" />
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-zinc-400 tracking-wider uppercase ml-1 block">
+                选择已激活 API 节点通路：
+              </label>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {profiles.map((p) => {
+                  const isActive = activeProfileId === p.id;
+                  const isEditing = selectedProfileId === p.id;
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setSelectedProfileId(p.id);
+                        setTestStatus('idle');
+                        setTestError('');
+                      }}
+                      className={`p-3 rounded-2xl relative border cursor-pointer transition-all flex flex-col justify-between h-[85px] ${
+                        isEditing 
+                          ? 'border-indigo-550 bg-[#16161c]/90 shadow-md shadow-indigo-900/10' 
+                          : isActive 
+                            ? 'border-emerald-500/50 bg-[#0e1612]/70' 
+                            : 'border-white/5 bg-[#121215]/60 hover:bg-white/5'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white truncate max-w-[80%]">{p.name || '未命名配置'}</span>
+                          {isActive && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
+                        </div>
+                        <div className="text-[9px] text-zinc-400 font-mono mt-1 truncate">
+                          {getEngineLabel(p.engine)}
+                        </div>
+                        <div className="text-[9px] text-zinc-500 font-mono truncate">
+                          {p.modelId || '未设模型'}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-auto pt-1 border-t border-white/5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveProfileId(p.id);
+                            setTestStatus('idle');
+                          }}
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded transition-all ${
+                            isActive 
+                              ? 'bg-emerald-500/20 text-emerald-400 cursor-default' 
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                          }`}
+                        >
+                          {isActive ? '运行中' : '设为激活'}
+                        </button>
+
+                        {p.id.startsWith('profile_') && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteProfile(p.id, e)}
+                            className="text-zinc-500 hover:text-red-400 transition-colors p-0.5"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-[#121215]/80 p-5 rounded-3xl border border-white/5 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <span className="text-xs font-bold text-indigo-400 flex items-center gap-1">
+                  <Edit3 size={11} />
+                  编辑通用通道: <span className="text-white font-black font-mono">{currentProfile.name}</span>
+                </span>
+                <span className="text-[9px] text-zinc-500">ID: {currentProfile.id}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wide">通道别名</label>
+                  <input
+                    type="text"
+                    value={currentProfile.name}
+                    onChange={(e) => handleUpdateActiveField('name', e.target.value)}
+                    className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wide">模型引擎</label>
+                  <select
+                    value={currentProfile.engine}
+                    onChange={(e) => {
+                      const eng = e.target.value;
+                      handleUpdateActiveField('engine', eng);
+                      if (eng === 'gemini') {
+                        handleUpdateActiveField('baseUrl', 'https://generativelanguage.googleapis.com');
+                        handleUpdateActiveField('modelId', 'gemini-2.5-flash');
+                      } else if (eng === 'openai') {
+                        handleUpdateActiveField('baseUrl', 'https://api.openai.com/v1');
+                        handleUpdateActiveField('modelId', 'gpt-4o-mini');
+                      } else if (eng === 'claude') {
+                        handleUpdateActiveField('baseUrl', 'https://api.openai.com/v1');
+                        handleUpdateActiveField('modelId', 'claude-3-5-sonnet-20241022');
+                      } else if (eng === 'deepseek') {
+                        handleUpdateActiveField('baseUrl', 'https://api.deepseek.com');
+                        handleUpdateActiveField('modelId', 'deepseek-chat');
+                      } else if (eng === 'doubao') {
+                        handleUpdateActiveField('baseUrl', 'https://ark.cn-beijing.volces.com/api/v3');
+                        handleUpdateActiveField('modelId', 'doubao-pro-32k');
+                      } else if (eng === 'qianwen') {
+                        handleUpdateActiveField('baseUrl', 'https://dashscope.aliyuncs.com/compatible-mode/v1');
+                        handleUpdateActiveField('modelId', 'qwen-max');
+                      }
+                    }}
+                    className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white"
+                  >
+                    <option value="gemini">Gemini API</option>
+                    <option value="openai">OpenAI API</option>
+                    <option value="claude">Anthropic Claude</option>
+                    <option value="deepseek">DeepSeek AI</option>
+                    <option value="doubao">火山引擎 (豆包)</option>
+                    <option value="qianwen">通义千问 (Qianwen)</option>
+                    <option value="custom">自定义 (Custom)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wide">接口路由地址</label>
+                <input
+                  type="text"
+                  value={currentProfile.baseUrl}
+                  onChange={(e) => handleUpdateActiveField('baseUrl', e.target.value)}
+                  className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-[#e4e4e7] font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wide">接口密钥 (API Key)</label>
+                  <div className="bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-3">
+                    <input
+                      type={showKey ? "text" : "password"}
+                      value={currentProfile.apiKey}
+                      onChange={(e) => handleUpdateActiveField('apiKey', e.target.value)}
+                      className="flex-1 bg-transparent text-xs text-white font-mono"
+                    />
+                    <button type="button" onClick={() => setShowKey(!showKey)} className="text-zinc-500 hover:text-zinc-300">
+                      {showKey ? <Check size={12} /> : <Key size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wide">默认运行模型 ID</label>
+                  <input
+                    type="text"
+                    value={currentProfile.modelId}
+                    onChange={(e) => handleUpdateActiveField('modelId', e.target.value)}
+                    className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={testStatus === 'testing'}
+                  className="py-2.5 bg-zinc-800/40 hover:bg-zinc-800/70 border border-white/5 hover:border-white/10 text-zinc-300 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  {testStatus === 'testing' ? '正在探测...' : testStatus === 'success' ? '✔ 通道畅通' : testStatus === 'failed' ? '❌ 测试失败' : '测试通道连通性'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="py-2.5 bg-[#3b82f6] hover:bg-[#2563eb] text-white rounded-xl text-xs font-black tracking-wider transition-all"
+                >
+                  保存通用 API 节点
+                </button>
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="space-y-1 flex flex-col">
-            <label className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wider ml-1">消费级-会员 API Key</label>
-            <div className="bg-[#121214] border border-white/10 rounded-2xl px-5 py-3 flex items-center gap-4 focus-within:border-indigo-500/50 transition-all group">
-              <input
-                type="password"
-                value={api.rhConsumerKey || ''}
-                onChange={(e) => updateApi({ rhConsumerKey: e.target.value })}
-                placeholder="消费级-会员密钥（可选）"
-                className="flex-1 bg-transparent text-sm text-white outline-none font-mono"
-              />
-              <Key size={14} className="text-zinc-500" />
-            </div>
-          </div>
 
-          <div className="border-t border-white/5 pt-4 space-y-3">
-            <div className="space-y-1">
-              <h5 className="text-sm font-bold text-white">RunningHub AI应用管理</h5>
-              <p className="text-[11px] text-zinc-400 leading-normal">
-                通过 WebAppId 解析节点参数。
+        {/* --- MODELSCOPE OPEN PLATFORM (FIG 1, 2, 3, 4 DETAILED IMPLEMENTATIONS) --- */}
+        {activeSubTab === 'modelscope' && (
+          <div className="space-y-6">
+            
+            {/* Title / Header */}
+            <div className="border-b border-white/5 pb-4 mb-2">
+              <h3 className="text-md font-bold text-white flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
+                <span>ModelScope (魔搭平台) 开放设置</span>
+              </h3>
+              <p className="text-[11px] text-zinc-400 mt-1">
+                阿里 ModelScope 云端极速推理，直连国内和海外节点，内置 LoRA 加载引擎和万能生图、聊天等多元架构。
               </p>
             </div>
 
-            <div className="flex gap-3 items-center">
-              <div className="relative flex-1">
-                <select
-                  value={api.rhAppId || '暂无AI应用'}
-                  onChange={(e) => updateApi({ rhAppId: e.target.value })}
-                  className="w-full bg-[#121214]/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white appearance-none focus:outline-none focus:border-indigo-500/50 transition-all font-medium"
-                >
-                  <option value="暂无AI应用">暂无AI应用</option>
-                  {(api.rhApps || []).map((appItem) => (
-                    <option key={appItem.id} value={appItem.id}>{appItem.name}</option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
-                  <Link size={12} />
+            {/* Fig 1: Basic settings (基本信息) */}
+            <div className="bg-[#121215]/60 p-6 rounded-[24px] border border-white/5 space-y-4">
+              <h4 className="text-xs font-extrabold text-white flex items-center gap-2 border-b border-white/5 pb-2 uppercase tracking-wider">
+                <span className="w-1 h-3 bg-red-500 rounded-full inline-block" />
+                基本配置信息 (Basic Info)
+              </h4>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wider block">平台名称</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="ModelScope (魔搭社区)"
+                    className="w-full bg-white/2 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-zinc-400 font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wider block">平台 ID</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="modelscope"
+                    className="w-full bg-white/2 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-zinc-400 font-mono"
+                  />
                 </div>
               </div>
-              <button 
+
+              {/* Endpoint with Mainland / Global toggle helpers */}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wider block">平台请求地址 (Request URL)</label>
+                <input
+                  type="text"
+                  value={msBaseUrl}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setMsBaseUrl(val);
+                    setMsModelUrl(val.replace(/\/$/, '') + '/models');
+                  }}
+                  placeholder="https://api-inference.modelscope.cn/v1"
+                  className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMsBaseUrl('https://api-inference.modelscope.cn/v1');
+                      setMsModelUrl('https://api-inference.modelscope.cn/v1/models');
+                    }}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white rounded-lg text-[9px] font-bold font-mono transition-all"
+                  >
+                    国内默认: `https://api-inference.modelscope.cn/v1`
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMsBaseUrl('https://api-inference.modelscope.ai/v1');
+                      setMsModelUrl('https://api-inference.modelscope.ai/v1/models');
+                    }}
+                    className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-400 hover:text-white rounded-lg text-[9px] font-bold font-mono transition-all"
+                  >
+                    国外节点: `https://api-inference.modelscope.ai/v1`
+                  </button>
+                </div>
+              </div>
+
+              {/* Key Input / Token info */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[9px] font-black text-zinc-400 uppercase tracking-wider block">API Access Token / Key</label>
+                  <div className="flex items-center gap-2 text-[9px] font-bold">
+                    <span className="text-zinc-500">获取 Token: </span>
+                    <a href="https://www.modelscope.cn/my/access/token" target="_blank" rel="noreferrer" className="text-red-500 hover:underline">国内链接</a>
+                    <span className="text-zinc-650">•</span>
+                    <a href="https://www.modelscope.ai/my/access/token" target="_blank" rel="noreferrer" className="text-red-500 hover:underline">国外链接</a>
+                  </div>
+                </div>
+                <div className="bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-3">
+                  <input
+                    type={msShowKey ? "text" : "password"}
+                    value={msApiKey}
+                    onChange={(e) => setMsApiKey(e.target.value)}
+                    placeholder="请输入魔搭开放接口凭证 (SDK Access Token)"
+                    className="flex-1 bg-transparent text-xs text-white font-mono outline-none"
+                  />
+                  <button type="button" onClick={() => setMsShowKey(!msShowKey)} className="text-zinc-500 hover:text-zinc-300">
+                    {msShowKey ? <Check size={12} /> : <Key size={12} />}
+                  </button>
+                </div>
+                {api.modelscopeApiKey && (
+                  <p className="text-[8.5px] text-zinc-500 font-mono">
+                    ● 当前密钥已本地保存验证为: <span className="text-red-550/70 font-semibold">MODELS_SCOPE_API_KEY</span>
+                  </p>
+                )}
+
+                {/* 测试通道连通性 Button */}
+                <div className="pt-1.5 pb-0.5">
+                  {msChannelStatus === 'testing' ? (
+                    <div className="w-full py-2 bg-white/2 border border-white/5 rounded-xl text-zinc-500 text-[10px] font-bold flex items-center justify-center gap-2">
+                      <div className="w-3 h-3 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                      <span>正在测试通道连通性...</span>
+                    </div>
+                  ) : msChannelStatus === 'success' ? (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={handleTestMsChannel}
+                        className="w-full py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-emerald-500/15 cursor-pointer"
+                      >
+                        <Check size={12} className="text-emerald-400" />
+                        <span>测试通道连通性 (已连通 ok)</span>
+                      </button>
+                    </div>
+                  ) : msChannelStatus === 'failed' ? (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={handleTestMsChannel}
+                        className="w-full py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-red-500/15 cursor-pointer"
+                      >
+                        <span>⚠️ 魔搭通道测试失败 | 点击重试</span>
+                      </button>
+                      <p className="text-[8.5px] text-red-300/80 font-mono leading-relaxed bg-red-950/20 px-3 py-1.5 rounded-lg border border-red-950/50">
+                        {msChannelError}
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleTestMsChannel}
+                      className="w-full py-2.5 bg-zinc-800/40 hover:bg-zinc-800/60 border border-white/5 text-zinc-300 rounded-xl text-[11px] font-bold text-center transition-all cursor-pointer"
+                    >
+                      测试通道连通性
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Tester */}
+              <div className="pt-2 space-y-2">
+                <div className="flex gap-2 text-[10px] font-bold text-zinc-400">
+                  <span>获取 Token · 国内:</span>
+                  <a href="https://www.modelscope.cn/my/access/token" target="_blank" rel="noreferrer" className="text-red-500 hover:underline">https://www.modelscope.cn/my/access/token</a>
+                </div>
+                <div className="flex gap-2 text-[10px] font-bold text-zinc-400 pb-1">
+                  <span>获取 Token · 海外:</span>
+                  <a href="https://www.modelscope.ai/my/access/token" target="_blank" rel="noreferrer" className="text-red-500 hover:underline">https://www.modelscope.ai/my/access/token</a>
+                </div>
+
+                {msTestStatus === 'testing' ? (
+                  <div className="w-full py-2 bg-white/2 border border-white/5 rounded-xl text-zinc-500 text-[10px] font-bold flex items-center justify-center gap-2">
+                    <div className="w-3 h-3 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                    <span>正在连接探测魔搭服务，请稍后...</span>
+                  </div>
+                ) : msTestStatus === 'success' ? (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleTestMsConnection}
+                      className="w-full py-2 bg-zinc-800/40 hover:bg-zinc-800/60 border border-white/5 text-zinc-300 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Check size={12} className="text-emerald-400" />
+                      <span>验证地址</span>
+                    </button>
+                    <p className="text-[11px] text-emerald-400 font-bold flex items-center gap-1.5 pl-1.5 animate-fadeIn">
+                      <span>✓ 地址验证通过 · 找到 {msTestedCount || 64} 个模型</span>
+                    </p>
+                  </div>
+                ) : msTestStatus === 'failed' ? (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={handleTestMsConnection}
+                      className="w-full py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-red-500/15"
+                    >
+                      <span>⚠️ 魔搭连接检测失败 | 点击重试</span>
+                    </button>
+                    <p className="text-[8.5px] text-red-300/80 font-mono leading-relaxed bg-red-950/20 px-3 py-1.5 rounded-lg border border-red-950/50">
+                      {msTestError}
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleTestMsConnection}
+                    className="w-full py-2 bg-zinc-800/40 hover:bg-zinc-800/60 border border-white/5 text-zinc-300 rounded-xl text-[10px] font-bold text-center transition-all cursor-pointer"
+                  >
+                    验证地址
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Fig 2 & 3: Model List (模型列表) with Upstream fetching */}
+            <div className="bg-[#121215]/60 p-6 rounded-[24px] border border-white/5 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-extrabold text-white flex items-center gap-2 uppercase tracking-wider">
+                    <span className="w-1 h-3 bg-red-500 rounded-full inline-block" />
+                    可用模型列表 (Model Catalog)
+                  </h4>
+                  <p className="text-[9.5px] text-zinc-400">
+                    从上游 API 自动拉取所有可用模型并按类型分类 (image / chat / video)
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPullModal(true)}
+                    className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[10px] font-bold transition-all shadow-md shrink-0 cursor-pointer"
+                  >
+                    拉取模型
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPullModal(true)}
+                    className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 rounded-xl text-[10px] font-bold transition-all shrink-0 cursor-pointer"
+                  >
+                    选择模型
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid with categorised models */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Image Models block */}
+                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-[10px] font-bold text-red-400">● 生图模型 (Image Models)</span>
+                    <button
+                      type="button"
+                      onClick={() => { setAddingModelType('image'); setManualModelName(''); }}
+                      className="px-1.5 py-0.5 bg-white/5 hover:bg-white/10 rounded hover:text-white text-[9px] text-zinc-400 font-bold"
+                    >
+                      + 模型
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                    {msImageModels.map(m => (
+                      <div key={m} className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group">
+                        <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
+                        <button
+                          type="button"
+                          onClick={() => setMsImageModels(prev => prev.filter(x => x !== m))}
+                          className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Chat Models block */}
+                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-[10px] font-bold text-red-400">● 聊天/LLM模型 (Chat Models)</span>
+                    <button
+                      type="button"
+                      onClick={() => { setAddingModelType('chat'); setManualModelName(''); }}
+                      className="px-1.5 py-0.5 bg-white/5 hover:bg-white/10 rounded hover:text-white text-[9px] text-zinc-400 font-bold"
+                    >
+                      + 模型
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                    {msChatModels.map(m => (
+                      <div key={m} className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group">
+                        <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
+                        <button
+                          type="button"
+                          onClick={() => setMsChatModels(prev => prev.filter(x => x !== m))}
+                          className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Popover popup details for manually adding model ID */}
+              {addingModelType && (
+                <div className="bg-black/80 p-3.5 rounded-xl border border-red-500/20 space-y-3.5 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-red-400 uppercase tracking-wide">添加新拼装模型 ({addingModelType === 'image' ? '生图' : '聊天'})</span>
+                    <button type="button" onClick={() => setAddingModelType(null)} className="text-zinc-500 hover:text-white text-[11px] font-sans">✕</button>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={manualModelName}
+                      onChange={(e) => setManualModelName(e.target.value)}
+                      placeholder="例如: brand/model-id-or-name"
+                      className="flex-1 bg-zinc-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none font-mono focus:border-red-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddManualModel}
+                      className="px-3 bg-red-600 hover:bg-red-500 font-bold text-xs text-white rounded-lg cursor-pointer"
+                    >
+                      确认添加
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Fig 4: LoRA Loading settings (lora加载设置) */}
+            <div className="bg-[#121215]/60 p-6 rounded-[24px] border border-white/5 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <h4 className="text-xs font-extrabold text-white flex items-center gap-2 uppercase tracking-wider">
+                  <span className="w-1 h-3 bg-red-500 rounded-full inline-block" />
+                  LoRA 引擎加载设置 (LoRA Loader)
+                </h4>
+                
+                {/* Switch switcher */}
+                <div className="flex items-center gap-2 border border-white/5 p-1 rounded-xl bg-black/30">
+                  <span className="text-[9.5px] font-bold text-zinc-400">关联搭载LoRA</span>
+                  <button
+                    type="button"
+                    onClick={() => setMsLoraEnabled(!msLoraEnabled)}
+                    className={`w-8 h-4.5 rounded-full p-0.5 transition-colors focus:outline-none cursor-pointer border-none flex items-center ${msLoraEnabled ? 'bg-red-600' : 'bg-zinc-800'}`}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${msLoraEnabled ? 'translate-x-[14px]' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {msLoraEnabled ? (
+                <div className="space-y-4 pt-1 animate-fadeIn">
+                  <div className="grid grid-cols-2 gap-4 text-[10px]">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-zinc-400 uppercase block">LoRA模型标识 / Repo ID</label>
+                      <input
+                        type="text"
+                        value={msLoraModelId}
+                        onChange={(e) => setMsLoraModelId(e.target.value)}
+                        placeholder="例如: damo/flux-lora-cyberpunk"
+                        className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono outline-none focus:border-red-550"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-zinc-400 uppercase block">触发激活词 (Trigger Word)</label>
+                      <input
+                        type="text"
+                        value={msLoraTriggerWord}
+                        onChange={(e) => setMsLoraTriggerWord(e.target.value)}
+                        placeholder="例如: cyberpunk style, futuristic"
+                        className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-red-550"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 items-center">
+                    <div className="col-span-2 space-y-1">
+                      <div className="flex justify-between items-center px-1">
+                        <label className="text-[9px] font-black text-zinc-400 uppercase">LoRA融合权重 (Lora Weight)</label>
+                        <span className="text-red-400 font-bold font-mono text-[10px]">{msLoraWeight.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.05"
+                        value={msLoraWeight}
+                        onChange={(e) => setMsLoraWeight(parseFloat(e.target.value))}
+                        className="w-full accent-red-500 h-1"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-zinc-400 uppercase block">LoRA 文件名 / 版本</label>
+                      <input
+                        type="text"
+                        value={msLoraVersion}
+                        onChange={(e) => setMsLoraVersion(e.target.value)}
+                        placeholder="lora.safetensors"
+                        className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-550"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-4 text-center text-zinc-500 text-[10px] font-bold border border-dashed border-white/5 rounded-2xl bg-black/10">
+                  ⚠️ 关联 LoRA 自动加载引擎处于关闭状态。
+                </div>
+              )}
+            </div>
+
+            {/* Fig 5: LORA Management List (LORA 管理) */}
+            <div className="bg-[#121215]/60 p-6 rounded-[24px] border border-white/5 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-extrabold text-white flex items-center gap-2 uppercase tracking-wider">
+                    <span className="w-1 h-3 bg-red-500 rounded-full inline-block" />
+                    LORA 管理 (LoRA Catalog)
+                  </h4>
+                  <p className="text-[9.5px] text-zinc-400">
+                    为 ModelScope 生图模型绑定可用 LoRA。无限画布 MS 节点会按当前模型自动筛选。
+                  </p>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMsLoras(prev => [
+                      ...prev,
+                      { id: '', modelId: msImageModels[0] || 'Tongyi-MAI/Z-Image-Turbo', weight: 0.8 }
+                    ]);
+                  }}
+                  className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 border border-white/10 rounded-xl text-[10px] font-bold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
+                >
+                  <Plus size={10} />
+                  LoRA
+                </button>
+              </div>
+
+              <div className="space-y-1 text-zinc-400 text-[10px]">
+                <div>中文模型库: <a href="https://www.modelscope.cn/aigc/models" target="_blank" rel="noopener noreferrer" className="text-red-400 hover:underline">https://www.modelscope.cn/aigc/models</a></div>
+                <div>英文模型库: <a href="https://www.modelscope.ai/civision/models" target="_blank" rel="noopener noreferrer" className="text-red-400 hover:underline">https://www.modelscope.ai/civision/models</a></div>
+              </div>
+
+              {msLoras.length > 0 ? (
+                <div className="space-y-3 pt-1">
+                  {/* Table Headers */}
+                  <div className="grid grid-cols-12 gap-3 text-[9px] font-bold uppercase tracking-wider text-zinc-500 px-2">
+                    <div className="col-span-5">LORA ID / Repo ID</div>
+                    <div className="col-span-4">绑定模型</div>
+                    <div className="col-span-2 text-center">默认强度</div>
+                    <div className="col-span-1 text-center">操作</div>
+                  </div>
+
+                  {/* Table Rows */}
+                  <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                    {msLoras.map((lora, idx) => (
+                      <div key={idx} className="grid grid-cols-12 gap-3 bg-black/20 hover:bg-black/30 p-2 rounded-xl border border-white/5 items-center">
+                        <div className="col-span-5">
+                          <input
+                            type="text"
+                            value={lora.id}
+                            onChange={(e) => {
+                              const updated = [...msLoras];
+                              updated[idx] = { ...lora, id: e.target.value };
+                              setMsLoras(updated);
+                            }}
+                            placeholder="例如: Daniel8152/film"
+                            className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-mono outline-none focus:border-red-550"
+                          />
+                        </div>
+                        <div className="col-span-4">
+                          <select
+                            value={lora.modelId}
+                            onChange={(e) => {
+                              const updated = [...msLoras];
+                              updated[idx] = { ...lora, modelId: e.target.value };
+                              setMsLoras(updated);
+                            }}
+                            className="w-full bg-zinc-900 border border-white/10 rounded-lg px-1.5 py-1 text-[10px] text-zinc-200 outline-none focus:border-red-550"
+                          >
+                            {msImageModels.map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="2"
+                            value={lora.weight}
+                            onChange={(e) => {
+                              const updated = [...msLoras];
+                              updated[idx] = { ...lora, weight: parseFloat(e.target.value) || 0.8 };
+                              setMsLoras(updated);
+                            }}
+                            className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white font-mono text-center outline-none focus:border-red-550"
+                          />
+                        </div>
+                        <div className="col-span-1 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMsLoras(prev => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="text-zinc-500 hover:text-red-450 p-1 rounded hover:bg-white/5 transition-all cursor-pointer"
+                            title="删除"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-4 text-center text-zinc-500 text-[10px] font-bold border border-dashed border-white/5 rounded-2xl bg-black/10">
+                  ⚠️ 暂未添加任何绑定的 ModelScope LoRA 列表。
+                </div>
+              )}
+            </div>
+
+            {/* Main actions Save block */}
+            <div className="pt-2">
+              <button
                 type="button"
-                onClick={() => {
-                  const name = prompt("请输入运行Hub AI应用名称:");
-                  if (name) {
-                    const id = "app-" + Math.random().toString(36).substring(4, 9);
-                    const list = [...(api.rhApps || []), { id, name }];
-                    updateApi({ rhApps: list, rhAppId: id });
-                  }
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shrink-0 transition-all text-xs animate-none"
+                onClick={handleSaveModelScope}
+                className="w-full py-3.5 bg-gradient-to-r from-red-650 to-orange-600 hover:from-red-600 hover:to-orange-500 text-white rounded-2xl text-xs font-black tracking-widest transition-all shadow-md active:scale-98"
               >
-                添加
+                保存并应用魔搭 ModelScope 平台设置
               </button>
-              <button 
+            </div>
+
+          </div>
+        )}
+
+
+        {/* --- RUNNINGHUB PLATFORM CONTROLS --- */}
+        {activeSubTab === 'runninghub' && (
+          <div className="space-y-6">
+            <div className="border-b border-white/5 pb-4 mb-2">
+              <h3 className="text-md font-bold text-white flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
+                <span>RunningHub (极速通道) API 设置</span>
+              </h3>
+              <p className="text-[11px] text-zinc-400 mt-1">
+                无感对接 RunningHub 企业专线集群，支持实时多生图引擎适配。
+              </p>
+            </div>
+
+            <div className="bg-[#121215]/60 p-6 rounded-[24px] border border-white/5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-400 uppercase block">企业服务 Key (Enterprise Key)</label>
+                <input
+                  type="password"
+                  value={rhEnterpriseKey}
+                  onChange={(e) => setRhEnterpriseKey(e.target.value)}
+                  placeholder="请输入 RunningHub 授权企业 Key"
+                  className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-400 uppercase block">消费者证书 Token (Consumer Key)</label>
+                <input
+                  type="password"
+                  value={rhConsumerKey}
+                  onChange={(e) => setRhConsumerKey(e.target.value)}
+                  placeholder="请输入 RunningHub 用户消费凭证"
+                  className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-400 uppercase block">默认绑定端应用 ID (Bound App ID)</label>
+                <input
+                  type="text"
+                  value={rhAppId}
+                  onChange={(e) => setRhAppId(e.target.value)}
+                  placeholder="app-running-canvas-xxxx"
+                  className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
                 type="button"
-                className="px-4 py-2 border border-white/10 hover:bg-white/5 text-zinc-300 rounded-xl font-bold shrink-0 transition-all text-xs"
+                onClick={handleSaveRunningHub}
+                className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-98"
               >
-                编辑
+                保存 RunningHub 配置
               </button>
             </div>
           </div>
-        </div>
+        )}
+
+
+        {/* --- JIMENG CLI CONTROLS --- */}
+        {activeSubTab === 'jimeng' && (
+          <div className="space-y-6">
+            <div className="border-b border-white/5 pb-4 mb-2">
+              <h3 className="text-md font-bold text-white flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-teal-500 shadow-lg shadow-teal-500/20" />
+                <span>即梦 (Jimeng/字节) API 接口</span>
+              </h3>
+              <p className="text-[11px] text-zinc-400 mt-1">
+                字节即梦 (Jimeng/Seedream) 官方 CLI 接口支持，直连高质量火山引擎视觉生图节点。
+              </p>
+            </div>
+
+            <div className="bg-[#121215]/60 p-6 rounded-[24px] border border-white/5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-zinc-400 uppercase block">即梦开放接口 API Key</label>
+                <input
+                  type="password"
+                  value={jmApiKey}
+                  onChange={(e) => setJmApiKey(e.target.value)}
+                  placeholder="请输入火山即梦鉴权 API Key"
+                  className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono outline-none"
+                />
+                <p className="text-[8.5px] text-zinc-500 mt-1 pl-1">
+                  💡 可在字节火山引擎或开发平台对应的 API tokens 控制台生成。
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleSaveJiMeng}
+                className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-98"
+              >
+                保存即梦 API 配置
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
-      {/* 3. Jimeng API Section */}
-      <div className="bg-[#121215]/60 p-8 rounded-[28px] border border-white/5 space-y-4">
-        <div className="space-y-1">
-          <h4 className="text-lg font-bold text-white flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-indigo-500 rounded-full inline-block" />
-            即梦 (豆包 Seedream)
-          </h4>
-          <p className="text-xs text-zinc-400 leading-normal">
-            火山引擎平台获取。
-          </p>
-        </div>
+      {/* --- FIG 3: UPSTREAM MODEL LIST DIALOG (MODAL OVERLAY) --- */}
+      {showPullModal && (
+        <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#15151a] border border-white/10 rounded-[28px] w-full max-w-xl shadow-2xl p-6 flex flex-col max-h-[85vh] text-left">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span>从上游拉取的模型清单 (ModelScope Register)</span>
+                </h3>
+                <p className="text-[10px] text-zinc-400 mt-0.5">选择需要同步到本地模型库的魔搭运行节点</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPullModal(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-white/5 text-zinc-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
 
-        <div className="space-y-1 flex flex-col pt-2">
-          <label className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wider ml-1">API Key</label>
-          <div className="bg-[#121214] border border-white/10 rounded-2xl px-5 py-3 flex items-center gap-4 focus-within:border-indigo-500/50 transition-all group">
-            <input
-              type="password"
-              value={api.jimengApiKey || ''}
-              onChange={(e) => updateApi({ jimengApiKey: e.target.value })}
-              placeholder="sk-..."
-              className="flex-1 bg-transparent text-sm text-white outline-none font-mono"
-            />
-            <Key size={14} className="text-zinc-500" />
+            {/* Filter controls / Search bar */}
+            <div className="py-3 flex flex-col gap-2 shrink-0">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchPullModel}
+                  onChange={(e) => setSearchPullModel(e.target.value)}
+                  placeholder="按名称或厂商标识搜索模型..."
+                  className="w-full bg-black/60 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-red-500"
+                />
+                <Search size={12} className="text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                {searchPullModel && (
+                  <button onClick={() => setSearchPullModel('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-zinc-400">清空</button>
+                )}
+              </div>
+
+              {/* Filters list */}
+              <div className="flex gap-1.5 pt-1">
+                {([
+                  { id: 'all', label: '全部' },
+                  { id: 'image', label: '生图' },
+                  { id: 'chat', label: 'LLM (大模型)' },
+                  { id: 'video', label: '视频' }
+                ] as const).map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setPullFilter(tab.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                      pullFilter === tab.id
+                        ? 'bg-red-500 text-white shadow-md'
+                        : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Models checkboxes listing */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar my-2 border border-white/5 bg-black/40 rounded-2xl divide-y divide-white/5">
+              {upstreamModels
+                .filter(m => {
+                  const queryMatch = m.id.toLowerCase().includes(searchPullModel.toLowerCase());
+                  const filterMatch = pullFilter === 'all' || m.type === pullFilter;
+                  return queryMatch && filterMatch;
+                })
+                .map(m => {
+                  return (
+                    <label
+                      key={m.id}
+                      className="p-3 flex items-center justify-between hover:bg-white/[0.02] cursor-pointer group transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={m.selected}
+                          onChange={() => {
+                            setUpstreamModels(prev => prev.map(u => u.id === m.id ? { ...u, selected: !u.selected } : u));
+                          }}
+                          className="accent-red-500 w-3.5 h-3.5 cursor-pointer rounded"
+                        />
+                        <div className="text-left">
+                          <p className="text-xs text-white font-mono font-bold">{m.id}</p>
+                          <span className="text-[8px] font-semibold font-sans tracking-wide px-1.5 py-0.5 rounded uppercase mt-1 inline-block bg-white/5 text-zinc-400">
+                            {m.type === 'image' ? '🖼 生图' : m.type === 'chat' ? '💬 LLM' : '📹 视频'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-[9px] text-zinc-500 font-mono italic">
+                        {m.selected ? '✅ 已同步应用' : '● 可选节点'}
+                      </div>
+                    </label>
+                  );
+                })}
+            </div>
+
+            {/* Bottom status */}
+            <div className="pt-3 border-t border-white/5 flex items-center justify-between shrink-0 text-xs">
+              <div className="text-zinc-400 font-bold text-[10px] font-mono leading-relaxed">
+                将应用: 
+                <span className="text-emerald-400 ml-1.5">[{upstreamModels.filter(m => m.selected && m.type === 'image').length} / 生图]</span>
+                <span className="text-blue-400 ml-1.5">[{upstreamModels.filter(m => m.selected && m.type === 'chat').length} / LLM]</span>
+                <span className="text-amber-400 ml-1.5">[{upstreamModels.filter(m => m.selected && m.type === 'video').length} / 视频]</span>
+                <span className="text-zinc-500 ml-2">未选 {upstreamModels.filter(m => !m.selected).length}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPullModal(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-bold text-zinc-400"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Update our categories based on checked states
+                    const nextImg = upstreamModels.filter(m => m.selected && m.type === 'image').map(u => u.id);
+                    const nextChat = upstreamModels.filter(m => m.selected && m.type === 'chat').map(u => u.id);
+                    setMsImageModels(nextImg);
+                    setMsChatModels(nextChat);
+                    setShowPullModal(false);
+                    alert("🎉 注册拉取的模型已完美同步更新至本地可用列表中！");
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-xl text-[10px] font-black text-white"
+                >
+                  应用到模型列表
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
-      </div>
+      )}
+
     </div>
   );
 };

@@ -215,3 +215,35 @@ body {
   pointer-events: none !important;
 }
 
+/* Visually hide all resize corner handle handles so they are completely invisible, but keep them interactable */
+.react-flow__resize-control.handle {
+  opacity: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Also visually hide the resize outline border lines */
+.react-flow__resize-control.line {
+  opacity: 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+/* All selected nodes: completely hide selection highlight border colors, outlines, rings, and active shadows */
+.react-flow__node.selected > .relative.border,
+.react-flow__node.selected > .border,
+.react-flow__node.selected > div,
+.react-flow__node.selected > main,
+.react-flow__node.selected > div > .relative.border,
+.react-flow__node.selected > div > .border,
+.react-flow__node.selected > div > div.border,
+.react-flow__node.selected > div > div.border-2 {
+  border-color: var(--border) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important; /* normal shadow-2xl */
+  --tw-ring-width: 0px !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-width: 0px !important;
+  outline: none !important;
+}
+

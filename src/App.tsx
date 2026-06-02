@@ -54,6 +54,7 @@ import {
   Coins,
   ChevronRight,
   Maximize2,
+  Minimize2,
   Grid,
   Search,
   Paperclip,
@@ -228,6 +229,136 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     groupSelectedNodes,
     ungroupNode,
   } = useStore();
+
+  const mainContainerRef = useRef<HTMLDivElement>(null);
+  const [cuttingPoints, setCuttingPoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [isCutting, setIsCutting] = useState(false);
+
+  const onEdgesChangeRef = useRef(onEdgesChange);
+  useEffect(() => {
+    onEdgesChangeRef.current = onEdgesChange;
+  }, [onEdgesChange]);
+
+  useEffect(() => {
+    const mainEl = mainContainerRef.current;
+    if (!mainEl) return;
+
+    let localIsCutting = false;
+    let activePoints: Array<{ x: number; y: number }> = [];
+    let lastCutTime = 0;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // 2 is Right-Click
+      if (e.button === 2 && e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        localIsCutting = true;
+        setIsCutting(true);
+
+        const rect = mainEl.getBoundingClientRect();
+        const firstPoint = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        };
+        activePoints = [firstPoint];
+        setCuttingPoints([firstPoint]);
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!localIsCutting) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = mainEl.getBoundingClientRect();
+      const currentPoint = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+
+      activePoints.push(currentPoint);
+      setCuttingPoints([...activePoints]);
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (localIsCutting) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Perform visual intersection analysis in a single batch on mouse release
+        const rect = mainEl.getBoundingClientRect();
+        const detectedEdgeIds = new Set<string>();
+
+        for (let i = 0; i < activePoints.length - 1; i++) {
+          const p1 = activePoints[i];
+          const p2 = activePoints[i + 1];
+          const x1 = p1.x + rect.left;
+          const y1 = p1.y + rect.top;
+          const x2 = p2.x + rect.left;
+          const y2 = p2.y + rect.top;
+
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const steps = Math.ceil(distance / 4); // check every 4px for high accuracy
+
+          for (let s = 0; s <= steps; s++) {
+            const t = steps === 0 ? 0 : s / steps;
+            const ix = x1 + dx * t;
+            const iy = y1 + dy * t;
+
+            if (document.elementsFromPoint) {
+              const elements = document.elementsFromPoint(ix, iy);
+              for (const el of elements) {
+                const edgeContainer = el.closest(".react-flow__edge");
+                if (edgeContainer) {
+                  const edgeId = edgeContainer.getAttribute("data-id");
+                  if (edgeId) {
+                    detectedEdgeIds.add(edgeId);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (detectedEdgeIds.size > 0) {
+          const edgeChanges = Array.from(detectedEdgeIds).map((id) => ({
+            id,
+            type: "remove" as const,
+          }));
+          onEdgesChangeRef.current(edgeChanges);
+        }
+
+        localIsCutting = false;
+        setIsCutting(false);
+        activePoints = [];
+        setCuttingPoints([]);
+        lastCutTime = Date.now();
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      if (e.altKey || localIsCutting || (Date.now() - lastCutTime < 150)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    mainEl.addEventListener("mousedown", handleMouseDown, { capture: true });
+    window.addEventListener("mousemove", handleMouseMove, { capture: true });
+    window.addEventListener("mouseup", handleMouseUp, { capture: true });
+    mainEl.addEventListener("contextmenu", handleContextMenu, { capture: true });
+
+    return () => {
+      mainEl.removeEventListener("mousedown", handleMouseDown, { capture: true });
+      window.removeEventListener("mousemove", handleMouseMove, { capture: true });
+      window.removeEventListener("mouseup", handleMouseUp, { capture: true });
+      mainEl.removeEventListener("contextmenu", handleContextMenu, { capture: true });
+    };
+  }, []);
+
   const {
     fitView,
     screenToFlowPosition,
@@ -418,6 +549,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [connectingHandle, setConnectingHandle] = useState<any | null>(null);
   const connectionMade = useRef(false);
   const [inputText, setInputText] = useState("");
+  const [isAssistantMaximized, setIsAssistantMaximized] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<any[]>([]);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -662,6 +794,10 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   const onPaneContextMenu = useCallback(
     (event: React.MouseEvent) => {
+      if (event.altKey) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -1451,6 +1587,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
 
         {/* Canvas Area */}
         <main
+          ref={mainContainerRef}
           className={`flex-1 overflow-hidden relative group/canvas transition-all border-4 ${
             isCanvasDragging
               ? "border-accent/50 bg-accent/5"
@@ -1677,6 +1814,11 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                         <kbd className="px-1.5 py-0.5 bg-white/10 border border-white/20 rounded font-mono text-[10px] text-white">R</kbd>
                         <span className="text-gray-400 font-normal">等比放缩</span>
                       </div>
+                      <span className="text-gray-600">/</span>
+                      <div className="flex items-center gap-1.5">
+                        <kbd className="px-1.5 py-0.5 bg-white/10 border border-white/20 rounded font-mono text-[10px] text-white">Alt + 右键划线</kbd>
+                        <span className="text-gray-400 font-normal">切刀删线</span>
+                      </div>
                     </div>
 
                     <button 
@@ -1839,6 +1981,33 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
 
             <AlignmentToolbar />
           </ReactFlow>
+
+          {/* Cutting Overlay SVG (Alt + Drag Right-Click) */}
+          {cuttingPoints.length > 1 && (
+            <svg className="absolute inset-0 pointer-events-none z-[9999]">
+              {/* Dark subtle shadow/backing stroke to maximize readability over light node contents and images */}
+              <path
+                d={`M ${cuttingPoints[0].x} ${cuttingPoints[0].y} ` + cuttingPoints.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ")}
+                fill="none"
+                stroke="rgba(0, 0, 0, 0.4)"
+                strokeWidth="5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {/* High-fidelity glowing white core stroke representing the laser-like blade cut path */}
+              <path
+                d={`M ${cuttingPoints[0].x} ${cuttingPoints[0].y} ` + cuttingPoints.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ")}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  filter: "drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 4px rgba(255, 255, 255, 0.6))",
+                }}
+              />
+            </svg>
+          )}
         </main>
       </div>
 
@@ -1849,16 +2018,19 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
             {/* Right Assistant Hover Sensor */}
             <div 
               onMouseEnter={() => setIsAssistantHovered(true)}
-              className="fixed right-0 top-0 bottom-0 w-3 z-40 pointer-events-auto"
+              className={`fixed right-0 top-0 bottom-0 w-3 z-40 pointer-events-auto ${isAssistantMaximized ? "hidden" : ""}`}
             />
             <motion.div
               onMouseEnter={() => setIsAssistantHovered(true)}
               onMouseLeave={() => setIsAssistantHovered(false)}
-              initial={{ x: 400 }}
-              animate={{ x: isAssistantHovered ? 0 : 400 }}
+              initial={{ x: 400, width: "400px" }}
+              animate={{ 
+                x: isAssistantMaximized ? 0 : (isAssistantHovered ? 0 : 400),
+                width: isAssistantMaximized ? "100vw" : "400px"
+              }}
               exit={{ x: 400 }}
               transition={{ type: "tween", duration: 0.3 }}
-              className="fixed right-0 top-0 bottom-0 w-[400px] bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col z-50 overflow-hidden shadow-[-20px_0_40px_rgba(0,0,0,0.5)]"
+              className="fixed right-0 top-0 bottom-0 bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col z-50 overflow-hidden shadow-[-20px_0_40px_rgba(0,0,0,0.5)]"
             >
             <div
               className={`p-6 flex items-center justify-between border-b border-[var(--border)] transition-all ${
@@ -1874,11 +2046,18 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors">
-                  <Maximize2 size={16} />
+                <button 
+                  onClick={() => setIsAssistantMaximized(!isAssistantMaximized)}
+                  className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors"
+                  title={isAssistantMaximized ? "缩小" : "全屏"}
+                >
+                  {isAssistantMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 </button>
                 <button
-                  onClick={toggleAssistant}
+                  onClick={() => {
+                    toggleAssistant();
+                    setIsAssistantMaximized(false);
+                  }}
                   className="p-2 hover:bg-red-500/10 rounded-lg text-[var(--text-secondary)] hover:text-red-400 transition-colors"
                 >
                   <X size={16} />
@@ -1924,18 +2103,22 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                     <SuggestionCard
                       icon={<Compass size={16} />}
                       title="寻找创作灵感"
+                      onClick={() => setInputText("寻找创作灵感")}
                     />
                     <SuggestionCard
                       icon={<Sparkles size={16} />}
                       title="优化提示词 DNA"
+                      onClick={() => setInputText("优化提示词 DNA")}
                     />
                     <SuggestionCard
                       icon={<Cloud size={16} />}
                       title="生成环境模拟"
+                      onClick={() => setInputText("生成环境模拟")}
                     />
                     <SuggestionCard
                       icon={<ImageIcon size={16} />}
                       title="批量节点管理"
+                      onClick={() => setInputText("批量节点管理")}
                     />
                   </div>
 
@@ -2276,84 +2459,69 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                 <div className="relative group/model">
                   <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/5 rounded-xl border border-[var(--border)] hover:bg-white/10 cursor-pointer transition-colors">
                     <span className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1">
-                      {settings.apiSettings.engine} |{" "}
-                      {settings.apiSettings.imageEngine}
+                      {(() => {
+                        const activeId = settings.apiSettings.activeProfileId;
+                        const profilesList = settings.apiSettings.profiles || [];
+                        const activeProf = profilesList.find((p: any) => p.id === activeId);
+                        return activeProf ? activeProf.name : (settings.apiSettings.engine || '').toUpperCase();
+                      })()} | {settings.apiSettings.imageEngine}
                     </span>
                     <ChevronUp size={12} className="text-gray-500" />
                   </div>
 
                   <div className="absolute bottom-full right-0 mb-2 w-56 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl shadow-2xl opacity-0 invisible group-hover/model:opacity-100 group-hover/model:visible transition-all z-50 overflow-hidden">
                     <div className="p-2 flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      <span className="text-sm font-bold text-gray-500 uppercase tracking-widest px-2 py-1">
+                      <span className="text-sm font-bold text-gray-500 uppercase tracking-widest px-2 py-1 select-none border-b border-white/5 mb-1">
                         Text Models
                       </span>
-                      <button
-                        onClick={() =>
-                          updateSettings({
-                            apiSettings: {
-                              ...settings.apiSettings,
-                              isCustom: true,
-                              engine: "gemini",
-                              modelId: "gemini-1.5-flash",
-                              baseUrl:
-                                "https://generativelanguage.googleapis.com",
-                            },
-                          })
-                        }
-                        className="px-3 py-2 text-base text-gray-300 hover:bg-accent hover:text-white rounded-lg text-left transition-colors"
-                      >
-                        Gemini 1.5
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateSettings({
-                            apiSettings: {
-                              ...settings.apiSettings,
-                              isCustom: true,
-                              engine: "doubao",
-                              modelId: "doubao-pro-32k",
-                              baseUrl:
-                                "https://ark.cn-beijing.volces.com/api/v3",
-                            },
-                          })
-                        }
-                        className="px-3 py-2 text-base text-gray-300 hover:bg-accent hover:text-white rounded-lg text-left transition-colors"
-                      >
-                        Doubao Pro
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateSettings({
-                            apiSettings: {
-                              ...settings.apiSettings,
-                              isCustom: true,
-                              engine: "qianwen",
-                              modelId: "qwen-max",
-                              baseUrl:
-                                "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                            },
-                          })
-                        }
-                        className="px-3 py-2 text-base text-gray-300 hover:bg-accent hover:text-white rounded-lg text-left transition-colors"
-                      >
-                        Qwen Max
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateSettings({
-                            apiSettings: {
-                              ...settings.apiSettings,
-                              isCustom: true,
-                              engine: "deepseek",
-                              modelId: "deepseek-chat",
-                              baseUrl: "https://api.deepseek.com",
-                            },
-                          })
-                        }
-                        className="px-3 py-2 text-base text-gray-300 hover:bg-accent hover:text-white rounded-lg text-left transition-colors"
-                      >
-                        DeepSeek Chat
-                      </button>
+                      {(() => {
+                        const rawProfiles = settings.apiSettings.profiles || [];
+                        const displayProfiles = rawProfiles.length > 0 ? rawProfiles : [
+                          { id: "gemini", name: "Gemini 官方", engine: "gemini", baseUrl: "https://generativelanguage.googleapis.com", apiKey: settings.apiSettings.apiKey || "", modelId: "gemini-2.5-flash" },
+                          { id: "openai", name: "OpenAI 官方", engine: "openai", baseUrl: "https://api.openai.com/v1", apiKey: "", modelId: "gpt-4o-mini" },
+                          { id: "claude", name: "Claude 官方", engine: "claude", baseUrl: "https://api.openai.com/v1", apiKey: "", modelId: "claude-3-5-sonnet-20241022" },
+                          { id: "deepseek", name: "DeepSeek 官方", engine: "deepseek", baseUrl: "https://api.deepseek.com", apiKey: "", modelId: "deepseek-chat" },
+                          { id: "doubao", name: "火山引擎 (豆包)", engine: "doubao", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", apiKey: "", modelId: "doubao-pro-32k" },
+                          { id: "qianwen", name: "通义千问", engine: "qianwen", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: "", modelId: "qwen-max" }
+                        ];
+
+                        return displayProfiles.map((prof: any) => {
+                          const isSelected = settings.apiSettings.activeProfileId === prof.id || 
+                            (!settings.apiSettings.activeProfileId && settings.apiSettings.engine === prof.engine);
+                          return (
+                            <button
+                              key={prof.id}
+                              onClick={() =>
+                                updateSettings({
+                                  apiSettings: {
+                                    ...settings.apiSettings,
+                                    isCustom: true,
+                                    engine: prof.engine,
+                                    baseUrl: prof.baseUrl,
+                                    apiKey: prof.apiKey,
+                                    modelId: prof.modelId,
+                                    activeProfileId: prof.id,
+                                  },
+                                })
+                              }
+                              className={`px-3 py-1.5 text-sm rounded-lg text-left transition-colors flex flex-col justify-center ${
+                                isSelected
+                                  ? "bg-[var(--accent)] text-white font-extrabold"
+                                  : "text-gray-300 hover:bg-white/5"
+                              }`}
+                            >
+                              <span className="text-xs truncate font-bold">
+                                {prof.name}
+                              </span>
+                              <span className={`text-[9px] font-mono truncate tracking-tight block ${
+                                isSelected ? "text-white/80" : "text-gray-500"
+                              }`}>
+                                {prof.modelId || prof.engine}
+                              </span>
+                            </button>
+                          );
+                        });
+                      })()}
                       <div className="h-px bg-white/5 my-1 mx-2" />
                       <span className="text-sm font-bold text-gray-500 uppercase tracking-widest px-2 py-1">
                         Image Generation
@@ -3235,12 +3403,17 @@ function ContextMenuGroup({
 function SuggestionCard({
   icon,
   title,
+  onClick,
 }: {
   icon: React.ReactNode;
   title: string;
+  onClick?: () => void;
 }) {
   return (
-    <button className="flex flex-col gap-3 p-4 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-2xl text-left hover:border-accent/30 hover:bg-[var(--border)] transition-all group">
+    <button 
+      onClick={onClick}
+      className="flex flex-col gap-3 p-4 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-2xl text-left hover:border-accent/30 hover:bg-[var(--border)] transition-all group"
+    >
       <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-500 group-hover:text-accent transition-colors">
         {icon}
       </div>

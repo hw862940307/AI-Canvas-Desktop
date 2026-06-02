@@ -8,9 +8,19 @@ import { fileURLToPath } from 'url';
 import https from 'https';
 import http from 'http';
 import zlib from 'zlib';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function appendLog(message: string) {
+  try {
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(path.join(__dirname, 'app_logs.txt'), `[${timestamp}] ${message}\n`);
+  } catch (err) {
+    console.error('Failed to write log:', err);
+  }
+}
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -1317,14 +1327,268 @@ async function startServer() {
 
   // Proxy for LLM Image Generations (OpenAI format and Gemini format)
   app.post('/api/images', async (req, res) => {
-    const { engine, baseUrl, apiKey, modelId, prompt, size, n, quality } = req.body;
+    const { engine, baseUrl, apiKey, modelId, prompt, size, n, quality, lora, msAsync } = req.body;
 
     if (!apiKey) {
       return res.status(400).json({ error: 'API Key is missing' });
     }
 
+    // Helper to recursively find all HTTP/HTTPS image-like URLs in a response object
+    const extractImageUrls = (obj: any): string[] => {
+      const urls: string[] = [];
+      const recurse = (value: any) => {
+        if (typeof value === 'string') {
+          if (value.startsWith('http://') || value.startsWith('https://')) {
+            urls.push(value);
+          }
+        } else if (Array.isArray(value)) {
+          for (const item of value) recurse(item);
+        } else if (value && typeof value === 'object') {
+          for (const k of Object.keys(value)) recurse(value[k]);
+        }
+      };
+      recurse(obj);
+      return urls;
+    };
+
     try {
-      if (engine === 'gemini') {
+      if (engine === 'modelscope') {
+        const finalBaseUrl = baseUrl || 'https://api-inference.modelscope.cn/v1';
+        const isModelScope = finalBaseUrl.toLowerCase().includes('modelscope');
+        const url = `${finalBaseUrl.replace(/\/$/, '')}/images/generations`;
+
+        let finalPrompt = prompt;
+        if (lora && lora.enabled && lora.triggerWord) {
+          finalPrompt = `${lora.triggerWord}, ${prompt}`;
+        }
+
+        const payload: any = {
+          prompt: finalPrompt,
+          model: modelId || 'Tongyi-MAI/Z-Image-Turbo',
+          n: parseInt(n) || 1,
+        };
+
+        // Map ratio + resolution into a valid width x height string for ModelScope
+        let finalSize = '1024x1024';
+        const ratio = size || '1:1';
+        const resType = quality || '1K';
+
+        if (resType === '512x512' || resType === '768x768') {
+          finalSize = resType;
+        } else {
+          const is2K = resType === '2K';
+          if (ratio === '1:1' || ratio === '自动') {
+            finalSize = is2K ? '2048x2048' : '1024x1024';
+          } else if (ratio === '4:3') {
+            finalSize = is2K ? '2048x1536' : '1024x768';
+          } else if (ratio === '3:4') {
+            finalSize = is2K ? '1536x2048' : '768x1024';
+          } else if (ratio === '16:9') {
+            finalSize = is2K ? '2048x1152' : '1024x576';
+          } else if (ratio === '9:16') {
+            finalSize = is2K ? '1152x2048' : '576x1024';
+          } else {
+            finalSize = is2K ? '2048x2048' : '1024x1024';
+          }
+        }
+        payload.size = finalSize;
+
+        if (lora && lora.enabled) {
+          payload.lora = lora;
+        }
+
+        const headers: any = {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        };
+
+        // ModelScope API gateway does not expose a running tasks status polling endpoint for ModelScope token users (it returns 500 task not found).
+        // Therefore, we must run synchronously (isActuallyAsync = false) when using ModelScope endpoints,
+        // so that the gateway blocks, processes the generation, and returns standard OpenAI-compatible results directly.
+        // DashScope endpoints with proper DashScope keys can safely use async polling mode.
+        const isActuallyAsync = isModelScope ? false : !!(msAsync || (lora && lora.enabled));
+
+        if (isActuallyAsync) {
+          headers['X-DashScope-Async'] = 'enable';
+          headers['X-ModelScope-Async'] = 'enable';
+        }
+
+        appendLog(`[ModelScope Request] URL: ${url}, Model: ${payload.model}, Size: ${payload.size}, Payload: ${JSON.stringify(payload)}, Async: ${isActuallyAsync}`);
+
+        const response = await axios.post(url, payload, {
+          headers,
+          timeout: 45000
+        });
+
+        appendLog(`[ModelScope Response] Status: ${response.status}, Raw Data: ${JSON.stringify(response.data)}`);
+
+        let urls: string[] = [];
+
+        // If we received a task ID and no image URLs are immediately available, we MUST poll regardless of msAsync flag,
+        // because LoRA or complex image generation on ModelScope and DashScope is always asynchronous under the hood.
+        const taskId = response.data.output?.task_id || response.data.task_id;
+        
+        // Extract immediate urls if present in the response
+        urls = response.data.data?.map((d: any) => d.url).filter(Boolean) || [];
+        if (urls.length === 0) {
+          urls = extractImageUrls(response.data);
+        }
+
+        if (taskId && urls.length === 0) {
+          appendLog(`[ModelScope] Task ID: ${taskId} received with no immediate image URLs. Initiating robust polling...`);
+          
+          const candidates: string[] = [
+            `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
+            `${finalBaseUrl.replace(/\/v1\/?$/, '')}/tasks/${taskId}`,
+            `${finalBaseUrl.replace(/\/$/, '')}/tasks/${taskId}`,
+            `https://api-inference.modelscope.cn/v1/tasks/${taskId}`,
+            `https://api-inference.modelscope.cn/tasks/${taskId}`,
+            `https://api-inference.modelscope.ai/v1/tasks/${taskId}`,
+            `https://api-inference.modelscope.ai/tasks/${taskId}`,
+            `https://api-inference.modelscope.cn/api/v1/tasks/${taskId}`
+          ];
+          appendLog(`[ModelScope] Candidates for polling task status: ${JSON.stringify(candidates)}`);
+
+          let completed = false;
+          let attempts = 0;
+          const maxAttempts = 12; // 12 attempts * 2s = 24s, preventing HTTP reverse proxy / browser 504 gateway timeouts
+          let consecutiveFailures = 0;
+
+          while (!completed && attempts < maxAttempts) {
+            attempts++;
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            try {
+              appendLog(`[ModelScope] Polling attempt ${attempts}/${maxAttempts}`);
+              let taskResponse: any = null;
+              let fetchedStatus = '';
+              let fetchErrorMsg = '';
+              let isTaskNotFound = false;
+
+              for (const candidateUrl of candidates) {
+                try {
+                  appendLog(`[ModelScope] Requesting candidateUrl: ${candidateUrl}`);
+                  
+                  // Try first with Bearer prefix, standard custom headers, and direct custom headers
+                  let res = null;
+                  try {
+                    res = await axios.get(candidateUrl, {
+                      headers: { 
+                        'Authorization': `Bearer ${apiKey}`,
+                        'X-ModelScope-Token': apiKey,
+                        'X-DashScope-ApiKey': apiKey,
+                        'Content-Type': 'application/json'
+                      },
+                      timeout: 8000
+                    });
+                  } catch (firstErr: any) {
+                    appendLog(`[ModelScope] First token attempt failed on ${candidateUrl}: ${firstErr.message}. Trying direct token fallback...`);
+                    // Try fallback without Bearer prefix as some proxies reject 'Bearer ' on custom endpoints or mismatch
+                    res = await axios.get(candidateUrl, {
+                      headers: { 
+                        'Authorization': apiKey,
+                        'X-ModelScope-Token': apiKey,
+                        'X-DashScope-ApiKey': apiKey,
+                        'Content-Type': 'application/json'
+                      },
+                      timeout: 8000
+                    });
+                  }
+
+                  const errors = res.data.errors || res.data.error;
+                  if (errors && (JSON.stringify(errors).toLowerCase().includes('not found') || JSON.stringify(errors).toLowerCase().includes('notfound'))) {
+                    appendLog(`[ModelScope] Candidate ${candidateUrl} returned not found errors: ${JSON.stringify(errors)}`);
+                    isTaskNotFound = true;
+                    continue; // Skip and try next candidate
+                  }
+
+                  const taskStatus = res.data.output?.task_status || res.data.task_status || res.data.status;
+                  if (taskStatus) {
+                    taskResponse = res;
+                    fetchedStatus = taskStatus;
+                    appendLog(`[ModelScope] Success fetch from ${candidateUrl}. Status: ${taskStatus}`);
+                    break;
+                  }
+                } catch (candidateErr: any) {
+                  const errMsg = candidateErr?.response?.data ? JSON.stringify(candidateErr.response.data) : candidateErr.message;
+                  appendLog(`[ModelScope] Fetch candidate URL error on ${candidateUrl}: ${errMsg}`);
+                  if (errMsg.toLowerCase().includes('task not found') || errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('invalidapikey')) {
+                    isTaskNotFound = true;
+                  }
+                  fetchErrorMsg = errMsg;
+                }
+              }
+
+              if (!taskResponse) {
+                consecutiveFailures++;
+                appendLog(`[ModelScope] All candidate URLs failed to resolve task ${taskId} at attempt ${attempts}. Consecutive failures: ${consecutiveFailures}. Last error message: ${fetchErrorMsg}`);
+                
+                if (isTaskNotFound && consecutiveFailures >= 3) {
+                  const isLoraEnabled = !!(lora && lora.enabled);
+                  const activeModel = payload.model || 'Tongyi-MAI/Z-Image-Turbo';
+                  const isDashScopeProxied = activeModel.toLowerCase().includes('tongyi') || activeModel.toLowerCase().includes('qwen') || activeModel.toLowerCase().includes('wanx');
+                  
+                  let errorMsg = `图片生成失败：ModelScope 接口无法查询到该异步生图结果 (任务ID: ${taskId})。\n\n【原因与排查】\n`;
+                  
+                  if (isLoraEnabled) {
+                    errorMsg += `1. 您当前启用了 [LoRA] 微调。魔搭社区版 API 接口对配置了微调的生图任务不支持常规异步状态和结果查询。\n`;
+                  } else if (isDashScopeProxied && isModelScope) {
+                    errorMsg += `1. 您当前选择的模型为 [阿里通义/万相托管模型] (「${activeModel}」)。此类模型提交后，魔搭网关会将任务交由阿里云后台处理，但社区版极简 Token 目前不具备阿里云异步任务的查询权限 (系统会反馈 500 task not found 错误)。\n`;
+                  } else {
+                    errorMsg += `1. 请求已成功到达托管网关，但网关反馈 500 task not found，通常是因为高负载下或第三方镜像任务在瞬间完成后被自动清理，导致状态无法轮询。\n`;
+                  }
+                  
+                  errorMsg += `\n【推荐解决方案】\n` +
+                              `➡️ **推荐方案 A (最稳定且免费)**：在节点下方或侧边设置中，将生图模型更换为魔搭原生极高稳定性的同步免轮询模型，例如 **\`black-forest-labs/FLUX.2-klein-9B\`** (FLUX模型)。此类原生模型可直接在首次请求中秒级同步返回精美生图，不依赖后台轮询，极其稳定高效！\n` +
+                              `➡️ **推荐方案 B (启用万相 & LoRA)**：如果您必须对「${activeModel}」进行生图或配合 LoRA 微调，建议在系统全局密钥配置中，获取并改用正式的 **阿里云 DashScope API-KEY (以 \`sk-\` 开头)**，并将自定义 Base URL 替换为通义官方端点，选择 DashScope 服务，即可完美启用完整的异步画图及微调生态！`;
+                  
+                  if (isLoraEnabled) {
+                    errorMsg += `\n➡️ **推荐方案 C**：在生成节点下方关闭 [启用 LoRA] 复选框，然后点击重新生成进行排查。`;
+                  }
+                  
+                  throw new Error(errorMsg);
+                }
+                continue; // retry next main poll loop attempt
+              }
+
+              // Reset on active response success
+              consecutiveFailures = 0;
+              appendLog(`[ModelScope] Selected polling response data: ${JSON.stringify(taskResponse.data)}`);
+
+              if (fetchedStatus === 'SUCCEEDED' || fetchedStatus === 'SUCCESS') {
+                completed = true;
+                urls = extractImageUrls(taskResponse.data);
+                if (urls.length === 0) {
+                  urls = taskResponse.data.output?.results?.map((r: any) => r.url).filter(Boolean) || [];
+                }
+                appendLog(`[ModelScope] Polling Succeeded. URLs: ${JSON.stringify(urls)}`);
+              } else if (fetchedStatus === 'FAILED' || fetchedStatus === 'REJECTED') {
+                completed = true;
+                const taskErr = taskResponse.data.output?.message || taskResponse.data.message || 'ModelScope task failed';
+                appendLog(`[ModelScope] Polling returned failed task status: ${fetchedStatus}, msg: ${taskErr}`);
+                throw new Error(taskErr);
+              }
+            } catch (pollErr: any) {
+              const pollErrMsg = pollErr?.response?.data ? JSON.stringify(pollErr.response.data) : pollErr.message;
+              appendLog(`[ModelScope] Error during polling attempt ${attempts}: ${pollErrMsg}`);
+              if (pollErr.message && !pollErr.message.includes('timeout') && !pollErr.message.includes('not found')) {
+                throw pollErr;
+              }
+            }
+          }
+
+          if (!completed) {
+            appendLog(`[ModelScope] Polling timed out (limit reached)`);
+            throw new Error('ModelScope image generation task timed out on the upstream server (limit reached)');
+          }
+        } else {
+          appendLog(`[ModelScopeSync] Already have URLs or no taskId. Output URLs: ${JSON.stringify(urls)}`);
+        }
+
+        console.log(`[ModelScope] Image extraction completed successfully. Extracted URLs count: ${urls.length}`);
+        appendLog(`[ModelScope] Output result urls: ${JSON.stringify(urls)}`);
+        return res.json({ urls });
+      } else if (engine === 'gemini') {
         let finalBaseUrl = (baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
         if (finalBaseUrl.endsWith('/v1beta')) {
           finalBaseUrl = finalBaseUrl.slice(0, -7);
@@ -1389,9 +1653,123 @@ async function startServer() {
         return res.json({ urls });
       }
     } catch (error: any) {
+      const errDetails = error?.response?.data ? JSON.stringify(error.response.data) : error.message;
+      appendLog(`[Image API Error] Details: ${errDetails}`);
       console.error('Image API Error:', error?.response?.data || error.message);
       const errMsg = error?.response?.data?.error?.message || error?.response?.data?.error || error.message || 'Unknown API Error';
       res.status(500).json({ error: typeof errMsg === 'object' ? JSON.stringify(errMsg) : errMsg });
+    }
+  });
+
+  // API Connection Tester for verification
+  app.post('/api/test-connection', async (req, res) => {
+    const { engine, baseUrl, apiKey, modelId, modelUrl } = req.body;
+
+    if (!apiKey) {
+      return res.status(200).json({ ok: false, error: 'API 密钥为空，请输入 API 密钥后再测试。' });
+    }
+
+    try {
+      if (engine === 'gemini') {
+        let finalBaseUrl = (baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
+        if (finalBaseUrl.endsWith('/v1beta')) {
+          finalBaseUrl = finalBaseUrl.slice(0, -7);
+        }
+        const url = `${finalBaseUrl}/v1beta/models?key=${apiKey}`;
+        const response = await axios.get(url, { timeout: 8000 });
+        if (response.status === 200) {
+          return res.json({ ok: true });
+        } else {
+          return res.json({ ok: false, error: `Http Code: ${response.status}` });
+        }
+      } else {
+        const finalBaseUrl = baseUrl || 'https://api.openai.com/v1';
+
+        // Check if this is a ModelScope models list request
+        const isModelScopeList = (engine === 'modelscope');
+
+        if (isModelScopeList) {
+          const finalModelUrl = modelUrl || `${finalBaseUrl.replace(/\/$/, '')}/models`;
+          appendLog(`[ModelScope Test Connection] GET request to modelUrl: ${finalModelUrl}`);
+          try {
+            const response = await axios.get(finalModelUrl, {
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 10000
+            });
+            if (response.status === 200 || response.status === 201) {
+              const count = response.data?.data?.length || 0;
+              appendLog(`[ModelScope Test Connection] Success! Found ${count} models.`);
+              return res.json({ ok: true, count, models: response.data?.data || [] });
+            } else {
+              return res.json({ ok: false, error: `模型列表获取失败: Http Code ${response.status}` });
+            }
+          } catch (modelErr: any) {
+            const errMsg = modelErr?.response?.data ? JSON.stringify(modelErr.response.data) : modelErr.message;
+            appendLog(`[ModelScope Test Connection] Models endpoint failed: ${errMsg}`);
+            return res.json({
+              ok: false,
+              error: `模型接入测试失败: ${modelErr?.response?.data?.error?.message || modelErr?.response?.data?.error || modelErr.message || '未知异常'}。
+💡 建议配置国内/海外「平台模型获取地址」并确认联网正常后再次尝试！`
+            });
+          }
+        }
+
+        const url = `${finalBaseUrl.replace(/\/$/, '')}/chat/completions`;
+        const payload = {
+          model: modelId || 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: 'test connection' }],
+          max_tokens: 1
+        };
+
+        const response = await axios.post(url, payload, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 8000
+        });
+
+        if (response.status === 200 || response.status === 201) {
+          return res.json({ ok: true });
+        } else {
+          return res.json({ ok: false, error: `Http Code: ${response.status}` });
+        }
+      }
+    } catch (error: any) {
+      console.error('Connection Test Error:', error?.response?.data || error.message);
+      const errMsg = error?.response?.data?.error?.message 
+        || error?.response?.data?.error 
+        || error.message 
+        || '连接异常，请检查 Base URL & API Key 或网络连通性。';
+      return res.json({ 
+        ok: false, 
+        error: typeof errMsg === 'object' ? JSON.stringify(errMsg) : errMsg 
+      });
+    }
+  });
+
+  // API debug logs endpoint to view server-side logs during development
+  app.get('/api/debug-logs', (req, res) => {
+    try {
+      const logPath = path.join(__dirname, 'app_logs.txt');
+      if (fs.existsSync(logPath)) {
+        const content = fs.readFileSync(logPath, 'utf8');
+        return res.send(`
+          <html>
+            <head><title>App Server Debug Logs</title></head>
+            <body style="margin:0; background:#121212;">
+              <pre style="font-family: monospace; white-space: pre-wrap; font-size: 13px; color: #00ff00; padding: 20px; line-height: 1.5;">${content}</pre>
+            </body>
+          </html>
+        `);
+      } else {
+        return res.send(`No logs generated yet. Log path: ${logPath}`);
+      }
+    } catch (err: any) {
+      return res.status(500).send(`Error reading logs: ${err.message}`);
     }
   });
 
