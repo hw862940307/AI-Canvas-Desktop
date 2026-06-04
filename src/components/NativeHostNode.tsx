@@ -17,6 +17,94 @@ const isElectron = typeof window !== 'undefined' &&
   window.navigator && 
   window.navigator.userAgent.toLowerCase().includes('electron');
 
+// Auto detect launcher executable from raw folder path
+const autoDetectExecutableFromPath = (rawPath: string, appNameHint: string = ''): string => {
+  if (!rawPath) return '';
+  let path = rawPath.replace(/^["']|["']$/g, '').trim(); // strip quotes
+  
+  // Normalize slashes
+  const isWindowsPath = path.includes('\\') || !!path.match(/^[A-Za-z]:/);
+  const separator = isWindowsPath ? '\\' : '/';
+  
+  // If already ends in acceptable file formats, keep as is
+  if (path.match(/\.(exe|bat|cmd|sh|app|lnk|bin)$/i)) {
+    return path;
+  }
+  
+  // Clean trailing separator
+  if (path.endsWith(separator)) {
+    path = path.slice(0, -1);
+  }
+
+  const lowerPath = path.toLowerCase();
+  const lowerHint = appNameHint.toLowerCase();
+
+  // Keyword match cases (photoshop, comfyui, keyshot, blender, etc.)
+  if (lowerPath.includes('photoshop') || lowerPath.endsWith('ps') || lowerPath.includes('adobe ps') || lowerHint.includes('photoshop')) {
+    return `${path}${separator}Photoshop.exe`;
+  }
+  if (lowerPath.includes('comfyui') || lowerHint.includes('comfyui')) {
+    return `${path}${separator}run_nvidia_gpu.bat`;
+  }
+  if (lowerPath.includes('vscode') || lowerPath.includes('microsoft vs code') || lowerHint.includes('vscode') || lowerHint.includes('vs code')) {
+    return `${path}${separator}Code.exe`;
+  }
+  if (lowerPath.includes('keyshot') || lowerHint.includes('keyshot')) {
+    if (lowerPath.endsWith('bin')) {
+      return `${path}${separator}keyshot.exe`;
+    }
+    return `${path}${separator}bin${separator}keyshot.exe`;
+  }
+  if (lowerPath.includes('blender') || lowerHint.includes('blender')) {
+    return `${path}${separator}blender.exe`;
+  }
+  if (lowerPath.includes('painter') || lowerHint.includes('painter')) {
+    return `${path}${separator}Adobe Substance 3D Painter.exe`;
+  }
+  if (lowerPath.includes('designer') || lowerHint.includes('designer')) {
+    return `${path}${separator}Adobe Substance 3D Designer.exe`;
+  }
+  if (lowerPath.includes('marvelous') || lowerHint.includes('marvelous')) {
+    return `${path}${separator}MarvelousDesigner.exe`;
+  }
+  if (lowerPath.includes('zbrush') || lowerHint.includes('zbrush')) {
+    return `${path}${separator}ZBrush.exe`;
+  }
+  if (lowerPath.includes('maya') || lowerHint.includes('maya')) {
+    if (lowerPath.endsWith('bin')) {
+      return `${path}${separator}maya.exe`;
+    }
+    return `${path}${separator}bin${separator}maya.exe`;
+  }
+  if (lowerPath.includes('3dsmax') || lowerPath.includes('3ds max') || lowerHint.includes('3dsmax') || lowerHint.includes('3ds max')) {
+    return `${path}${separator}3dsmax.exe`;
+  }
+  if (lowerPath.includes('houdini') || lowerHint.includes('houdini')) {
+    if (lowerPath.endsWith('bin')) {
+      return `${path}${separator}houdini.exe`;
+    }
+    return `${path}${separator}bin${separator}houdini.exe`;
+  }
+  if (lowerPath.includes('unreal') || lowerPath.includes('ue5') || lowerHint.includes('unreal') || lowerHint.includes('ue5')) {
+    if (lowerPath.endsWith('win64')) {
+      return `${path}${separator}UnrealEditor.exe`;
+    }
+    return `${path}${separator}Engine${separator}Binaries${separator}Win64${separator}UnrealEditor.exe`;
+  }
+  if (lowerPath.includes('realitycapture') || lowerHint.includes('realitycapture')) {
+    return `${path}${separator}RealityCapture.exe`;
+  }
+
+  // General fallback parsing: extract folder name
+  const segments = path.split(separator);
+  const folderName = segments[segments.length - 1];
+  if (folderName) {
+    return `${path}${separator}${folderName}.exe`;
+  }
+
+  return path;
+};
+
 // Comprehensive Software Application Registry Definitions (Core App Registry)
 const PRESET_PROGRAMS = [
   {
@@ -716,22 +804,25 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
   };
 
   // Launch Local Native Software handler
-  const handleLaunchNativeApp = async () => {
+  const handleLaunchNativeApp = async (overridePath?: string, overrideArgs?: string) => {
     setIsLaunching(true);
     setErrorMsg('');
     setLoadingMsg(`正在调起本地系统应用: ${selectedPreset.toUpperCase()}...`);
     
+    const finalPath = overridePath !== undefined ? overridePath : appPath;
+    const finalArgs = overrideArgs !== undefined ? overrideArgs : appArgs;
+
     const now = new Date().toLocaleTimeString();
     setProcLogs(prev => [
       ...prev,
-      `[${now}] 发起进程创建信号 -> CreateProcess("${appPath}", args="${appArgs}")`,
+      `[${now}] 发起进程创建信号 -> CreateProcess("${finalPath}", args="${finalArgs}")`,
       `[${now}] 正在向本地宿主内核请求注册 PID 连接通道...`
     ]);
 
     try {
       const response = await axios.post('/api/native/launch-app', {
-        appPath,
-        args: appArgs
+        appPath: finalPath,
+        args: finalArgs
       });
 
       if (response.data && response.data.ok) {
@@ -743,7 +834,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
         const randHwnd = `0x00${Math.floor(Math.random() * 800000 + 100000).toString(16).toUpperCase()}`;
         setProcLogs(prev => [
           ...prev,
-          `[${now2}] 🟢 本地程序已拉起。检索 PID 锁定: [PID ${randPid}]`,
+          `[${now2}] 🟢 本地程序已拉起并挂载成功。检索 PID 锁定: [PID ${randPid}]`,
           `[${now2}] [EnumWindows] 检索窗口。成功解析宿主应用窗口 HWND: [${randHwnd}]`,
           `[${now2}] 启动 60FPS 运动渲染，激活 ContentRect 与 Windows-MoveWindow 直连协调层！`,
           `[${now2}] 已阻断外部钓鱼沙盒。画面嵌入已完美覆盖在画布对应的防越界叠加层层级顶端。`
@@ -1837,8 +1928,9 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                   <ArrowRight size={14} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setRefreshKey(k => k + 1)}
-                  className="p-1.5 text-indigo-300 hover:bg-slate-800 rounded-md transition-colors cursor-pointer border-none"
+                  className="p-1.5 text-indigo-300 hover:bg-slate-800 rounded-md transition-colors cursor-pointer border-none bg-transparent"
                 >
                   <RefreshCw size={14} />
                 </button>
@@ -1872,7 +1964,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
             </div>
 
             {/* Browser Safe Sandboxed Status header */}
-            <div className="px-4 py-1 flex items-center justify-between text-[10px] border-b border-indigo-500/10 shrink-0 bg-indigo-950/25 text-indigo-450 select-none">
+            <div className="px-4 py-1 flex items-center justify-between text-[10px] border-b border-indigo-500/10 shrink-0 bg-indigo-950/25 text-indigo-455 select-none">
               <div className="flex items-center gap-1.5 overflow-hidden truncate">
                 <span className="flex h-1.5 w-1.5 relative shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-indigo-400"></span>
@@ -1999,6 +2091,16 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                         type="text"
                         value={newAppPath}
                         onChange={e => setNewAppPath(e.target.value)}
+                        onPaste={e => {
+                          const pasted = e.clipboardData.getData('text');
+                          if (pasted) {
+                            const detected = autoDetectExecutableFromPath(pasted, newAppName);
+                            if (detected !== pasted) {
+                              e.preventDefault();
+                              setNewAppPath(detected);
+                            }
+                          }
+                        }}
                         placeholder="C:\Program Files\..."
                         className="flex-1 min-w-0 bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[9.5px] focus:outline-none focus:border-indigo-500/50 font-mono"
                       />
@@ -2011,47 +2113,19 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                         📁 浏览
                       </button>
                     </div>
-                  </div>
-
-                  {/* Connection Stream URL */}
-                  <div className="space-y-1">
-                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest font-mono">协同流测试端口 URL</label>
-                    <input 
-                      type="text"
-                      value={newAppUrl}
-                      onChange={e => setNewAppUrl(e.target.value)}
-                      placeholder="http://127.0.0.1:8080"
-                      className="w-full bg-slate-950 border border-indigo-500/15 text-indigo-300 rounded-lg px-2 py-1 text-[9.5px] focus:outline-none focus:border-indigo-500/50 font-mono"
-                    />
-                  </div>
-
-                  {/* Icon and actions */}
-                  <div className="flex gap-2.5 items-end justify-between pt-1">
-                    <div className="flex-1">
-                      <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 font-mono">图标类型</label>
-                      <select 
-                        value={newAppIcon}
-                        onChange={e => setNewAppIcon(e.target.value)}
-                        className="bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[9.5px] focus:outline-none focus:border-indigo-500/50"
-                      >
-                        <option value="Monitor">🖥️ 显示器</option>
-                        <option value="Cpu">📟 处理器</option>
-                        <option value="Palette">🎨 调色板</option>
-                        <option value="Workflow">⚙️ 节点流</option>
-                        <option value="Code">💻 代码</option>
-                        <option value="Layers">📁 图层</option>
-                        <option value="Zap">⚡ 闪电</option>
-                        <option value="LayoutGrid">格子</option>
-                        <option value="Activity">📈 活跃度</option>
-                        <option value="Database">🛢️ 数据库</option>
-                      </select>
-                    </div>
-                    <button
-                      type="submit"
-                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-550 text-white rounded-lg text-[9.5px] font-black cursor-pointer border-none"
-                    >
-                      保存
-                    </button>
+                    {newAppPath && !newAppPath.match(/\.(exe|bat|cmd|sh|app|lnk)$/i) && (
+                      <div className="text-[8.5px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded mt-1 flex flex-col gap-0.5 animate-fade-in select-none">
+                        <span>⚠️ 检测到当前可能是普通文件夹路径！</span>
+                        <button 
+                          type="button"
+                          onClick={() => setNewAppPath(autoDetectExecutableFromPath(newAppPath, newAppName))}
+                          className="text-left underline hover:text-white cursor-pointer text-amber-300 font-mono bg-transparent border-none p-0"
+                        >
+                          💡 一键自动智能识别填入主程序：
+                          <span className="block text-[8px] opacity-90 font-black mt-0.5 text-indigo-300">{autoDetectExecutableFromPath(newAppPath, newAppName)}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </form>
               )}
@@ -2173,9 +2247,9 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
               <div className="pt-2 border-t border-indigo-500/10 shrink-0 select-none">
                 {procStatus !== 'running' ? (
                   <button
-                    onClick={handleLaunchNativeApp}
+                    onClick={() => handleLaunchNativeApp()}
                     disabled={isLaunching}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-gradient-to-r from-indigo-605 to-violet-605 hover:from-indigo-550 hover:to-violet-550 disabled:opacity-40 text-white rounded-xl text-[11px] font-black shadow-lg transition-all transform active:scale-95 cursor-pointer border-none"
+                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-gradient-to-r from-indigo-650 to-violet-650 hover:from-indigo-550 hover:to-violet-550 disabled:opacity-40 text-white rounded-xl text-[11px] font-black shadow-lg transition-all transform active:scale-95 cursor-pointer border-none"
                   >
                     {isLaunching ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
                     <span>拉起并建立覆盖映射</span>

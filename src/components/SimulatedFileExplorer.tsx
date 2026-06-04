@@ -259,6 +259,24 @@ const MOCK_FS: Record<string, FileItem[]> = {
   ],
   'D:': [
     {
+      id: 'd_ps',
+      name: 'ps',
+      type: 'folder',
+      children: [
+        {
+          id: 'd_ps_photoshop',
+          name: 'Adobe Photoshop 2026',
+          type: 'folder',
+          children: [
+            { id: 'd_ps_photoshop_exe', name: 'Photoshop.exe', type: 'file' },
+            { id: 'd_ps_photoshop_node', name: 'node.exe', type: 'file' },
+            { id: 'd_ps_photoshop_dll', name: 'onnxruntime.dll', type: 'file' },
+            { id: 'd_ps_photoshop_bak', name: 'Photoshop.exe.bak', type: 'file' }
+          ]
+        }
+      ]
+    },
+    {
       id: 'd_ai',
       name: 'ai-draw',
       type: 'folder',
