@@ -45,6 +45,7 @@ import {
   MessageSquare,
   Move3d,
   Globe2,
+  Monitor,
   Images,
   ScanSearch,
   CloudLightning,
@@ -89,6 +90,7 @@ import { LogicEngineNode } from "./components/LogicEngineNode";
 import FusionMasterNode from "./components/FusionMasterNode";
 import { SpatialViewNode } from "./components/SpatialViewNode";
 import { AptWebToolNode } from "./components/AptWebToolNode";
+import NativeHostNode from "./components/NativeHostNode";
 import { IoImageListNode } from "./components/IoImageListNode";
 import { DoubleBoxTransformNode } from "./components/DoubleBoxTransformNode";
 import { ReverseNode } from "./components/ReverseNode";
@@ -109,6 +111,7 @@ const nodeTypes = {
   "fusion-master": React.memo(FusionMasterNode),
   "spatial-view": React.memo(SpatialViewNode),
   "apt-web-tool": React.memo(AptWebToolNode),
+  "native-host": React.memo(NativeHostNode),
   "io-image-list": React.memo(IoImageListNode),
   "double-box-transform": React.memo(DoubleBoxTransformNode),
   reverse: React.memo(ReverseNode),
@@ -727,6 +730,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     else if (type === "fusion-master") { baseW = 720; baseH = 960; }
     else if (type === "double-box-transform") { baseW = 800; baseH = 600; }
     else if (type === "apt-web-tool") { baseW = 1000; baseH = 750; }
+    else if (type === "native-host") { baseW = 1000; baseH = 750; }
     else if (type === "io-image-list") { baseW = 450; baseH = 600; }
     else if (type === "image-gen" || type === "text-gen" || type === "translate-engine" || type === "logic-engine" || type === "prompt-engine" || type === "ms-gen" || type === "reverse") {
       baseW = 450;
@@ -1604,6 +1608,11 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                 onClick={() => handleAddNode("apt-web-tool")}
               />
               <TopBarButton
+                icon={<Monitor size={16} />}
+                label="Native Host"
+                onClick={() => handleAddNode("native-host")}
+              />
+              <TopBarButton
                 icon={<Images size={16} />}
                 label="图像列表"
                 onClick={() => handleAddNode("io-image-list")}
@@ -1948,6 +1957,13 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                         icon={<Globe2 size={12} />}
                         onClick={() =>
                           handleAddNode("apt-web-tool", menu.x, menu.y)
+                        }
+                      />
+                      <ContextMenuItem
+                        label="Native Host - 本地宿主"
+                        icon={<Monitor size={12} />}
+                        onClick={() =>
+                          handleAddNode("native-host", menu.x, menu.y)
                         }
                       />
                       <ContextMenuItem
@@ -3047,6 +3063,7 @@ function SidebarWrapper({
     else if (type === "fusion-master") { baseW = 720; baseH = 950; }
     else if (type === "double-box-transform") { baseW = 680; baseH = 500; }
     else if (type === "apt-web-tool") { baseW = 500; baseH = 500; }
+    else if (type === "native-host") { baseW = 500; baseH = 500; }
     else if (type === "io-image-list") { baseW = 300; baseH = 400; }
     else if (type === "image-source") { baseW = 300; baseH = 350; }
     

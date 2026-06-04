@@ -293,6 +293,82 @@ async function startServer() {
     }
   });
 
+  // Launch Local Independent System Browser
+  app.post('/api/native/launch-browser', async (req, res) => {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ ok: false, error: '链接/网页地址不能为空' });
+    }
+
+    try {
+      const cp = await import('child_process');
+      const escapedUrl = url.replace(/"/g, '\\"');
+      const isWin = process.platform === 'win32';
+      const isMac = process.platform === 'darwin';
+
+      console.log(`[Native Host] Launching OS native browser for URL: ${url}`);
+      
+      if (isWin) {
+        // Use cmd /c start "" url to securely delegate browser loading to default Windows handler
+        cp.exec(`start "" "${escapedUrl}"`);
+      } else if (isMac) {
+        cp.exec(`open "${escapedUrl}"`);
+      } else {
+        cp.exec(`xdg-open "${escapedUrl}"`);
+      }
+
+      res.json({ 
+        ok: true, 
+        message: `成功在您的本地电脑上拉起默认网页浏览器！\n目标网址: ${url}\n\n提示：此为外部独立窗口，您也可以随时返回当前画布查看内嵌直连。` 
+      });
+    } catch (err: any) {
+      console.error('Failed to launch native browser:', err);
+      res.status(500).json({ 
+        ok: false, 
+        error: `启动本地浏览器失败: ${err.message || String(err)}`
+      });
+    }
+  });
+
+  // Launch Native Executable App (.exe / shell command)
+  app.post('/api/native/launch-app', async (req, res) => {
+    const { appPath, args } = req.body;
+    if (!appPath) {
+      return res.status(400).json({ ok: false, error: '应用程序的可执行文件路径或名称不能为空' });
+    }
+
+    try {
+      const cp = await import('child_process');
+      const isWin = process.platform === 'win32';
+      
+      console.log(`[Native Host] Launching Local Executable: ${appPath} with args: ${args || ''}`);
+      
+      let cmd = '';
+      if (isWin) {
+        cmd = `start "" "${appPath}" ${args || ''}`;
+      } else {
+        cmd = `"${appPath}" ${args || ''} &`;
+      }
+
+      cp.exec(cmd, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`[Native Host] Process launch callback error:`, error);
+        }
+      });
+
+      res.json({
+        ok: true,
+        message: `已成功在您的本地系统后台发起该应用程序的启动流程！\n程序路径: ${appPath}\n\n提示：该程序将在您本地独立执行。`
+      });
+    } catch (err: any) {
+      console.error('Failed to launch application:', err);
+      res.status(500).json({
+        ok: false,
+        error: `启动应用程序失败: ${err.message || String(err)}`
+      });
+    }
+  });
+
   // Keep-alive agent pooling to tremendously slash SSL handshake times
   const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 10, timeout: 60000 });
   const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 10, timeout: 60000, rejectUnauthorized: false });

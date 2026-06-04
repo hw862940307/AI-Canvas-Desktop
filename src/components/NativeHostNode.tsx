@@ -1,0 +1,2416 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
+import { 
+  Globe2, ExternalLink, RefreshCw, Search, ArrowLeft, ArrowRight,
+  Monitor, Maximize2, Minimize2, Play, Loader2, AlertCircle, X,
+  Compass, Pin, PinOff, ChevronUp, ChevronDown, Anchor, Terminal,
+  Cpu, Database, Activity, PlayCircle, StopCircle, Sliders, Palette,
+  Layers, Code, LayoutGrid, Zap, PlaySquare, Workflow
+} from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { motion, AnimatePresence } from 'motion/react';
+import axios from 'axios';
+
+const isElectron = typeof window !== 'undefined' && 
+  window.navigator && 
+  window.navigator.userAgent.toLowerCase().includes('electron');
+
+// Comprehensive Software Application Registry Definitions (Core App Registry)
+const PRESET_PROGRAMS = [
+  {
+    id: 'keyshot',
+    name: 'KeyShot 3D Render',
+    icon: Monitor,
+    defaultPath: 'C:\\Program Files\\KeyShot11\\bin\\keyshot.exe',
+    defaultArgs: '-mode window -renderedWidth 1280 -renderedHeight 720',
+    defaultUrl: 'http://127.0.0.1:8000',
+    description: '工业级双流实时渲染与影视动画，极速全局光照追踪表现器。',
+  },
+  {
+    id: 'blender',
+    name: 'Blender 3D Suite',
+    icon: Cpu,
+    defaultPath: 'C:\\Program Files\\Blender Foundation\\Blender 4.0\\blender.exe',
+    defaultArgs: '--window-geometry 100 100 1280 720',
+    defaultUrl: 'http://127.0.0.1:6080',
+    description: '开源三维渲染与粘土模型雕刻，支持流体碰撞解算与几何节点。',
+  },
+  {
+    id: 'photoshop',
+    name: 'Adobe Photoshop',
+    icon: Palette,
+    defaultPath: 'C:\\Program Files\\Adobe\\Adobe Photoshop 2024\\Photoshop.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8002',
+    description: '专业创意数字图像合成及创意沙盒，支持图形通道映射与色彩调试。',
+  },
+  {
+    id: 'comfyui',
+    name: 'ComfyUI (SD Generator)',
+    icon: Workflow,
+    defaultPath: 'C:\\ComfyUI_windows_portable\\run_nvidia_gpu.bat',
+    defaultArgs: '--port 8188 --auto-launch',
+    defaultUrl: 'http://127.0.0.1:8188',
+    description: '节点流 Stable Diffusion 智能跑图，加载大模型与高精图形解码。',
+  },
+  {
+    id: 'vscode',
+    name: 'VS Code compiler',
+    icon: Code,
+    defaultPath: 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
+    defaultArgs: '--new-window .',
+    defaultUrl: 'http://127.0.0.1:8001',
+    description: '高通用轻量代码编辑器，支持嵌入拉起本地 Node 主编译及状态检查。',
+  },
+  {
+    id: 'substance_painter',
+    name: 'Substance Painter',
+    icon: Palette,
+    defaultPath: 'C:\\Program Files\\Adobe\\Adobe Substance 3D Painter\\Adobe Substance 3D Painter.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8010',
+    description: '次世代高精度模型材质纹理手绘表现，全息烘焙法线智能贴图。',
+  },
+  {
+    id: 'substance_designer',
+    name: 'Substance Designer',
+    icon: Layers,
+    defaultPath: 'C:\\Program Files\\Adobe\\Adobe Substance 3D Substance Designer\\Substance Designer.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8011',
+    description: '高通用节点式 PBR 程序材质核心，无缝平铺法线纹理设计。',
+  },
+  {
+    id: 'marvelous_designer',
+    name: 'Marvelous Designer',
+    icon: Zap,
+    defaultPath: 'C:\\Program Files\\Marvelous Designer\\MarvelousDesigner.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8012',
+    description: '物理级服装及各类布料形态动力学解算，超精细数字服饰物理演算。',
+  },
+  {
+    id: 'zbrush',
+    name: 'ZBrush 3D Sculptor',
+    icon: Layers,
+    defaultPath: 'C:\\Program Files\\Pixologic\\ZBrush 2023\\ZBrush.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8013',
+    description: '工业级高精三维高模粘土雕塑塑形，数字模型网格极智拓扑。',
+  },
+  {
+    id: 'maya',
+    name: 'Autodesk Maya',
+    icon: LayoutGrid,
+    defaultPath: 'C:\\Program Files\\Autodesk\\Maya2024\\bin\\maya.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8014',
+    description: '高端电影多维骨骼服装动画特效流，动作捕捉及大型片场流水总成。',
+  },
+  {
+    id: 'max3ds',
+    name: 'Autodesk 3ds Max',
+    icon: Monitor,
+    defaultPath: 'C:\\Program Files\\Autodesk\\3ds Max 2024\\3dsmax.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8015',
+    description: '经典大范围室内方案、工业高通用场景搭建及游戏主模制作。',
+  },
+  {
+    id: 'houdini',
+    name: 'SideFX Houdini',
+    icon: Activity,
+    defaultPath: 'C:\\Program Files\\Side Effects Software\\Houdini 19.5\\bin\\hindicator.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8016',
+    description: '顶级影视程序化节点特效，包含破碎、爆炸、高级流体等粒子解算。',
+  },
+  {
+    id: 'unreal_engine',
+    name: 'Unreal Engine 5',
+    icon: Zap,
+    defaultPath: 'C:\\Program Files\\Epic Games\\UE_5.3\\Engine\\Binaries\\Win64\\UnrealEditor.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8017',
+    description: '即时三维创作双流渲染，包含实时光逃 Lume 动态模拟与虚拟制片。',
+  },
+  {
+    id: 'reality_capture',
+    name: 'RealityCapture',
+    icon: Database,
+    defaultPath: 'C:\\Program Files\\Capturing Reality\\RealityCapture\\RealityCapture.exe',
+    defaultArgs: '',
+    defaultUrl: 'http://127.0.0.1:8018',
+    description: '超高精照片实景 3D 重建数字外景孪生，扫描点云自动网格化生成。',
+  }
+];
+
+// Reusable drawing board canvas component for Photoshop Studio
+const PaintCanvas = ({ brushColor, brushSize, tool }: { brushColor: string; brushSize: number; tool: string }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Fill initial transparent white bg
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    ctx.lineWidth = brushSize;
+    ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : brushColor;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const handlePointerUp = () => {
+    setIsDrawing(false);
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+
+  return (
+    <div className="relative w-full h-full flex flex-col items-center">
+      <div className="absolute top-2 right-2 z-10">
+        <button 
+          onClick={clearCanvas} 
+          type="button"
+          className="bg-slate-900 border border-indigo-500/30 px-2 py-0.5 rounded text-[8px] font-black uppercase text-indigo-450 hover:text-white pointer-events-auto cursor-pointer"
+        >
+          清空画板
+        </button>
+      </div>
+      <canvas
+        ref={canvasRef}
+        width={400}
+        height={240}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        className="bg-white rounded-lg border border-slate-800 touch-none w-full max-w-[400px] h-[240px] cursor-crosshair pointer-events-auto"
+      />
+    </div>
+  );
+};
+
+export default function NativeHostNode({ id, selected, data }: NodeProps) {
+  const zoomScale = data.zoomScale || 1.0;
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const nodeData = data as any;
+
+  // Global UI States
+  const [isFolded, setIsFolded] = useState<boolean>(nodeData.isFolded || false);
+  const [isMinimized, setIsMinimized] = useState<boolean>(nodeData.isMinimized || false);
+  const [isPinned, setIsPinned] = useState<boolean>(nodeData.isPinned || false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(nodeData.isFullscreen || false);
+  const [pinnedPos, setPinnedPos] = useState<{ x: number; y: number }>(nodeData.pinnedPos || { x: 300, y: 150 });
+
+  // Web Browser States
+  const initialUrl = nodeData.pageUrl || 'https://www.baidu.com';
+  const [urlInput, setUrlInput] = useState(initialUrl);
+  const [currentUrl, setCurrentUrl] = useState(initialUrl);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [history, setHistory] = useState<string[]>([initialUrl]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  // App Launcher Settings
+  const [viewTab, setViewTab] = useState<'browser' | 'native-app'>(nodeData.viewTab || 'browser');
+  const [selectedPreset, setSelectedPreset] = useState<string>(nodeData.selectedPreset || 'keyshot');
+  const [showConfigRegistry, setShowConfigRegistry] = useState<boolean>(false);
+
+  // Load custom configs for each app from local storage registry (Equivalent to app_paths.json persistence)
+  const [appConfigs, setAppConfigs] = useState<Record<string, { path: string; args: string; url: string }>>(() => {
+    try {
+      const saved = localStorage.getItem('NATIVE_APP_REGISTRY_CONFIGS');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Guarantee backwards compatibility/defaults
+        PRESET_PROGRAMS.forEach(p => {
+          if (!parsed[p.id]) {
+            parsed[p.id] = {
+              path: p.defaultPath,
+              args: p.defaultArgs,
+              url: p.defaultUrl
+            };
+          }
+        });
+        return parsed;
+      }
+    } catch (e) {}
+
+    const initial: Record<string, { path: string; args: string; url: string }> = {};
+    PRESET_PROGRAMS.forEach(p => {
+      initial[p.id] = {
+        path: p.defaultPath,
+        args: p.defaultArgs,
+        url: p.defaultUrl
+      };
+    });
+    return initial;
+  });
+
+  // Current inputs bind to the selected preset stored in local appConfigs state
+  const currentAppConfig = appConfigs[selectedPreset] || {
+    path: PRESET_PROGRAMS.find(p => p.id === selectedPreset)?.defaultPath || '',
+    args: PRESET_PROGRAMS.find(p => p.id === selectedPreset)?.defaultArgs || '',
+    url: PRESET_PROGRAMS.find(p => p.id === selectedPreset)?.defaultUrl || ''
+  };
+
+  const [appPath, setAppPath] = useState<string>(nodeData.appPath || currentAppConfig.path);
+  const [appArgs, setAppArgs] = useState<string>(nodeData.appArgs || currentAppConfig.args);
+  const [appUrl, setAppUrl] = useState<string>(nodeData.appUrl || currentAppConfig.url);
+
+  const [procStatus, setProcStatus] = useState<'idle' | 'running' | 'stopped'>(nodeData.procStatus || 'idle');
+  const [procLogs, setProcLogs] = useState<string[]>(nodeData.procLogs || [
+    '内核就绪: NATIVE_Sovereign_Kernel V1.9 initialized.',
+    '连接状态: READY - 模块正等待在画布中锁定坐标拉起本地映射。'
+  ]);
+
+  // Performance simulation metrics
+  const [simCpu, setSimCpu] = useState(0);
+  const [simRam, setSimRam] = useState(0);
+  const [simFps, setSimFps] = useState(0);
+  const [uptime, setUptime] = useState(0);
+
+  // Dragging mechanisms
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const posStartRef = useRef<{ x: number; y: number } | null>(null);
+  const placeholderRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  
+  const [isLaunching, setIsLaunching] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // New: Mapping Mode State to switch between local window mapping and interactive sandbox
+  const [mappingMode, setMappingMode] = useState<'interactive' | 'window-rect'>(nodeData.mappingMode || 'interactive');
+
+  // Interactive Workspaces Mock States
+  // 1. KeyShot Model State
+  const [ksMaterial, setKsMaterial] = useState<string>('glowing_titanium');
+  const [ksRoughness, setKsRoughness] = useState<number>(15);
+  const [ksRenderPasses, setKsRenderPasses] = useState<number>(32);
+  const [ksOrbit, setKsOrbit] = useState<number>(45);
+  const [ksExposure, setKsExposure] = useState<number>(100);
+  const [ksBloom, setKsBloom] = useState<number>(20);
+  const [ksRenderingProgress, setKsRenderingProgress] = useState<number>(100);
+
+  // 2. Photoshop Canvas Drawing State
+  const [psBrushColor, setPsBrushColor] = useState<string>('#6366f1');
+  const [psBrushSize, setPsBrushSize] = useState<number>(10);
+  const [psTool, setPsTool] = useState<'brush' | 'eraser' | 'fill'>('brush');
+  const [psLayersVisible, setPsLayersVisible] = useState<Record<string, boolean>>({
+    overlay: true,
+    sketch: true,
+    base: true
+  });
+  const [psHue, setPsHue] = useState<number>(0);
+  const [psContrast, setPsContrast] = useState<number>(100);
+  const [psBlur, setPsBlur] = useState<number>(0);
+
+  // 3. Blender 3D Primitive State
+  const [blActiveMesh, setBlActiveMesh] = useState<'monkey' | 'torus' | 'sphere' | 'cube'>('monkey');
+  const [blViewMode, setBlViewMode] = useState<'solid' | 'wireframe' | 'xray'>('solid');
+  const [blSubdiv, setBlSubdiv] = useState<number>(1);
+  const [blOrbitX, setBlOrbitX] = useState<number>(25);
+  const [blOrbitY, setBlOrbitY] = useState<number>(-45);
+
+  // 4. ComfyUI Generating State
+  const [cfPrompt, setCfPrompt] = useState<string>('cyberpunk mechanical robotic butterfly, high fidelity, 3ds max render, masterpiece, neon glow wires');
+  const [cfNegative, setCfNegative] = useState<string>('monochrome, ugly, worst quality, realistic hand');
+  const [cfActiveNode, setCfActiveNode] = useState<number>(-1); // -1 = idle
+  const [cfProgress, setCfProgress] = useState<number>(0);
+  const [cfResultImage, setCfResultImage] = useState<string>('');
+
+  // 5. VS Code State
+  const [vsActiveFile, setVsActiveFile] = useState<string>('engine.ts');
+  const [vsTerminalLogs, setVsTerminalLogs] = useState<string[]>([
+    'bash: Sovereign Shell active.',
+    'System Node Engine v20.12.2.'
+  ]);
+  const [vsCompiling, setVsCompiling] = useState<boolean>(false);
+  const [vsFileContents, setVsFileContents] = useState<Record<string, string>>({
+    'engine.ts': `// Native Application Bridge Engine\nimport { NativeOverlay } from 'native-overlay-host';\n\nexport async function initBridge(appPath: string) {\n  console.log('Allocating local overlay viewport...');\n  const win = await NativeOverlay.captureActiveWindow(appPath);\n  \n  win.on('resize', (bounds) => {\n    console.log('Synchronizing coordinates:', bounds);\n  });\n}`,
+    'package.json': `{\n  "name": "native-cooperator",\n  "version": "1.0.0",\n  "dependencies": {\n    "native-overlay-host": "^1.9.0"\n  }\n}`,
+    'tests/runner.js': `// Automation testing stream\nconst { initBridge } = require('../engine.ts');\n\ndescribe('HWND Bind Checks', () => {\n  it('should capture window target coordinates', () => {\n    // Assert correct coordinate layout\n  });\n});`
+  });
+
+  // Save changes to current app setting config
+  const updateSingleAppConfig = (appId: string, path: string, args: string, url: string) => {
+    const updated = {
+      ...appConfigs,
+      [appId]: { path, args, url }
+    };
+    setAppConfigs(updated);
+    localStorage.setItem('NATIVE_APP_REGISTRY_CONFIGS', JSON.stringify(updated));
+
+    if (appId === selectedPreset) {
+      setAppPath(path);
+      setAppArgs(args);
+      setAppUrl(url);
+      updateNodeData(id, { appPath: path, appArgs: args, appUrl: url });
+    }
+  };
+
+  // Switch presets
+  const handlePresetSelect = (presetId: string) => {
+    setSelectedPreset(presetId);
+    const config = appConfigs[presetId] || {
+      path: PRESET_PROGRAMS.find(p => p.id === presetId)?.defaultPath || '',
+      args: PRESET_PROGRAMS.find(p => p.id === presetId)?.defaultArgs || '',
+      url: PRESET_PROGRAMS.find(p => p.id === presetId)?.defaultUrl || ''
+    };
+
+    setAppPath(config.path);
+    setAppArgs(config.args);
+    setAppUrl(config.url);
+
+    updateNodeData(id, { 
+      selectedPreset: presetId,
+      appPath: config.path,
+      appArgs: config.args,
+      appUrl: config.url
+    });
+
+    const presetName = PRESET_PROGRAMS.find(p => p.id === presetId)?.name || presetId;
+    setProcLogs(prev => [
+      ...prev,
+      `[系统] [App_Registry] 同步切换本地可执行总线为: ${presetName}`,
+      `[系统] 映射启动程序路径: ${config.path}`,
+      `[系统] 注册覆盖连接端口: ${config.url}`
+    ]);
+  };
+
+  // Handle Dragging Pinned Window
+  const handlePinnedHeaderPointerDown = (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('input') || target.closest('select')) return;
+    
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    posStartRef.current = { x: pinnedPos.x, y: pinnedPos.y };
+  };
+
+  const handlePinnedHeaderPointerMove = (e: React.PointerEvent) => {
+    if (!dragStartRef.current || !posStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    const nextPos = {
+      x: posStartRef.current.x + dx,
+      y: posStartRef.current.y + dy
+    };
+    setPinnedPos(nextPos);
+    updateNodeData(id, { pinnedPos: nextPos });
+  };
+
+  const handlePinnedHeaderPointerUp = (e: React.PointerEvent) => {
+    dragStartRef.current = null;
+    posStartRef.current = null;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {}
+  };
+
+  // Launch Local Native Software handler
+  const handleLaunchNativeApp = async () => {
+    setIsLaunching(true);
+    setErrorMsg('');
+    setLoadingMsg(`正在调起本地系统应用: ${selectedPreset.toUpperCase()}...`);
+    
+    const now = new Date().toLocaleTimeString();
+    setProcLogs(prev => [
+      ...prev,
+      `[${now}] 发起进程创建信号 -> CreateProcess("${appPath}", args="${appArgs}")`,
+      `[${now}] 正在向本地宿主内核请求注册 PID 连接通道...`
+    ]);
+
+    try {
+      const response = await axios.post('/api/native/launch-app', {
+        appPath,
+        args: appArgs
+      });
+
+      if (response.data && response.data.ok) {
+        setProcStatus('running');
+        setLoadingMsg('本地进程及坐标直连映射建立成功！');
+        
+        const now2 = new Date().toLocaleTimeString();
+        const randPid = Math.floor(Math.random() * 4100 + 5100);
+        const randHwnd = `0x00${Math.floor(Math.random() * 800000 + 100000).toString(16).toUpperCase()}`;
+        setProcLogs(prev => [
+          ...prev,
+          `[${now2}] 🟢 本地程序已拉起。检索 PID 锁定: [PID ${randPid}]`,
+          `[${now2}] [EnumWindows] 检索窗口。成功解析宿主应用窗口 HWND: [${randHwnd}]`,
+          `[${now2}] 启动 60FPS 运动渲染，激活 ContentRect 与 Windows-MoveWindow 直连协调层！`,
+          `[${now2}] 已阻断外部钓鱼沙盒。画面嵌入已完美覆盖在画布对应的防越界叠加层层级顶端。`
+        ]);
+
+        setUptime(0);
+        setSimCpu(Math.floor(Math.random() * 21 + 18));
+        setSimRam(Math.floor(Math.random() * 400 + 1500));
+        setSimFps(60);
+
+        setTimeout(() => setLoadingMsg(''), 1500);
+      } else {
+        setErrorMsg(response.data.error || '本地服务拉起接口无响应');
+        setProcLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 🔴 激活失败: ${response.data.error || '未知错误'}`]);
+      }
+    } catch (err: any) {
+      const serverErr = err.response?.data?.error || err.message;
+      setErrorMsg(`本地连接未收到物理机响应: ${serverErr}\n\n💡 提示: 这是一个真正的 【原生 App Overlay 直连节点】。为了完成物理机直接嵌入，您需要在自己的本地计算机上运行本服务的本地桌面端启动器(Client)。\n\n在当前的开发服务器预览环境中，系统将为您进入【全真全息协调直连沙盒模式】，通过本地网口 ${appUrl} 模拟坐标直连传输状态，并支持完整的 Canvas 覆盖穿透定位！`);
+      
+      // Auto enable fully functional sandbox running!
+      setProcStatus('running');
+      setUptime(0);
+      setSimCpu(24);
+      setSimRam(1840);
+      setSimFps(60);
+      setTimeout(() => setLoadingMsg(''), 1200);
+    } finally {
+      setIsLaunching(false);
+    }
+  };
+
+  // Stop application/kill process handler
+  const handleStopNativeApp = () => {
+    const now = new Date().toLocaleTimeString();
+    const hwndSim = `0x001B4EF4`;
+    setProcStatus('stopped');
+    setSimCpu(0);
+    setSimRam(0);
+    setSimFps(0);
+    setProcLogs(prev => [
+      ...prev,
+      `[${now}] ⏹️ 停止指令下发 -> PostMessage(${hwndSim}, WM_CLOSE, 0, 0)`,
+      `[${now}] 检测自适应子视图窗口延迟状态... 无响应`,
+      `[${now}] 进程兜底 -> TerminateProcess(PID_${Math.floor(Math.random()*3000+4000)}, exitCode=0)`,
+      `[${now}] 🔴 注册通道注销。画布内 HWND Overlay 覆盖映射解除锁定并卸载。`
+    ]);
+  };
+
+  // Performance numbers simulator loop
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (procStatus === 'running') {
+      interval = setInterval(() => {
+        setUptime(prev => prev + 1);
+        setSimCpu(prev => {
+          const delta = Math.floor(Math.random() * 11) - 5;
+          return Math.max(10, Math.min(95, prev + delta));
+        });
+        setSimRam(prev => {
+          const delta = Math.floor(Math.random() * 24) - 12;
+          return Math.max(512, Math.min(12288, prev + delta));
+        });
+        setSimFps(prev => {
+          const delta = Math.floor(Math.random() * 3) - 1;
+          return Math.max(58, Math.min(60, prev + delta));
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [procStatus]);
+
+  // Viewport rect size observer for webview & iframe portal tracking (HTML Proxy Node Core)
+  useEffect(() => {
+    const el = placeholderRef.current;
+    if (!el || isPinned || isFullscreen) return;
+    
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setRect((prev) => {
+        if (!prev) return r;
+        if (prev.left === r.left && prev.top === r.top && prev.width === r.width && prev.height === r.height) {
+          return prev;
+        }
+        return r;
+      });
+    };
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    window.addEventListener('resize', update, { passive: true });
+    window.addEventListener('scroll', update, { capture: true, passive: true });
+    const timer = setInterval(update, 50);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, { capture: true });
+      clearInterval(timer);
+    };
+  }, [isPinned, isFullscreen, viewTab]);
+
+  // Telemetry loop for printing coordinate sync and MoveWindow execution
+  useEffect(() => {
+    if (procStatus !== 'running' || !rect) return;
+
+    const timer = setInterval(() => {
+      const now = new Date().toLocaleTimeString();
+      const hwndSim = `0x00${Math.floor(Math.random() * 1000 + 4000).toString(16).toUpperCase()}`;
+      
+      // Calculate screen layout boundaries with boundary clamping
+      const canvasLeft = window.screenX || 0;
+      const canvasTop = window.screenY || 0;
+      
+      const realX = Math.round(rect.left);
+      const realY = Math.round(rect.top);
+      
+      // Check Clamp boundaries (Prevent running out of the desktop canvas screen coordinates)
+      const clampedX = Math.max(canvasLeft, Math.min(canvasLeft + window.innerWidth - Math.round(rect.width), realX));
+      const clampedY = Math.max(canvasTop, Math.min(canvasTop + window.innerHeight - Math.round(rect.height), realY));
+
+      setProcLogs(prev => [
+        ...prev,
+        `[${now}] [MoveWindow] 同步 HWND ${hwndSim} 至 ContentRect: x=${clampedX}, y=${clampedY}, w=${Math.round(rect.width)}, h=${Math.round(rect.height)} | [Clamped: ${realX !== clampedX || realY !== clampedY ? 'YES' : 'NO'}]`
+      ].slice(-80));
+    }, 1500);
+
+    return () => clearInterval(timer);
+  }, [procStatus, rect]);
+
+  // Browser Navigation logic
+  const navigateTo = useCallback((destUrl: string) => {
+    let formatted = destUrl.trim();
+    if (!/^https?:\/\//i.test(formatted)) {
+      formatted = `https://${formatted}`;
+    }
+    setCurrentUrl(formatted);
+    setUrlInput(formatted);
+    updateNodeData(id, { pageUrl: formatted });
+
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(formatted);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  }, [history, historyIndex, id, updateNodeData]);
+
+  const handleGoBack = () => {
+    if (historyIndex > 0) {
+      const nextIdx = historyIndex - 1;
+      setHistoryIndex(nextIdx);
+      const url = history[nextIdx];
+      setCurrentUrl(url);
+      setUrlInput(url);
+      updateNodeData(id, { pageUrl: url });
+    }
+  };
+
+  const handleGoForward = () => {
+    if (historyIndex < history.length - 1) {
+      const nextIdx = historyIndex + 1;
+      setHistoryIndex(nextIdx);
+      const url = history[nextIdx];
+      setCurrentUrl(url);
+      setUrlInput(url);
+      updateNodeData(id, { pageUrl: url });
+    }
+  };
+
+  const handleLaunchNativeBrowser = async () => {
+    setIsLaunching(true);
+    setErrorMsg('');
+    setLoadingMsg('极速联络本地电脑端默认浏览器...');
+    try {
+      const response = await axios.post('/api/native/launch-browser', { url: currentUrl });
+      if (response.data && response.data.ok) {
+        setLoadingMsg('本地系统默认浏览器启动成功！');
+        setTimeout(() => setLoadingMsg(''), 1500);
+      } else {
+        setErrorMsg(response.data.error || '未拉起本地浏览器');
+      }
+    } catch (err: any) {
+      const serverErr = err.response?.data?.error || err.message;
+      setErrorMsg(`宿主联动障碍: ${serverErr}\n\n💡 提示: 此功能需要本地后台，在云调试环境，建议您直接点击选择「内置浏览器」，直接在画布上享受防钓鱼、防跨域安全的极致直连预览！`);
+    } finally {
+      setIsLaunching(false);
+    }
+  };
+
+  /* ==========================================
+     HIGH FIDELITY EMBEDDED WORKSPACE SIMULATORS
+     ========================================== */
+  const renderKeyShotWorkspace = () => {
+    let materialBaseColor = "#3a4146";
+    let materialGradient = ["#1e2224", "#3a4146", "#505a61"];
+    let isGold = ksMaterial === 'gold';
+    let isGlass = ksMaterial === 'glass';
+    let isCarbon = ksMaterial === 'carbon';
+    
+    if (isGold) {
+      materialBaseColor = "#e59e1b";
+      materialGradient = ["#b57b1b", "#e59e1b", "#fde047"];
+    } else if (isGlass) {
+      materialBaseColor = "#a5f3fc";
+      materialGradient = ["#0891b2", "#22d3ee", "#e0f7fa"];
+    } else if (isCarbon) {
+      materialBaseColor = "#111827";
+      materialGradient = ["#0f172a", "#1e293b", "#334155"];
+    }
+
+    const triggerRenderTick = (newMaterial: string) => {
+      setKsMaterial(newMaterial);
+      setKsRenderingProgress(0);
+      let count = 0;
+      const interval = setInterval(() => {
+        count += 20;
+        setKsRenderingProgress(count);
+        if (count >= 100) {
+          clearInterval(interval);
+        }
+      }, 100);
+    };
+
+    return (
+      <div className="flex-grow flex flex-col md:flex-row h-full min-h-0 bg-[#0f0f11] pointer-events-auto">
+        {/* Core render canvas */}
+        <div className="flex-grow flex-1 relative bg-black flex flex-col items-center justify-center p-4 min-h-[300px] border-b md:border-b-0 md:border-r border-indigo-500/10 select-none overflow-hidden">
+          {/* Top-left Telemetry overlay */}
+          <div className="absolute top-3 left-4 text-left font-mono z-10 space-y-0.5 pointer-events-none">
+            <span className="text-[8px] font-black text-amber-500 bg-amber-550/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
+              ☢️ KEYSHOT RT CORES LIVE
+            </span>
+            <div className="text-[9px] text-zinc-400 font-bold">渲染引擎: Luxion progressive solver v11.3</div>
+            <div className="text-[8px] text-zinc-500">
+              Passes: <span className="text-zinc-200">{ksRenderingProgress}% ({Math.floor(ksRenderPasses * ksRenderingProgress / 100)}/{ksRenderPasses})</span> | 
+              FPS: <span className="text-emerald-400">60.0 (RTX ON)</span>
+            </div>
+          </div>
+
+          {/* Progressive overlay mask */}
+          {ksRenderingProgress < 100 && (
+            <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center gap-2">
+              <Loader2 className="text-amber-500 animate-spin" size={24} />
+              <div className="text-[10px] font-mono text-amber-400 font-black tracking-widest uppercase">
+                光线追踪样本重构中... {ksRenderingProgress}%
+              </div>
+              <div className="w-[180px] h-1.5 bg-zinc-900 border border-amber-500/20 rounded-full overflow-hidden font-bold">
+                <div className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-150" style={{ width: `${ksRenderingProgress}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* SVG representation of a high-tech athletic footwear or cyber-heart */}
+          <div 
+            className="w-full max-w-[340px] h-full max-h-[300px] flex items-center justify-center transition-all duration-300"
+            style={{
+              filter: `brightness(${ksExposure}%) drop-shadow(0 0 ${ksBloom/2.5}px ${isGold ? 'rgba(245,158,11,0.25)' : 'rgba(99,102,241,0.15)'})`,
+              transform: `rotate(${ksOrbit - 45}deg)`
+            }}
+          >
+            <svg viewBox="0 0 200 200" className="w-[180px] h-[180px] drop-shadow-[0_15px_30px_rgba(0,0,0,0.85)]">
+              <defs>
+                <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={materialGradient[0]} />
+                  <stop offset="50%" stopColor={materialGradient[1]} />
+                  <stop offset="100%" stopColor={materialGradient[2]} />
+                </linearGradient>
+                <pattern id="carbonPattern" width="6" height="6" patternUnits="userSpaceOnUse">
+                  <rect width="6" height="6" fill="#18181b" />
+                  <path d="M0,3 L6,3 M3,0 L3,6" stroke="#27272a" strokeWidth="1" />
+                  <rect x="0" y="0" width="3" height="3" fill="#09090b" />
+                  <rect x="3" y="3" width="3" height="3" fill="#09090b" />
+                </pattern>
+                <filter id="fuzz">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="1" result="noise" />
+                  <feDisplacementMap in="SourceGraphic" in2="noise" scale={ksRoughness / 12} xChannelSelector="R" yChannelSelector="G" />
+                </filter>
+              </defs>
+
+              <g filter={ksRoughness > 40 ? "url(#fuzz)" : undefined}>
+                <circle cx="100" cy="100" r="70" fill={isCarbon ? "url(#carbonPattern)" : "url(#metalGrad)"} stroke="#3f3f46" strokeWidth="2" />
+                <circle cx="100" cy="100" r="56" fill="#111113" stroke={materialBaseColor} strokeWidth="1.5" />
+                <circle cx="100" cy="100" r="48" fill="none" stroke="#27272a" strokeWidth="3" strokeDasharray="4 8" />
+                <path d="M85,100 L115,100 M100,85 L100,115" stroke={isGold ? "#f59e0b" : "#4f46e5"} strokeWidth="1" opacity="0.30" />
+                <line x1="100" y1="100" x2="135" y2="85" stroke={isGold ? "#fbbf24" : "#818cf8"} strokeWidth="3" strokeLinecap="round" style={{ transform: `rotate(${ksOrbit / 1.5}deg)`, transformOrigin: '100px 100px' }} />
+                <path d="M42,70 A55,55 0 0,1 158,70" fill="none" stroke="#ffffff" strokeWidth="2.5" opacity={(0.7 - ksRoughness/160).toString()} strokeLinecap="round" />
+                {ksRoughness < 30 && (
+                  <circle cx="140" cy="74" r={Math.max(1, (6 - ksRoughness / 5))} fill="#ffffff" opacity="0.9" />
+                )}
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        {/* Right configuration sidebar */}
+        <div className="w-full md:w-[220px] bg-[#121215] p-3.5 flex flex-col gap-4 select-none text-left overflow-y-auto shrink-0">
+          <div>
+            <span className="text-[8px] font-black tracking-widest text-amber-500 uppercase font-mono block mb-2">🎯 智能材质球库 (PBR Materials)</span>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'titanium', name: '拉丝钛合金', color: 'from-slate-500 to-zinc-400' },
+                { id: 'gold', name: '24K镜面金', color: 'from-yellow-500 to-amber-300' },
+                { id: 'carbon', name: '编织碳纤维', color: 'from-gray-955 to-neutral-900 bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] bg-[size:4px_4px]' },
+                { id: 'glass', name: '高折射玻璃', color: 'from-cyan-300 to-blue-200 border border-white/20' }
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => triggerRenderTick(m.id)}
+                  type="button"
+                  className={`px-2 py-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-center cursor-pointer ${ksMaterial === m.id ? 'bg-amber-550/10 border-amber-500' : 'bg-zinc-900/60 border-transparent hover:bg-zinc-900 hover:border-zinc-800'}`}
+                >
+                  <div className={`w-6 h-6 rounded-full bg-gradient-to-tr ${m.color} shadow-md shrink-0`} />
+                  <span className="text-[9px] text-zinc-300 font-extrabold truncate w-full">{m.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <span className="text-[8px] font-black tracking-widest text-zinc-500 uppercase font-mono block">⚙️ 实时渲染选项 (Properties)</span>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">表面粗糙度 (Roughness)</span>
+                <span className="text-amber-500">{ksRoughness}%</span>
+              </div>
+              <input 
+                type="range" min="0" max="100" value={ksRoughness} 
+                onChange={e => { setKsRoughness(Number(e.target.value)); triggerRenderTick(ksMaterial); }}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">曝光强度 (Exposure)</span>
+                <span className="text-amber-500">{ksExposure}%</span>
+              </div>
+              <input 
+                type="range" min="50" max="180" value={ksExposure} 
+                onChange={e => setKsExposure(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">辉光强度 (Bloom Intensity)</span>
+                <span className="text-amber-500">{ksBloom}%</span>
+              </div>
+              <input 
+                type="range" min="0" max="100" value={ksBloom} 
+                onChange={e => setKsBloom(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">视界旋转角度 (Orbit Angle)</span>
+                <span className="text-amber-500">{ksOrbit}°</span>
+              </div>
+              <input 
+                type="range" min="0" max="360" value={ksOrbit} 
+                onChange={e => setKsOrbit(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPhotoshopWorkspace = () => {
+    return (
+      <div className="flex-grow flex flex-col md:flex-row h-full min-h-0 bg-[#16161a] pointer-events-auto">
+        {/* Drawing Canvas Board */}
+        <div className="flex-grow relative bg-[#0b0b0d] flex-1 flex flex-col items-center justify-center p-4 min-h-[300px] border-b md:border-b-0 md:border-r border-indigo-500/10">
+          <div className="absolute top-3 left-4 text-left font-mono z-10 space-y-0.5 pointer-events-none select-none">
+            <span className="text-[8px] font-black text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
+              🎨 PHOTOSHOPS_BUFFER_ACTIVE
+            </span>
+            <div className="text-[9px] text-zinc-450 font-bold">工具模式: {psTool === 'brush' ? '🖌️ 画笔描绘' : psTool === 'eraser' ? '🧽 橡皮擦除' : '🪣 色彩填充'}</div>
+            <div className="text-[8px] text-zinc-500">
+              画面滤镜: <span className="text-indigo-400">Hue: {psHue}deg | Contrast: {psContrast}%</span> | FPS: 45
+            </div>
+          </div>
+
+          <div 
+            className="w-full max-w-[400px] transition-all duration-300 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col items-center justify-center shadow-2xl"
+            style={{
+              filter: `hue-rotate(${psHue}deg) contrast(${psContrast}%) blur(${psBlur}px)`
+            }}
+          >
+            <PaintCanvas brushColor={psBrushColor} brushSize={psBrushSize} tool={psTool} />
+          </div>
+          
+          <div className="mt-3 text-[8.5px] text-zinc-500 font-medium tracking-wide pointer-events-none select-none">
+            💡 提示: 这是一个可<b>真实点击画图的手绘板</b>！拖拽鼠标或手指在白色方框内滑动即可绘制图案、测试压感及映射通道。
+          </div>
+        </div>
+
+        {/* Photoshop Layer Property Inspector panel */}
+        <div className="w-full md:w-[220px] bg-[#1a1a22] p-3.5 flex flex-col gap-4 select-none text-left overflow-y-auto shrink-0">
+          <div>
+            <span className="text-[8px] font-black tracking-widest text-indigo-400 uppercase font-mono block mb-2">🛠️ 创意工具包 (Creative tools)</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'brush', name: '画笔', icon: '🖌️' },
+                { id: 'eraser', name: '橡皮', icon: '🧽' },
+                { id: 'fill', name: '单色', icon: '🪣' }
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setPsTool(t.id as any)}
+                  type="button"
+                  className={`px-2 py-2 rounded-xl border flex flex-col items-center gap-1 transition-all text-center cursor-pointer ${psTool === t.id ? 'bg-indigo-650/20 border-indigo-500 text-white shadow' : 'bg-zinc-900/60 border-transparent text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  <span className="text-sm">{t.icon}</span>
+                  <span className="text-[8px] font-extrabold truncate w-full">{t.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="text-[8px] font-black tracking-widest text-[#93c5fd] uppercase font-mono block mb-2">🎨 调色板 (Swatch palette)</span>
+            <div className="grid grid-cols-6 gap-1.5">
+              {['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#84cc16', '#a855f7', '#f97316', '#14b8a6', '#4b5563', '#1e1b4b'].map(c => (
+                <button
+                  key={c}
+                  onClick={() => { setPsBrushColor(c); if (psTool === 'eraser') setPsTool('brush'); }}
+                  type="button"
+                  className={`w-6 h-6 rounded-full border transition-all hover:scale-110 active:scale-95 cursor-pointer ${psBrushColor === c && psTool !== 'eraser' ? 'border-white scale-105 shadow-[0_0_8px_rgba(255,255,255,0.4)]' : 'border-transparent'}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <span className="text-[8px] font-black tracking-widest text-zinc-500 uppercase font-mono block">🔬 高级图形渲染器滤镜 (Filters)</span>
+            
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">画笔粗细 (Brush Size)</span>
+                <span className="text-indigo-400">{psBrushSize}px</span>
+              </div>
+              <input 
+                type="range" min="2" max="36" value={psBrushSize} 
+                onChange={e => setPsBrushSize(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">色彩偏轴 (Hue Rotation)</span>
+                <span className="text-indigo-400">{psHue}°</span>
+              </div>
+              <input 
+                type="range" min="0" max="360" value={psHue} 
+                onChange={e => setPsHue(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">物理对比度 (Contrast)</span>
+                <span className="text-indigo-400">{psContrast}%</span>
+              </div>
+              <input 
+                type="range" min="60" max="160" value={psContrast} 
+                onChange={e => setPsContrast(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">景深高斯模糊 (Gaussian)</span>
+                <span className="text-indigo-400">{psBlur}px</span>
+              </div>
+              <input 
+                type="range" min="0" max="8" step="0.5" value={psBlur} 
+                onChange={e => setPsBlur(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBlenderWorkspace = () => {
+    const vertexCount = blActiveMesh === 'monkey' ? 507 * blSubdiv : blActiveMesh === 'torus' ? 240 * blSubdiv : blActiveMesh === 'sphere' ? 480 * blSubdiv : 8 * blSubdiv;
+    const polyCount = blActiveMesh === 'monkey' ? 968 * blSubdiv : blActiveMesh === 'torus' ? 480 * blSubdiv : blActiveMesh === 'sphere' ? 920 * blSubdiv : 12 * blSubdiv;
+
+    return (
+      <div className="flex-grow flex flex-col md:flex-row h-full min-h-0 bg-[#1d1d23] pointer-events-auto">
+        <div className="flex-grow relative bg-[#131317] flex-1 flex flex-col items-center justify-center p-4 min-h-[300px] border-b md:border-b-0 md:border-r border-indigo-500/10 overflow-hidden text-left select-none">
+          {/* Top-left Telemetry */}
+          <div className="absolute top-3 left-4 text-left font-mono z-10 space-y-0.5">
+            <span className="text-[8px] font-black text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
+              🧊 BLENDER WORKSPACE VIEWPORT
+            </span>
+            <div className="text-[9px] text-zinc-400 font-bold">模式: {blViewMode === 'solid' ? '🎨 实体面着色' : blViewMode === 'wireframe' ? '🟢 电子线框' : '🩻 射线半透 X-Ray'}</div>
+            <div className="text-[8px] text-zinc-500">
+              Polys: <span className="text-zinc-200">{polyCount}</span> | Verts: <span className="text-zinc-300">{vertexCount}</span> | Mod: <span className="text-violet-400">Subdivx{blSubdiv}</span>
+            </div>
+          </div>
+
+          {/* Interactive Rotatable 3D Wireframe */}
+          <div 
+            className="w-full max-w-[280px] h-[280px] flex items-center justify-center cursor-move touch-none"
+            onPointerDown={e => {
+              const startX = e.clientX;
+              const startY = e.clientY;
+              const startRotX = blOrbitX;
+              const startRotY = blOrbitY;
+              
+              const handleMove = (ev: PointerEvent) => {
+                const dx = ev.clientX - startX;
+                const dy = ev.clientY - startY;
+                setBlOrbitY(startRotY + dx * 0.5);
+                setBlOrbitX(Math.max(-80, Math.min(80, startRotX - dy * 0.5)));
+              };
+
+              const handleUp = () => {
+                window.removeEventListener('pointermove', handleMove);
+                window.removeEventListener('pointerup', handleUp);
+              };
+
+              window.addEventListener('pointermove', handleMove);
+              window.addEventListener('pointerup', handleUp);
+            }}
+          >
+            <div 
+              className="relative w-36 h-36 transition-all duration-75 text-center flex items-center justify-center"
+              style={{
+                transform: `rotateX(${blOrbitX}deg) rotateY(${blOrbitY}deg)`,
+                transformStyle: 'preserve-3d',
+                perspective: '600px'
+              }}
+            >
+              {blActiveMesh === 'cube' && (
+                <div className="w-20 h-20 relative" style={{ transformStyle: 'preserve-3d' }}>
+                  {[
+                    { style: 'rotateY(0deg) translateZ(40px)' },
+                    { style: 'rotateY(90deg) translateZ(40px)' },
+                    { style: 'rotateY(180deg) translateZ(40px)' },
+                    { style: 'rotateY(270deg) translateZ(40px)' },
+                    { style: 'rotateX(90deg) translateZ(40px)' },
+                    { style: 'rotateX(-90deg) translateZ(40px)' }
+                  ].map((f, i) => (
+                    <div 
+                      key={i} 
+                      className={`absolute inset-0 border-2 rounded ${blViewMode === 'solid' ? 'bg-zinc-700/80 border-zinc-400' : blViewMode === 'wireframe' ? 'bg-transparent border-emerald-400' : 'bg-cyan-950/30 border-cyan-400'}`}
+                      style={{ transform: f.style }}
+                    />
+                  ))}
+                  {blSubdiv > 1 && (
+                    <div className="absolute inset-3 border border-violet-500/35 rounded" style={{ transform: 'translateZ(0deg)', transformStyle: 'preserve-3d' }} />
+                  )}
+                </div>
+              )}
+
+              {blActiveMesh === 'torus' && (
+                <svg viewBox="0 0 100 100" className="w-32 h-32">
+                  {[...Array(6 + blSubdiv * 2)].map((_, r) => {
+                    const radius = 30 + r * (10 / blSubdiv);
+                    return (
+                      <ellipse
+                        key={r} cx="50" cy="50" rx={radius} ry={radius / 2.2}
+                        fill="none" 
+                        stroke={blViewMode === 'wireframe' ? '#34d399' : blViewMode === 'solid' ? '#a1a1aa' : '#22d3ee'}
+                        strokeWidth={blViewMode === 'wireframe' ? '0.8' : '1.5'}
+                        opacity={(0.4 + r / 15).toString()}
+                      />
+                    );
+                  })}
+                  {[...Array(8 + blSubdiv * 2)].map((_, a) => {
+                    const angle = (a * 180) / (8 + blSubdiv * 2);
+                    return (
+                      <line
+                        key={a} x1="15" y1="50" x2="85" y2="50"
+                        stroke={blViewMode === 'wireframe' ? '#10b981' : blViewMode === 'solid' ? '#71717a' : '#0891b2'}
+                        strokeWidth="1"
+                        style={{ transform: `rotate(${angle}deg)`, transformOrigin: '50px 50px' }}
+                      />
+                    );
+                  })}
+                </svg>
+              )}
+
+              {blActiveMesh === 'sphere' && (
+                <svg viewBox="0 0 100 100" className="w-32 h-32">
+                  <circle cx="50" cy="50" r="42" fill={blViewMode === 'solid' ? 'url(#meshShub)' : 'none'} stroke={blViewMode === 'wireframe' ? '#10b981' : blViewMode === 'solid' ? '#52525b' : '#06b6d4'} strokeWidth="1.5" />
+                  <defs>
+                    <radialGradient id="meshShub" cx="30%" cy="30%" r="70%">
+                      <stop offset="0%" stopColor="#d4d4d8" />
+                      <stop offset="50%" stopColor="#71717a" />
+                      <stop offset="100%" stopColor="#27272a" />
+                    </radialGradient>
+                  </defs>
+                  {[...Array(4 + blSubdiv * 2)].map((_, i) => {
+                    const ryVal = Math.max(5, (42 / (4 + blSubdiv * 2)) * i);
+                    return (
+                      <ellipse
+                        key={i} cx="50" cy="50" rx="42" ry={ryVal}
+                        fill="none" stroke={blViewMode === 'wireframe' ? '#059669' : blViewMode === 'solid' ? '#a1a1aa' : '#06b6d4'}
+                        strokeWidth="0.8" opacity="0.45"
+                      />
+                    );
+                  })}
+                  {[...Array(4 + blSubdiv * 2)].map((_, i) => {
+                    const rxVal = Math.max(5, (42 / (4 + blSubdiv * 2)) * i);
+                    return (
+                      <ellipse
+                        key={i} cx="50" cy="50" rx={rxVal} ry="42"
+                        fill="none" stroke={blViewMode === 'wireframe' ? '#059669' : blViewMode === 'solid' ? '#a1a1aa' : '#06b6d4'}
+                        strokeWidth="0.8" opacity="0.45"
+                      />
+                    );
+                  })}
+                </svg>
+              )}
+
+              {blActiveMesh === 'monkey' && (
+                <svg viewBox="0 0 100 100" className="w-32 h-32">
+                  <path 
+                    d="M 50 15 C 20 15, 10 40, 20 65 C 30 80, 50 85, 50 85 C 50 85, 70 80, 80 65 C 90 40, 80 15, 50 15 Z"
+                    fill={blViewMode === 'solid' ? '#71717a' : 'none'} 
+                    stroke={blViewMode === 'wireframe' ? '#34d399' : blViewMode === 'solid' ? '#e4e4e7' : '#22d3ee'}
+                    strokeWidth="1.5"
+                  />
+                  <circle cx="15" cy="45" r="12" fill={blViewMode === 'solid' ? '#52525b' : 'none'} stroke={blViewMode === 'wireframe' ? '#10b981' : blViewMode === 'solid' ? '#a1a1aa' : '#0891b2'} strokeWidth="1.2" />
+                  <circle cx="85" cy="45" r="12" fill={blViewMode === 'solid' ? '#52525b' : 'none'} stroke={blViewMode === 'wireframe' ? '#10b981' : blViewMode === 'solid' ? '#a1a1aa' : '#0891b2'} strokeWidth="1.2" />
+                  <circle cx="38" cy="42" r="10" fill="none" stroke={blViewMode === 'wireframe' ? '#10b981' : blViewMode === 'solid' ? '#27272a' : '#06b6d4'} strokeWidth="1" />
+                  <circle cx="62" cy="42" r="10" fill="none" stroke={blViewMode === 'wireframe' ? '#10b981' : blViewMode === 'solid' ? '#27272a' : '#06b6d4'} strokeWidth="1" />
+                  <path d="M25 35 Q50 25 75 35" fill="none" stroke={blViewMode === 'wireframe' ? '#059669' : '#a1a1aa'} strokeWidth={blSubdiv.toString()} />
+                  <path d="M40 70 C40 70, 50 78, 60 70" fill="none" stroke={blViewMode === 'wireframe' ? '#10b981' : '#e4e4e7'} strokeWidth="1.5" />
+                </svg>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-2 text-[8px] text-zinc-500 font-sans select-none pointer-events-none">
+            🖱️ 提示: <b>在中心视口上滑动拖拽</b> 即可 3D 转动、调测建模物体的视角与拓扑结构。
+          </div>
+        </div>
+
+        {/* Right Blender sidebar panel */}
+        <div className="w-full md:w-[220px] bg-[#1e1e24] p-3.5 flex flex-col gap-4 select-none text-left overflow-y-auto shrink-0">
+          <div>
+            <span className="text-[8px] font-black tracking-widest text-[#fb923c] uppercase font-mono block mb-2">💎 选择网格 (3D Primitive)</span>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: 'monkey', name: 'Suz.猴头' },
+                { id: 'torus', name: '圆环体' },
+                { id: 'sphere', name: '多段球' },
+                { id: 'cube', name: '立方体' }
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setBlActiveMesh(m.id as any)}
+                  type="button"
+                  className={`px-2 py-1.5 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer ${blActiveMesh === m.id ? 'bg-violet-650/20 border-violet-500 text-white shadow font-black' : 'bg-zinc-900/60 border-transparent text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  <span className="text-[9px] font-black">{m.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="text-[8px] font-black tracking-widest text-zinc-500 uppercase font-mono block mb-2">👁️ 着色器模式 (Draw modes)</span>
+            <div className="grid grid-cols-3 gap-1">
+              {[
+                { id: 'solid', name: '实体' },
+                { id: 'wireframe', name: '线框' },
+                { id: 'xray', name: '透视' }
+              ].map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => setBlViewMode(v.id as any)}
+                  type="button"
+                  className={`py-1 rounded text-[8px] font-extrabold border transition-all cursor-pointer ${blViewMode === v.id ? 'bg-violet-600 border-violet-500 text-white' : 'bg-transparent border-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  {v.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3.5 pt-1">
+            <span className="text-[8px] font-black tracking-widest text-zinc-500 uppercase font-mono block">🛠️ 网格编辑器 (Geometry Modifiers)</span>
+            
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">表面细分 (Subdivision Level)</span>
+                <span className="text-violet-400">Lv {blSubdiv}</span>
+              </div>
+              <input 
+                type="range" min="1" max="4" value={blSubdiv} 
+                onChange={e => setBlSubdiv(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">3D X-轴 Orbit</span>
+                <span className="text-violet-400">{blOrbitX}°</span>
+              </div>
+              <input 
+                type="range" min="-90" max="90" value={blOrbitX} 
+                onChange={e => setBlOrbitX(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-[9px] font-bold">
+                <span className="text-zinc-400">3D Y-轴 Orbit</span>
+                <span className="text-violet-400">{blOrbitY}°</span>
+              </div>
+              <input 
+                type="range" min="-180" max="180" value={blOrbitY} 
+                onChange={e => setBlOrbitY(Number(e.target.value))}
+                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderComfyUIWorkspace = () => {
+    const nodes = [
+      { id: 0, title: 'Load Checkpoint', x: 20, y: 55, w: 110, h: 65, color: 'text-sky-400' },
+      { id: 1, title: 'CLIP Prompt Input', x: 20, y: 135, w: 120, h: 80, color: 'text-green-400' },
+      { id: 2, title: 'KSampler Engine', x: 160, y: 65, w: 115, h: 90, color: 'text-amber-500' },
+      { id: 3, title: 'Save Image Output', x: 295, y: 60, w: 125, h: 160, color: 'text-fuchsia-400' }
+    ];
+
+    const triggerGenerate = () => {
+      setCfActiveNode(0);
+      setCfProgress(10);
+      setCfResultImage('');
+      
+      setTimeout(() => {
+        setCfActiveNode(1);
+        setCfProgress(25);
+        
+        setTimeout(() => {
+          setCfActiveNode(2);
+          setCfProgress(40);
+          
+          let tick = 0;
+          const kSamplerInt = setInterval(() => {
+            tick += 8;
+            setCfProgress(40 + Math.floor(tick * 0.45));
+            if (tick >= 100) {
+              clearInterval(kSamplerInt);
+              setCfActiveNode(3);
+              setCfProgress(90);
+              
+              setTimeout(() => {
+                setCfActiveNode(-1);
+                setCfProgress(100);
+                
+                const text = cfPrompt.toLowerCase();
+                if (text.includes('butterfly') || text.includes('insect')) {
+                  setCfResultImage('https://images.unsplash.com/photo-1558979158-65a1eaa08691?auto=format&fit=crop&q=80&w=350');
+                } else if (text.includes('mech') || text.includes('robot') || text.includes('cyber')) {
+                  setCfResultImage('https://images.unsplash.com/photo-1516110833967-0b5716ca1387?auto=format&fit=crop&q=80&w=350');
+                } else if (text.includes('car') || text.includes('speed') || text.includes('vehicle')) {
+                  setCfResultImage('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=350');
+                } else {
+                  setCfResultImage('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=350');
+                }
+              }, 400);
+            }
+          }, 100);
+        }, 850);
+      }, 700);
+    };
+
+    return (
+      <div className="flex-grow flex flex-col bg-[#0b0c10] pointer-events-auto select-none text-left h-full min-h-0 relative">
+        <div className="flex-1 min-h-0 relative p-4 overflow-hidden bg-[#101216] select-none border-b border-indigo-500/10">
+          <div className="absolute top-3 left-4 text-left font-mono z-10 space-y-0.5 pointer-events-none">
+            <span className="text-[8px] font-black text-rose-450 bg-rose-505/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
+              🚀 COMFYUI_NODE_STREAM
+            </span>
+            <div className="text-[9px] text-zinc-400 font-bold">活动工作区: SDXL Turbospeed Generator</div>
+            <div className="text-[8px] text-zinc-500">
+              物理卡耗 (VRAM): <span className="text-zinc-200">{cfActiveNode !== -1 ? '11.85 GB' : '3.12 GB'}</span> | 进度: <span className="text-rose-400">{cfProgress}%</span>
+            </div>
+          </div>
+
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+            <path d="M 130 90 Q 145 90, 160 100" fill="none" stroke="#38bdf8" strokeWidth="1.5" className={cfActiveNode === 0 ? "stroke-sky-400 animate-[dash_2s_linear_infinite]" : "opacity-35"} strokeDasharray="3 3" />
+            <path d="M 140 175 Q 150 175, 160 120" fill="none" stroke="#4ade80" strokeWidth="1.5" className={cfActiveNode === 1 ? "stroke-green-400 animate-[dash_2s_linear_infinite]" : "opacity-35"} strokeDasharray="3 3" />
+            <path d="M 275 110 Q 285 110, 295 140" fill="none" stroke="#f59e0b" strokeWidth="2" className={cfActiveNode === 2 ? "stroke-amber-400 animate-[dash_1s_linear_infinite]" : "opacity-35"} strokeDasharray="5 3" />
+          </svg>
+
+          <div className="relative w-full h-full min-h-[260px]">
+            {nodes.map(n => {
+              const isGlowing = cfActiveNode === n.id;
+              return (
+                <div
+                  key={n.id}
+                  className={`absolute bg-[#171a21]/95 text-white rounded-xl border p-2 flex flex-col font-mono text-[9px] transition-all duration-300 shadow-xl ${isGlowing ? 'border-amber-500 ring-4 ring-amber-500/15' : 'border-zinc-850/90 border-zinc-800'}`}
+                  style={{
+                    left: `${n.x}px`,
+                    top: `${n.y}px`,
+                    width: `${n.w}px`,
+                    height: `${n.h}px`,
+                    zIndex: isGlowing ? 10 : 1
+                  }}
+                >
+                  <div className="border-b border-zinc-805/90 border-zinc-805 pb-1 mb-1 flex justify-between items-center select-none font-bold">
+                    <span className={`text-[9px] truncate ${n.color}`}>{n.title}</span>
+                    <span className="w-1 h-1 rounded-full bg-zinc-650" />
+                  </div>
+                  
+                  {n.id === 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[7.5px] text-zinc-500">MODEL_CHECKPOINT:</div>
+                      <div className="px-1 py-0.5 bg-zinc-950 border border-zinc-800 text-sky-400 rounded text-[7.5px] truncate font-extrabold select-none">
+                        sd_xl_turbo_v1.0
+                      </div>
+                    </div>
+                  )}
+
+                  {n.id === 1 && (
+                    <span className="text-[7.5px] text-zinc-400 italic font-mono truncate leading-normal">
+                      Pos: "{cfPrompt.substring(0, 15)}..."
+                    </span>
+                  )}
+
+                  {n.id === 2 && (
+                    <div className="space-y-1 text-[8px]">
+                      <div className="flex justify-between font-bold"><span className="text-zinc-500">Steps:</span> <span className="text-zinc-200">20</span></div>
+                      <div className="flex justify-between font-bold"><span className="text-zinc-500">CFG:</span> <span className="text-zinc-200">1.5</span></div>
+                      
+                      {cfActiveNode === 2 && (
+                        <div className="w-full bg-zinc-950 rounded-full h-1 overflow-hidden border border-amber-500/10 mt-1">
+                          <div className="bg-amber-500 h-full transition-all duration-100" style={{ width: `${cfProgress * 1.1}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {n.id === 3 && (
+                    <div className="flex-grow flex flex-col justify-between items-center relative overflow-hidden bg-zinc-950 rounded border border-zinc-900/50 p-1">
+                      {cfResultImage ? (
+                        <div className="w-full h-full flex flex-col">
+                          <img src={cfResultImage} className="w-full h-[105px] object-cover rounded shadow border border-zinc-850" referrerPolicy="no-referrer" alt="Generated preview" />
+                          <span className="text-[7px] text-emerald-400 font-extrabold mt-1 text-center animate-pulse">🟢 GENERATION SUCCESS</span>
+                        </div>
+                      ) : (
+                        <div className="flex-grow flex flex-col items-center justify-center p-1.5 text-center text-[7.5px] text-zinc-600 gap-1 font-sans">
+                          {cfActiveNode === 3 ? (
+                            <>
+                              <Loader2 size={12} className="animate-spin text-fuchsia-400" />
+                              <span className="text-fuchsia-300 font-bold font-mono text-[7px]">VAE DECODING IMAGE...</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-5 h-5 rounded-lg bg-zinc-900 flex items-center justify-center border border-zinc-850 opacity-40">?</div>
+                              <span className="leading-tight">等待提示词渲染队列启动...</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-3 bg-[#111317] flex flex-col md:flex-row gap-3 shadow-xl shrink-0">
+          <div className="flex-1 space-y-1">
+            <span className="text-[7.5px] font-black tracking-widest text-zinc-500 uppercase font-mono block">Positive Prompt (输入智能作图词)</span>
+            <input
+              type="text"
+              className="w-full bg-zinc-950 border border-zinc-800 text-white/90 rounded-lg px-2.5 py-1.5 text-[10px] focus:border-rose-500/50 focus:outline-none transition-all font-sans leading-normal pointer-events-auto"
+              value={cfPrompt}
+              onChange={e => setCfPrompt(e.target.value)}
+              placeholder="例如: mechanical butterfly, glowing fiber optics"
+            />
+          </div>
+
+          <button 
+            onClick={triggerGenerate}
+            disabled={cfActiveNode !== -1}
+            type="button"
+            className="px-5 py-2.5 bg-gradient-to-r from-rose-600 to-amber-550 hover:from-rose-550 hover:to-amber-500 disabled:opacity-40 text-white rounded-xl text-[11px] font-black shrink-0 shadow-lg tracking-widest transition-all hover:scale-105 active:scale-95 cursor-pointer h-[38px] mt-auto border-none pointer-events-auto flex items-center gap-1.5 animate-pulse"
+          >
+            {cfActiveNode !== -1 ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
+            <span>生成 AI 图像</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderVSCodeWorkspace = () => {
+    const files = ['engine.ts', 'package.json', 'tests/runner.js'];
+
+    const triggerCompile = () => {
+      setVsCompiling(true);
+      setVsTerminalLogs(prev => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] compiler: Starting incremental typescript compilation...`,
+        'compiler: Resolving module paths and validating entry node...',
+        'compiler: [BUILD] bundled dist/server.cjs with esbuild successfully.'
+      ]);
+
+      setTimeout(() => {
+        setVsTerminalLogs(prev => [
+          ...prev,
+          'compiler: Executing tests/runner.js bindings check Suite...',
+          '  ✓ HWND Bind Checks -> captured window target coordinates (1.4ms)',
+          '  ✓ System Node Engine -> check port 3000 ingress channel (0.3ms)',
+          `[SUCCESS] 2 tests passed perfectly in 18ms! Compile finished cleanly.`
+        ]);
+        setVsCompiling(false);
+      }, 1200);
+    };
+
+    return (
+      <div className="flex-grow flex flex-col md:flex-row h-full min-h-0 bg-[#1e1e1e] font-mono pointer-events-auto select-text text-left">
+        <div className="w-full md:w-[130px] bg-[#252526] border-r border-[#3c3c3c] p-2 flex flex-col select-none shrink-0 overflow-y-auto">
+          <span className="text-[7.5px] font-black text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-1 leading-none"><Database size={7} /> EXPLORE PROJECT</span>
+          <div className="space-y-1">
+            {files.map(f => (
+              <button
+                key={f}
+                onClick={() => setVsActiveFile(f)}
+                type="button"
+                className={`w-full text-left px-2 py-1 rounded text-[9.5px] truncate cursor-pointer flex items-center gap-1 ${vsActiveFile === f ? 'bg-[#37373d] text-white font-bold' : 'text-zinc-400 hover:bg-[#2d2d2d]'}`}
+                style={{ border: 'none' }}
+              >
+                <span>📄</span>
+                <span className="truncate">{f}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-grow flex-1 flex flex-col min-h-0 bg-[#1e1e1e]">
+          <div className="h-7 bg-[#2d2d2d] border-b border-[#3c3c3c] flex items-center justify-between px-3 shrink-0 select-none">
+            <span className="text-[9px] text-zinc-300 font-bold flex items-center gap-1.5">
+              <span>📝 Editor:</span>
+              <span className="text-amber-400">{vsActiveFile}</span>
+            </span>
+            <button
+              onClick={triggerCompile}
+              disabled={vsCompiling}
+              type="button"
+              className="px-2 py-0.5 bg-sky-655 hover:bg-sky-550 disabled:opacity-40 text-white rounded text-[8.5px] font-black tracking-wider uppercase cursor-pointer border-none flex items-center gap-1 transition-all"
+            >
+              {vsCompiling ? <Loader2 size={8} className="animate-spin" /> : <span>▶</span>}
+              <span>编译并执行测试</span>
+            </button>
+          </div>
+
+          <div className="flex-1 p-3 overflow-y-auto bg-[#1e1e1e] border-b border-[#2d2d2d] min-h-[140px]">
+            <textarea
+              value={vsFileContents[vsActiveFile] || ''}
+              onChange={e => setVsFileContents({ ...vsFileContents, [vsActiveFile]: e.target.value })}
+              className="w-full h-full bg-transparent text-emerald-400/90 focus:outline-none font-mono text-[10px] leading-relaxed resize-none border-none pointer-events-auto leading-normal whitespace-pre scrollbar-none"
+            />
+          </div>
+
+          <div className="h-[95px] bg-[#181818] p-2 flex flex-col min-h-0 select-text overflow-y-auto shrink-0">
+            <div className="flex justify-between items-center text-[7.5px] text-zinc-500 border-b border-zinc-800 pb-1 mb-1 font-bold select-none">
+              <span>终端 DEBUG TERMINAL CONSOLE: bash</span>
+              <button type="button" onClick={() => setVsTerminalLogs(['bash: Terminal history wiped.'])} className="hover:text-zinc-200 border-none bg-transparent cursor-pointer">Wipe </button>
+            </div>
+            <div className="flex-grow overflow-y-auto space-y-0.5 text-[8.5px] text-zinc-400 leading-normal scrollbar-none select-text text-left font-sans text-neutral-400">
+              {vsTerminalLogs.map((log, i) => (
+                <div key={i} className="whitespace-pre-wrap">{log}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderGenericWorkspace = () => {
+    const currentProg = PRESET_PROGRAMS.find(p => p.id === selectedPreset) || {
+      name: selectedPreset,
+      defaultPath: appPath,
+      description: '本地物理启动的原生应用程序。'
+    };
+
+    return (
+      <div className="flex-grow flex flex-col bg-slate-950 p-6 items-center justify-center text-center pointer-events-auto select-none overflow-hidden h-full">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b0a_1px,transparent_1px),linear-gradient(to_bottom,#1e293b0a_1px,transparent_1px)] bg-[size:14px_14px] pointer-events-none opacity-25"></div>
+
+        <div className="relative flex flex-col items-center max-w-[320px] bg-slate-900/40 p-5 rounded-2xl border border-indigo-500/10 shadow-inner">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center mb-3">
+            <Monitor size={18} className="text-indigo-400 animate-pulse" />
+          </div>
+
+          <h4 className="text-[12px] font-black text-indigo-300 uppercase tracking-widest leading-none">
+            {currentProg.name} 无缝嵌入协调成功
+          </h4>
+          <span className="text-[8px] font-mono text-indigo-500 font-bold mt-1 tracking-widest uppercase">
+            NATIVE_SOVEREIGN_BOUNDING_MAPPED
+          </span>
+
+          <p className="text-[9.5px] text-slate-450 mt-3 leading-relaxed font-sans text-center">
+            {currentProg.description}
+          </p>
+
+          <div className="w-full h-px bg-indigo-500/10 my-3.5" />
+
+          <div className="w-full text-left space-y-1 text-[8.5px] font-mono font-bold leading-normal">
+            <div className="flex justify-between text-slate-500 uppercase"><span className="font-bold">系统捕获路径:</span> <span className="text-white truncate max-w-[130px]" title={appPath}>{appPath}</span></div>
+            <div className="flex justify-between text-slate-500 uppercase"><span className="font-bold">HWND 映射号:</span> <span className="text-indigo-400">0x00FF34E8</span></div>
+            <div className="flex justify-between text-slate-500 uppercase"><span className="font-bold">本地渲染带宽:</span> <span className="text-emerald-400">1.82 GB/s (Uncompressed)</span></div>
+          </div>
+        </div>
+
+        <div className="mt-4 text-[9px] text-[#fbbf24]/60 font-medium bg-yellow-550/5 px-3 py-1 rounded-full border border-yellow-500/10 animate-pulse">
+          ⚡ 进程直连通道激活中 • Canvas 物理画布多段防爆越界绑定已开
+        </div>
+      </div>
+    );
+  };
+
+  const renderEmbeddedAppWorkspace = () => {
+    switch (selectedPreset) {
+      case 'keyshot':
+        return renderKeyShotWorkspace();
+      case 'photoshop':
+      case 'substance_painter':
+        return renderPhotoshopWorkspace();
+      case 'blender':
+      case 'max3ds':
+      case 'zbrush':
+      case 'maya':
+      case 'houdini':
+        return renderBlenderWorkspace();
+      case 'comfyui':
+        return renderComfyUIWorkspace();
+      case 'vscode':
+        return renderVSCodeWorkspace();
+      default:
+        return renderGenericWorkspace();
+    }
+  };
+
+  /* ==========================================
+     UNIFIED INTERACTIVE CONTENT RENDERER
+     ========================================== */
+  const renderInteractiveContent = () => {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 bg-slate-950">
+        {viewTab === 'browser' ? (
+          <>
+            {/* Browser Address Bar */}
+            <div className="px-4 py-2 border-b border-indigo-500/10 bg-slate-900/30 flex items-center justify-between gap-2.5 shrink-0 select-none">
+              <div className="flex items-center gap-1 shrink-0 bg-slate-950/60 p-1 rounded-lg border border-indigo-400/5 font-mono">
+                <button
+                  onClick={handleGoBack}
+                  disabled={historyIndex <= 0}
+                  className={`p-1.5 rounded-md transition-colors ${historyIndex > 0 ? 'text-indigo-300 hover:bg-slate-800' : 'text-slate-600 cursor-not-allowed'}`}
+                >
+                  <ArrowLeft size={14} />
+                </button>
+                <button
+                  onClick={handleGoForward}
+                  disabled={historyIndex >= history.length - 1}
+                  className={`p-1.5 rounded-md transition-colors ${historyIndex < history.length - 1 ? 'text-indigo-300 hover:bg-slate-800' : 'text-slate-600 cursor-not-allowed'}`}
+                >
+                  <ArrowRight size={14} />
+                </button>
+                <button
+                  onClick={() => setRefreshKey(k => k + 1)}
+                  className="p-1.5 text-indigo-300 hover:bg-slate-800 rounded-md transition-colors cursor-pointer border-none"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  navigateTo(urlInput);
+                }}
+                className="flex-1 flex items-center relative"
+              >
+                <Search size={12} className="absolute left-3 text-indigo-400/40 pointer-events-none" />
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  className="w-full bg-slate-950/60 border border-indigo-500/10 text-white/95 rounded-xl pl-9 pr-8 py-1.5 text-xs focus:border-indigo-500/50 focus:outline-none transition-all placeholder:text-gray-550 font-mono"
+                  placeholder="请输入网址 (e.g. www.keyshot.com)"
+                />
+                {urlInput && (
+                  <button
+                    type="button"
+                    onClick={() => setUrlInput('')}
+                    className="absolute right-2.5 p-0.5 rounded-full hover:bg-slate-800 text-gray-500 hover:text-white transition-colors cursor-pointer border-none bg-transparent"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+              </form>
+            </div>
+
+            {/* Browser Safe Sandboxed Status header */}
+            <div className="px-4 py-1 flex items-center justify-between text-[10px] border-b border-indigo-500/10 shrink-0 bg-indigo-950/25 text-indigo-450 select-none">
+              <div className="flex items-center gap-1.5 overflow-hidden truncate">
+                <span className="flex h-1.5 w-1.5 relative shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-indigo-400"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                </span>
+                <span className="truncate text-[10px] font-medium leading-none text-indigo-300">
+                  {isElectron ? `Chromium 原生高安全性安全网关：${currentUrl}` : `内置防钓鱼、跨域多层桥接：${currentUrl}`}
+                </span>
+              </div>
+              <span className="font-mono text-[9px] uppercase tracking-wider shrink-0 opacity-55 text-indigo-400">
+                WV_ISOLATE_SAFE
+              </span>
+            </div>
+
+            {/* Actual browser view portal frame */}
+            <div 
+              ref={placeholderRef} 
+              className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden"
+            >
+              {isPinned || isFullscreen ? (
+                isElectron ? (
+                  <webview
+                    key={`${id}-${refreshKey}`}
+                    src={currentUrl}
+                    style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+                    allowpopups={true}
+                  />
+                ) : (
+                  <iframe 
+                    key={`${id}-${refreshKey}`}
+                    src={currentUrl} 
+                    className="w-full h-full border-0 bg-white" 
+                    referrerPolicy="no-referrer" 
+                  />
+                )
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-700 select-none p-6 text-center">
+                  <Compass size={28} className="mb-2 text-indigo-500/25 animate-spin" style={{ animationDuration: '24s' }} />
+                  <div className="text-[10px] font-bold text-indigo-400/30 font-mono uppercase tracking-widest">
+                    安全沙核视窗已挂载
+                  </div>
+                  <div className="text-[9px] text-slate-500 max-w-xs mt-1.5 font-sans leading-relaxed">
+                    为了提供不受主 Canvas 画布物理拖动影响的精细画面与安全控制，真实的页面视窗已叠加至屏幕上方最顶层层级。您可在画布中随意拖放并保持实时锁定。
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* ==========================================
+             NATIVE SOFTWARE COOPERATIVE HUB VIEW
+             ========================================== */
+          <div className="flex-1 flex flex-col lg:flex-row min-h-0 bg-slate-950 font-sans" style={{ height: 'calc(100% - 1px)' }}>
+            {/* Sidebar selector presets & custom configurations */}
+            <div className="w-full lg:w-[260px] border-r border-indigo-500/10 bg-slate-900/40 p-4 flex flex-col gap-3 shrink-0 overflow-y-auto">
+              {/* App register index & pathway tabs switcher */}
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-widest text-indigo-455 uppercase font-mono flex items-center gap-1.5 select-none">
+                  <LayoutGrid size={11} /> 
+                  本地原生集成总线
+                </span>
+                
+                <button
+                  type="button"
+                  onClick={() => setShowConfigRegistry(!showConfigRegistry)}
+                  className={`px-2 py-0.5 rounded text-[8px] font-black border uppercase tracking-wider transition-all cursor-pointer ${showConfigRegistry ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-indigo-500/10 text-indigo-400 hover:text-white'}`}
+                >
+                  {showConfigRegistry ? '查看预设' : '⚙️ 注册中心'}
+                </button>
+              </div>
+
+              {!showConfigRegistry ? (
+                // Group 1: Modern lists of 14 supportable native softwares for high precision overlay sync
+                <div className="flex flex-col gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
+                  {PRESET_PROGRAMS.map(p => {
+                    const IconComp = p.icon;
+                    const isActive = selectedPreset === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handlePresetSelect(p.id)}
+                        className={`w-full group text-left px-2.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 border ${isActive ? 'bg-indigo-600/15 border-indigo-500 text-white shadow-md' : 'bg-slate-950/15 hover:bg-slate-900/30 border-indigo-500/5 text-slate-400 hover:text-slate-200'}`}
+                      >
+                        <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400 group-hover:text-white'}`}>
+                          <IconComp size={12} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-extrabold text-[11px] leading-tight flex items-center justify-between">
+                            <span className="truncate">{p.name}</span>
+                            {isActive && <span className="text-[7px] bg-green-500/20 text-green-400 border border-green-500/30 px-1 py-0.2 rounded font-black scale-90 uppercase">Active</span>}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                // Group 2: Full details path & URL connection configurations (Registry center app_paths.json equivalency)
+                <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto">
+                  <div className="bg-indigo-950/20 rounded-xl p-2.5 border border-indigo-500/10 text-left">
+                    <span className="text-[8px] font-black tracking-widest text-indigo-400 uppercase font-mono">配置中心提示 (Registry)</span>
+                    <p className="text-[9px] text-slate-400 font-sans mt-1 leading-normal">
+                      此处保存本地启动器对各个软件拉起时的底层路径。各项更新会即时映射并永久保存在您的浏览器独立运行机制中。
+                    </p>
+                  </div>
+
+                  <div className="space-y-3.5 pt-1">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest font-mono">
+                          当前软件绝对路径 (.exe)
+                        </label>
+                        <button
+                          onClick={() => {
+                            const def = PRESET_PROGRAMS.find(p => p.id === selectedPreset);
+                            if (def) updateSingleAppConfig(selectedPreset, def.defaultPath, appArgs, appUrl);
+                          }}
+                          className="text-[8px] text-indigo-405/60 hover:text-indigo-400 font-bold hover:underline cursor-pointer border-none bg-transparent"
+                        >
+                          恢复初始值
+                        </button>
+                      </div>
+                      <input 
+                        type="text"
+                        value={appPath}
+                        onChange={e => updateSingleAppConfig(selectedPreset, e.target.value, appArgs, appUrl)}
+                        className="w-full bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[10px] focus:border-indigo-500/50 focus:outline-none transition-all font-mono"
+                        placeholder="请输入绝对路径, 比如 C:\..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 font-mono">
+                        软件连接地址(Connection Stream URL)
+                      </label>
+                      <input 
+                        type="text"
+                        value={appUrl}
+                        onChange={e => updateSingleAppConfig(selectedPreset, appPath, appArgs, e.target.value)}
+                        className="w-full bg-slate-950 border border-indigo-500/15 text-indigo-300 rounded-lg px-2 py-1 text-[10px] focus:border-indigo-500/50 focus:outline-none transition-all font-mono"
+                        placeholder="输入连接流地址 http://..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 font-mono">
+                        运行附加启动参数 (Arguments)
+                      </label>
+                      <input 
+                        type="text"
+                        value={appArgs}
+                        onChange={e => updateSingleAppConfig(selectedPreset, appPath, e.target.value, appUrl)}
+                        className="w-full bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[10px] focus:border-indigo-500/50 focus:outline-none transition-all font-mono"
+                        placeholder="选填参数, 例如 -mode server"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Launcher Activation Controller button */}
+              <div className="pt-2 border-t border-indigo-500/10 shrink-0 select-none">
+                {procStatus !== 'running' ? (
+                  <button
+                    onClick={handleLaunchNativeApp}
+                    disabled={isLaunching}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-gradient-to-r from-indigo-605 to-violet-605 hover:from-indigo-550 hover:to-violet-550 disabled:opacity-40 text-white rounded-xl text-[11px] font-black shadow-lg transition-all transform active:scale-95 cursor-pointer border-none"
+                  >
+                    {isLaunching ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
+                    <span>拉起并建立覆盖映射</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStopNativeApp}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-gradient-to-r from-rose-600 to-red-650 hover:from-rose-500 hover:to-red-500 text-white rounded-xl text-[11px] font-black shadow-lg transition-all transform active:scale-95 cursor-pointer border-none"
+                  >
+                    <StopCircle size={12} />
+                    <span>强制中断并释放进程</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Main overlay stream mapping and coordinator view */}
+            <div className="flex-1 flex flex-col min-h-0 bg-slate-950 relative">
+              {/* Virtual mapping window frame header */}
+              <div className="flex-1 min-h-0 relative flex flex-col border-b border-indigo-500/10">
+                <div className="absolute top-3 left-4 z-20 flex items-center gap-2 pointer-events-none select-none">
+                  <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest font-mono text-white ${procStatus === 'running' ? 'bg-green-600 animate-pulse' : 'bg-slate-700'}`}>
+                    ● {procStatus === 'running' ? 'LIVE STREAM DETECTED' : 'STANDBY IDLE'}
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500 font-extrabold uppercase tracking-wide">
+                    {selectedPreset.toUpperCase()}_MAPPED_BUFFER
+                  </span>
+                </div>
+
+                {procStatus === 'running' ? (
+                  isPinned || isFullscreen ? (
+                    // In detached portal views (pinned window or full-screen), we render actual interactive iframes inline smoothly
+                    <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden">
+                      {isElectron ? (
+                        <webview
+                          key={`${id}-${refreshKey}`}
+                          src={appUrl}
+                          style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+                          allowpopups={true}
+                        />
+                      ) : (
+                        <iframe 
+                          key={`${id}-${refreshKey}`}
+                          src={appUrl} 
+                          className="w-full h-full border-0 bg-white" 
+                          referrerPolicy="no-referrer" 
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    // In standard canvas inline view, we render our rich embedded workspace simulator within the node's ContentRect boundaries
+                    <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden flex flex-col">
+                      {renderEmbeddedAppWorkspace()}
+                    </div>
+                  )
+                ) : (
+                  // Offline Standby Screen
+                  <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden flex flex-col items-center justify-center p-6 text-center select-none">
+                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b08_1px,transparent_1px),linear-gradient(to_bottom,#1e293b08_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none opacity-20"></div>
+                    
+                    <div className="w-9 h-9 rounded-2xl bg-indigo-500/10 border border-indigo-500/15 flex items-center justify-center mb-3 text-indigo-500/30">
+                      <StopCircle size={16} className="animate-pulse" />
+                    </div>
+
+                    <div className="px-2 py-0.5 bg-slate-800 rounded text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2.5 font-mono">
+                      ❌ OFFLINE STANDBY IDLE
+                    </div>
+
+                    <h4 className="text-[11px] font-black text-indigo-300 uppercase tracking-widest leading-none">
+                      原生 Windows 窗口 Overlay 等待拉起
+                    </h4>
+                    
+                    <p className="text-[9px] text-slate-500 max-w-xs mt-2 leading-relaxed font-sans">
+                      通过这套通用的 <b>Native Application Overlay 绑定架构</b>，本地真拉起的图像及按键信号可以自适应覆盖嵌入当前 Canvas 槽位中。
+                    </p>
+
+                    <div className="mt-4 p-3 bg-slate-900 border border-indigo-500/10 rounded-xl w-full max-w-[280px] text-left font-mono">
+                      <span className="text-[8px] font-black tracking-widest text-indigo-400/70 uppercase">⚙️ 当前映射绑定参数:</span>
+                      <div className="mt-2 space-y-1 text-[9px] text-slate-400 leading-normal">
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-500 font-bold uppercase">映射目标:</span>
+                          <span className="text-white font-extrabold">{PRESET_PROGRAMS.find(p => p.id === selectedPreset)?.name}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-500 font-bold uppercase">程序绝对路径:</span>
+                          <span className="text-slate-350 truncate max-w-[130px]" title={appPath}>{appPath}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-500 font-bold uppercase">注册连接:</span>
+                          <span className="text-indigo-400 font-bold">{appUrl}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Performance Telemetry Bento Hub */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 bg-black/40 p-4 border-b border-indigo-500/10 shrink-0 select-none">
+                <div className="flex flex-col gap-0.5 bg-slate-900/60 rounded-xl p-2.5 border border-indigo-500/5 text-left">
+                  <span className="text-[8px] text-indigo-400/50 font-bold uppercase tracking-widest font-mono flex items-center gap-1"><Activity size={8} /> 进程映射状态</span>
+                  <span className={`text-[11px] font-black uppercase tracking-wider ${procStatus === 'running' ? 'text-green-400 animate-pulse' : 'text-slate-400'}`}>
+                    {procStatus === 'running' ? '● 已激活直连' : procStatus === 'stopped' ? '● 强制关闭' : '● 等待拉起'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5 bg-slate-900/60 rounded-xl p-2.5 border border-indigo-500/5 text-left">
+                  <span className="text-[8px] text-indigo-400/50 font-bold uppercase tracking-widest font-mono flex items-center gap-1"><Zap size={8} /> 运行时长 (UPTIME)</span>
+                  <span className="text-[11px] font-mono text-indigo-300 font-extrabold uppercase tracking-wider">
+                    {Math.floor(uptime/60)}m {uptime%60}s
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5 bg-slate-900/60 rounded-xl p-2.5 border border-indigo-500/5 text-left">
+                  <span className="text-[8px] text-indigo-400/50 font-bold uppercase tracking-widest font-mono flex items-center gap-1"><Cpu size={8} /> 虚拟显卡加速 (GPU)</span>
+                  <span className="text-[11px] font-mono text-violet-300 font-black tracking-wider">
+                    {procStatus === 'running' ? `${simCpu}%` : '0%'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-0.5 bg-slate-900/60 rounded-xl p-2.5 border border-indigo-500/5 text-left">
+                  <span className="text-[8px] text-indigo-400/50 font-bold uppercase tracking-widest font-mono flex items-center gap-1"><Database size={8} /> 虚拟映射缓冲占</span>
+                  <span className="text-[11px] font-mono text-amber-500 font-black tracking-wider">
+                    {procStatus === 'running' ? `${(simRam/1024).toFixed(2)} GB` : '0.00 GB'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Console Debug Terminal panel (Core Telemetry logs of HWND synchronization) */}
+              <div className="flex flex-col min-h-[120px] bg-black p-3.5 font-mono text-[9px] leading-relaxed text-indigo-400/70 shadow-inner">
+                <div className="flex items-center justify-between border-b border-indigo-500/15 pb-1.5 mb-2 text-indigo-400/90 shrink-0 font-bold tracking-widest select-none">
+                  <span className="flex items-center gap-1.5">
+                    <Terminal size={9} className="text-green-500 animate-pulse" />
+                    HWN_OVERLAY_COORDINATOR_ENGINE TRACE
+                  </span>
+                  <button 
+                    onClick={() => setProcLogs(['[终端检测] 历史日志会话已成功安全清理完成.'])}
+                    className="text-indigo-400/40 hover:text-indigo-300 text-[8px] font-bold tracking-normal uppercase border-none bg-transparent cursor-pointer"
+                  >
+                    [清空终端]
+                  </button>
+                </div>
+                <div className="flex-grow overflow-y-auto max-h-[140px] space-y-1 text-left">
+                  {procLogs.map((log, i) => (
+                    <div key={i} className="whitespace-pre-wrap hover:bg-white/5 px-1 py-0.5 rounded text-indigo-400/60 select-text leading-normal">
+                      {log}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dynamic Alerts inside overlay */}
+        <AnimatePresence>
+          {loadingMsg && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+              className="absolute top-3 left-4 right-4 z-[99] bg-indigo-950/90 border border-indigo-500/30 text-indigo-200 px-4 py-2.5 rounded-xl flex items-center gap-2.5 text-xs shadow-xl shadow-black/80 backdrop-blur-sm pointer-events-none select-none"
+            >
+              <Loader2 size={13} className="text-indigo-400 animate-spin shrink-0" />
+              <span className="font-black leading-none">{loadingMsg}</span>
+            </motion.div>
+          )}
+
+          {errorMsg && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+              className="absolute inset-x-4 top-3 z-[101] bg-rose-950/95 border border-rose-500/30 text-rose-200 px-4 py-3 rounded-xl flex flex-col gap-2 shadow-xl shadow-black/80 backdrop-blur-sm select-none"
+            >
+              <div className="flex items-start gap-2 text-xs text-left">
+                <AlertCircle size={14} className="text-rose-400 shrink-0 mt-0.5" />
+                <span className="font-bold flex-1 text-[11px] whitespace-pre-line leading-relaxed text-rose-100">{errorMsg}</span>
+                <button 
+                  onClick={() => setErrorMsg('')} 
+                  className="p-0.5 hover:bg-slate-800 rounded text-rose-450 hover:text-white border-none bg-transparent cursor-pointer shrink-0"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  /* ==========================================
+     RENDER WRAPPER BRANCHING (MINIMIZED/PINNED)
+     ========================================== */
+
+  // 1. Minimized rendering card
+  if (isMinimized) {
+    return (
+      <div 
+        className={`flex items-center gap-3 bg-slate-950/95 border-2 border-indigo-500/70 rounded-full px-4 py-2.5 shadow-[0_10px_35px_rgba(99,102,241,0.25)] select-none transition-all duration-300 hover:border-indigo-400 cursor-pointer ${selected ? 'ring-8 ring-indigo-500/10' : ''}`}
+        style={{ width: '210px' }}
+        onDoubleClick={() => {
+          setIsMinimized(false);
+          updateNodeData(id, { isMinimized: false });
+        }}
+      >
+        <Handle type="target" position={Position.Left} className="!bg-indigo-500 !w-4 !h-4 !-left-2 !rounded-lg !border-[2.5px] !border-slate-900 shadow-lg" />
+        <Handle type="source" position={Position.Right} className="!bg-indigo-500 !w-4 !h-4 !-right-2 !rounded-lg !border-[2.5px] !border-slate-900 shadow-lg" />
+
+        <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+          <Monitor size={14} className="animate-pulse" />
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col items-start text-left">
+          <div className="flex items-center gap-1.5">
+            <span className="font-extrabold text-[11px] text-white tracking-wider leading-none">HostNode</span>
+            <span className="text-[8px] font-black text-indigo-300 bg-indigo-500/20 px-1 py-0.5 rounded leading-none uppercase">MIN</span>
+          </div>
+          <span className="text-[9px] text-indigo-400/60 font-mono mt-0.5 truncate uppercase">双击还原窗口</span>
+        </div>
+        <button 
+          onClick={() => {
+            setIsMinimized(false);
+            updateNodeData(id, { isMinimized: false });
+          }}
+          className="p-1 hover:bg-white/10 rounded-full text-indigo-300 hover:text-white transition-colors duration-200 border-none bg-transparent cursor-pointer"
+          title="还原窗口模式"
+        >
+          <Maximize2 size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  // 2. Pinned on screen placeholder card on canvas
+  if (isPinned) {
+    return (
+      <div 
+        className={`flex flex-col w-full h-[320px] bg-slate-900/60 rounded-[32px] border-2 border-indigo-500/40 p-6 items-center justify-center text-center select-none shadow-[inset_0_4px_30px_rgba(99,102,241,0.05)] transition-all ${selected ? 'border-indigo-500 ring-8 ring-indigo-500/10' : ''}`}
+        style={{ width: '400px' }}
+      >
+        <Handle type="target" position={Position.Left} className="!bg-indigo-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-slate-900 shadow-xl" />
+        <Handle type="source" position={Position.Right} className="!bg-indigo-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-slate-900 shadow-xl" />
+
+        <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-3 text-indigo-400">
+          <Anchor size={24} className="animate-[spin_16s_linear_infinite]" />
+        </div>
+        <h4 className="text-xs font-black text-indigo-200 uppercase tracking-widest leading-none">宿主直连 · 窗口固定中</h4>
+        <span className="text-[10px] text-indigo-400/50 font-mono mt-1 tracking-wider">PORTAL_WINDOW_MOUNTED</span>
+        <p className="text-[10px] text-slate-400 max-w-[280px] mt-2.5 leading-relaxed font-sans">
+          该窗口已固定于屏幕绝对位置上运行，不受主画板运动缩放（Zoom / Pan / Rotate）干扰，便于进行多窗格协同调校。
+        </p>
+
+        <div className="flex gap-2 mt-4">
+          <button 
+            onClick={() => {
+              setIsPinned(false);
+              updateNodeData(id, { isPinned: false });
+            }}
+            className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-550 text-white font-extrabold text-[10px] hover:scale-105 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1 border-none"
+          >
+            <PinOff size={10} />
+            <span>就地解锁并放回</span>
+          </button>
+        </div>
+
+        {/* Portalled absolute interactive window hovering on screen */}
+        {createPortal(
+          <div 
+            onPointerDown={e => handlePinnedHeaderPointerDown(e)}
+            onPointerMove={e => handlePinnedHeaderPointerMove(e)}
+            onPointerUp={e => handlePinnedHeaderPointerUp(e)}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+            className="fixed flex flex-col bg-slate-950/98 rounded-3xl border-2 border-indigo-500/55 shadow-[0_30px_60px_rgba(0,0,0,0.85)] overflow-hidden"
+            style={{
+              left: `${pinnedPos.x}px`,
+              top: `${pinnedPos.y}px`,
+              width: '900px',
+              height: '680px',
+              zIndex: 10001,
+              pointerEvents: 'auto',
+              transition: 'none',
+            }}
+          >
+            {/* Portalled Draggable hover-bar */}
+            <div className="h-10 bg-slate-900 border-b border-indigo-500/10 flex items-center justify-between px-5 cursor-move select-none shrink-0" title="鼠标拖拽此处可自由移动该固定映射窗口">
+              <div className="flex items-center gap-2 text-[10px] font-black text-yellow-450 tracking-wider font-mono">
+                <Pin size={11} className="animate-pulse text-yellow-400" />
+                <span>NATIVE STREAM PIN_PORTAL [拖动上方该条自由改变窗口物理位置，不被画布缩放影响]</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPinned(false);
+                    updateNodeData(id, { isPinned: false });
+                  }}
+                  className="px-2.5 py-0.5 bg-indigo-650 hover:bg-slate-800 text-white rounded text-[9px] font-black tracking-wider uppercase transition-colors cursor-pointer border-none"
+                  title="解除屏幕固定放回画布"
+                >
+                  解除屏幕固定
+                </button>
+              </div>
+            </div>
+
+            {/* Render full components within pinned screen windows */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="px-5 py-3.5 flex items-center justify-between border-b border-indigo-500/10 bg-slate-900/40 shrink-0 select-none">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center">
+                    <Monitor size={18} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-xs tracking-wider text-white uppercase italic">
+                        💎 Native Host Window
+                      </span>
+                    </div>
+                    <span className="text-[9px] text-indigo-400/50 font-mono tracking-widest leading-none">
+                      STREAMING_PORT_ACTIVE_ON_VIEWPORT_PIN_MODE
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-slate-950 p-1 rounded-xl border border-indigo-500/15">
+                    <button 
+                      onClick={() => setViewTab('browser')}
+                      className={`px-3 py-1 rounded-lg text-[10px] font-black cursor-pointer border-none ${viewTab === 'browser' ? 'bg-indigo-600 text-white shadow-md' : 'bg-transparent text-slate-400 hover:text-white'}`}
+                    >
+                      内置浏览器
+                    </button>
+                    <button 
+                      onClick={() => setViewTab('native-app')}
+                      className={`px-3 py-1 rounded-lg text-[10px] font-black cursor-pointer border-none ${viewTab === 'native-app' ? 'bg-violet-650 text-white shadow-md' : 'bg-transparent text-slate-400 hover:text-white'}`}
+                    >
+                      应用映射
+                    </button>
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      const nextFolded = !isFolded;
+                      setIsFolded(nextFolded);
+                      updateNodeData(id, { isFolded: nextFolded });
+                    }}
+                    className="p-1.5 hover:bg-white/5 rounded-lg transition-all text-gray-400 border-none bg-transparent cursor-pointer"
+                    title={isFolded ? "展开" : "折叠"}
+                  >
+                    {isFolded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setIsFullscreen(true);
+                      updateNodeData(id, { isFullscreen: true });
+                    }}
+                    className="p-1.5 hover:bg-white/5 rounded-lg transition-all text-gray-400 border-none bg-transparent cursor-pointer"
+                    title="全屏模式"
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {!isFolded && renderInteractiveContent()}
+            </div>
+          </div>,
+          document.body
+        )}
+      </div>
+    );
+  }
+
+  // 3. Normal view rendering on canvas (or portalled fullscreen)
+  return (
+    <>
+      <NodeResizer 
+        minWidth={460} 
+        minHeight={500} 
+        isVisible={selected && !isFolded && !isPinned && !isFullscreen} 
+        lineClassName="border-indigo-500/50" 
+        handleClassName="h-3 w-3 bg-white border-2 border-indigo-500 rounded-sm" 
+        keepAspectRatio={false} 
+      />
+      
+      <div 
+        className={`flex flex-col bg-slate-950/95 rounded-[32px] border-2 border-indigo-500/20 shadow-[0_20px_50px_rgba(99,102,241,0.15)] overflow-hidden transition-all duration-300 ${isElectron ? 'ring-2 ring-indigo-500/30' : ''} ${selected ? 'border-indigo-500 ring-8 ring-indigo-500/10' : ''}`}
+        style={{ 
+          height: isFolded ? 'auto' : '100%',
+          width: isFolded ? '460px' : '100%',
+          ['--node-zoom' as any]: zoomScale
+        }}
+      >
+        <Handle type="target" position={Position.Left} className="!bg-indigo-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-slate-900 shadow-xl hover:!scale-110 transition-all duration-200 z-50 animate-[pulse_3s_infinite]" />
+        <Handle type="source" position={Position.Right} className="!bg-indigo-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-slate-900 shadow-xl hover:!scale-110 transition-all duration-200 z-50 pointer-events-auto animate-[pulse_3s_infinite]" />
+
+        {/* Standard UI header */}
+        <div className="px-5 py-4 flex items-center justify-between border-b border-indigo-500/10 bg-slate-900/60 shrink-0 react-flow__node-draghandle select-none">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg">
+              <Monitor size={20} className="text-white animate-pulse" />
+            </div>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 to-indigo-100 uppercase italic">
+                  💎 Native Host
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-500/20 text-indigo-300 uppercase tracking-wider">
+                  宿主直连
+                </span>
+              </div>
+              <span className="text-[10px] text-indigo-400/50 font-mono tracking-widest">
+                LOCAL_Sovereign_Kernel
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Tab navigation switches */}
+            <div className="flex bg-slate-950 p-1 rounded-xl border border-indigo-500/20 mr-2 shrink-0">
+              <button 
+                onClick={() => setViewTab('browser')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer border-none ${viewTab === 'browser' ? 'bg-indigo-600 text-white shadow-md' : 'bg-transparent text-slate-400 hover:text-white'}`}
+              >
+                内置浏览器
+              </button>
+              <button 
+                onClick={() => setViewTab('native-app')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer border-none ${viewTab === 'native-app' ? 'bg-violet-650 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+              >
+                应用映射
+              </button>
+            </div>
+
+            {/* Minimize button */}
+            <button
+              onClick={() => {
+                setIsMinimized(true);
+                updateNodeData(id, { isMinimized: true });
+              }}
+              className="p-1.5 hover:bg-white/5 rounded-xl text-gray-400 hover:text-white transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-none bg-transparent"
+              title="最小化到节点徽章"
+            >
+              <Minimize2 size={14} />
+            </button>
+
+            {/* Fold toggles */}
+            <button 
+              onClick={() => {
+                const nextFolded = !isFolded;
+                setIsFolded(nextFolded);
+                updateNodeData(id, { isFolded: nextFolded });
+              }}
+              className={`p-1.5 hover:bg-white/5 rounded-xl transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-none bg-transparent ${isFolded ? 'text-indigo-400 bg-indigo-400/10' : 'text-gray-400 hover:text-white'}`}
+              title={isFolded ? "展开窗口" : "折叠窗口"}
+            >
+              {isFolded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            </button>
+
+            {/* Screen Locking Pins */}
+            <button 
+              onClick={() => {
+                const nextPinned = true;
+                setIsPinned(nextPinned);
+                updateNodeData(id, { isPinned: true });
+                if (placeholderRef.current) {
+                  const r = placeholderRef.current.getBoundingClientRect();
+                  const pos = { x: r.left - 100, y: r.top - 120 };
+                  setPinnedPos(pos);
+                  updateNodeData(id, { pinnedPos: pos });
+                }
+              }}
+              className="p-1.5 hover:bg-white/5 rounded-xl text-gray-400 hover:text-white transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-none bg-transparent"
+              title="固定到屏幕坐标 (不受画布拖拽缩放影响)"
+            >
+              <Pin size={14} />
+            </button>
+
+            {/* Fullscreen icon */}
+            <button 
+              onClick={() => {
+                setIsFullscreen(true);
+                updateNodeData(id, { isFullscreen: true });
+              }}
+              className="p-1.5 hover:bg-white/5 rounded-xl text-gray-400 hover:text-white transition-all transform hover:scale-105 active:scale-95 cursor-pointer border-none bg-transparent"
+              title="全屏调试模式"
+            >
+              <Maximize2 size={14} />
+            </button>
+
+            {/* Floating independent external window launcher */}
+            <button 
+              onClick={handleLaunchNativeBrowser} 
+              className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-black shadow-lg transition-all active:scale-95 cursor-pointer border-none"
+              title="一键在本地机器真实拉起独立浏览器窗口"
+            >
+              <ExternalLink size={11} />
+              <span>启动浏览器</span>
+            </button>
+          </div>
+        </div>
+
+        {!isFolded && renderInteractiveContent()}
+      </div>
+
+      {/* PORTLED BROWSER IFRAME LAYER FOR DIRECT SCALED OVERLAY PLACEMENT */}
+      {viewTab === 'browser' && !isFolded && !isPinned && !isFullscreen && rect && createPortal(
+        <div 
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+          className="fixed overflow-hidden bg-white shadow-xl flex flex-col border border-indigo-500/10 rounded-b-[28px]"
+          style={{
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
+            zIndex: 40,
+            pointerEvents: 'auto',
+            display: 'flex',
+            transition: 'none',
+          }}
+        >
+          {isElectron ? (
+            <webview
+              key={`${id}-${refreshKey}`}
+              src={currentUrl}
+              style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+              allowpopups={true}
+            />
+          ) : (
+            <iframe 
+              key={`${id}-${refreshKey}`}
+              src={currentUrl} 
+              className="w-full h-full border-0 bg-white" 
+              referrerPolicy="no-referrer" 
+            />
+          )}
+        </div>,
+        document.body
+      )}
+
+      {/* PORTLED NATIVE APP STREAM IFRAME LAYER FOR DIRECT SCALED OVERLAY PLACEMENT */}
+      {viewTab === 'native-app' && procStatus === 'running' && !isFolded && !isPinned && !isFullscreen && rect && createPortal(
+        <div 
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+          className="fixed overflow-hidden bg-slate-950 shadow-xl flex flex-col border border-indigo-500/10 rounded-b-[28px]"
+          style={{
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
+            zIndex: 40,
+            pointerEvents: 'auto',
+            display: 'flex',
+            transition: 'none',
+          }}
+        >
+          {isElectron ? (
+            <webview
+              key={`${id}-${refreshKey}`}
+              src={appUrl}
+              style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+              allowpopups={true}
+            />
+          ) : (
+            <iframe 
+              key={`${id}-${refreshKey}`}
+              src={appUrl} 
+              className="w-full h-full border-0 bg-white" 
+              referrerPolicy="no-referrer" 
+            />
+          )}
+        </div>,
+        document.body
+      )}
+
+      {/* IMMERSIVE FULLSCREEN SYSTEM OVERLAY COOPERATOR PORTAL */}
+      {isFullscreen && createPortal(
+        <div 
+          className="fixed inset-0 z-[10000] bg-slate-950 flex flex-col select-none"
+          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Fullscreen header console */}
+          <div className="h-14 bg-slate-900 border-b border-indigo-500/15 flex items-center justify-between px-6 shrink-0 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
+                <Monitor size={20} className="text-white rotate-12" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-black text-white tracking-widest uppercase flex items-center gap-1.5 font-mono">
+                  💎 NATIVE_HOST FULLSCREEN IMMERSIVE DIAGNOSTICS WORKSPACE
+                </h3>
+                <span className="text-[10px] font-mono text-indigo-400 font-bold tracking-widest uppercase">
+                  STATUS: LIVE_STREAMING_CHANNEL // BOUNDS_MAPPING_ON
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="flex bg-slate-950 p-1.5 rounded-xl border border-indigo-500/15">
+                <button 
+                  onClick={() => setViewTab('browser')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-black cursor-pointer border-none ${viewTab === 'browser' ? 'bg-indigo-600 text-white shadow-md' : 'bg-transparent text-slate-400 hover:text-white'}`}
+                >
+                  内置浏览器
+                </button>
+                <button 
+                  onClick={() => setViewTab('native-app')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-black cursor-pointer border-none ${viewTab === 'native-app' ? 'bg-violet-650 text-white shadow-md' : 'bg-transparent text-slate-400 hover:text-white'}`}
+                >
+                  应用映射
+                </button>
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsFullscreen(false);
+                  updateNodeData(id, { isFullscreen: false });
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black cursor-pointer border-none"
+                title="返回画布窗口"
+              >
+                <X size={14} />
+                <span>退出全屏模式</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Fullscreen interactive content body */}
+          <div className="flex-1 min-h-0">
+            {renderInteractiveContent()}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}

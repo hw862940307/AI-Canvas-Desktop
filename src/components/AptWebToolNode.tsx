@@ -36,7 +36,12 @@ import {
   Eye,
   EyeOff,
   Copy,
-  Check
+  Check,
+  Pin,
+  PinOff,
+  ChevronUp,
+  ChevronDown,
+  Anchor
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { normalizeWorkflowToPrompt } from './SettingsModal';
@@ -1044,8 +1049,87 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
   const [forceProxyComfy, setForceProxyComfy] = useState<boolean>(nodeData.forceProxyComfy || false);
   const [forceIframeRender, setForceIframeRender] = useState<boolean>(false);
 
+  const [isFolded, setIsFolded] = useState<boolean>(nodeData.isFolded || false);
+  const [isPinned, setIsPinned] = useState<boolean>(nodeData.isPinned || false);
+  const [pinnedPos, setPinnedPos] = useState<{ x: number; y: number }>(nodeData.pinnedPos || { x: 300, y: 150 });
+
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const posStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handlePinnedHeaderPointerDown = (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('input') || target.closest('select')) return;
+    
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    posStartRef.current = { x: pinnedPos.x, y: pinnedPos.y };
+  };
+
+  const handlePinnedHeaderPointerMove = (e: React.PointerEvent) => {
+    if (!dragStartRef.current || !posStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    const nextPos = {
+      x: posStartRef.current.x + dx,
+      y: posStartRef.current.y + dy
+    };
+    setPinnedPos(nextPos);
+    updateNodeData(id, { pinnedPos: nextPos });
+  };
+
+  const handlePinnedHeaderPointerUp = (e: React.PointerEvent) => {
+    dragStartRef.current = null;
+    posStartRef.current = null;
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {}
+  };
+
   const comfyIframeRef = useRef<HTMLIFrameElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const placeholderRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  // Track the placeholder's viewport coordinates dynamically to match position perfectly without reload
+  useEffect(() => {
+    const el = placeholderRef.current;
+    if (!el) return;
+    
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      // Only set state if any dimension is different to save render performance
+      setRect((prev) => {
+        if (!prev) return r;
+        if (
+          prev.left === r.left &&
+          prev.top === r.top &&
+          prev.width === r.width &&
+          prev.height === r.height
+        ) {
+          return prev;
+        }
+        return r;
+      });
+    };
+    
+    update();
+    
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    
+    window.addEventListener('resize', update, { passive: true });
+    window.addEventListener('scroll', update, { capture: true, passive: true });
+    
+    const timer = setInterval(update, 30);
+    
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, { capture: true });
+      clearInterval(timer);
+    };
+  }, []);
 
   // Auto-scan workflow when text changes
   useEffect(() => {
@@ -1895,10 +1979,11 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <NodeResizer minWidth={300} minHeight={400} isVisible={selected} lineClassName="border-accent/50" handleClassName="h-3 w-3 bg-white border-2 border-accent rounded-sm" keepAspectRatio={true} />
+      <NodeResizer minWidth={300} minHeight={400} isVisible={selected && !isFolded && !isPinned} lineClassName="border-accent/50" handleClassName="h-3 w-3 bg-white border-2 border-accent rounded-sm" keepAspectRatio={true} />
       <div 
-        className={`flex flex-col w-full h-full bg-[var(--bg-secondary)] rounded-[32px] border-2 border-[var(--border)] shadow-2xl transition-all ${selected ? 'border-accent ring-8 ring-accent/10' : ''}`}
+        className={`flex flex-col w-full bg-[var(--bg-secondary)] rounded-[32px] border-2 border-[var(--border)] shadow-2xl transition-all ${selected ? 'border-accent ring-8 ring-accent/10' : ''}`}
         style={{ 
+          height: isFolded ? 'auto' : '100%',
           ['--node-zoom' as any]: zoomScale
         }}
       >
@@ -1971,6 +2056,39 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
               </button>
             </div>
 
+            {/* 顶层状态组件：折叠和固定 */}
+            <button 
+              onClick={() => {
+                const nextFolded = !isFolded;
+                setIsFolded(nextFolded);
+                updateNodeData(id, { isFolded: nextFolded });
+              }}
+              className={`hover:bg-white/5 rounded-2xl transition-all transform hover:scale-105 active:scale-95 ${isFolded ? 'text-indigo-400 bg-indigo-400/10' : 'text-gray-500 hover:text-white'}`}
+              style={{ padding: 12 * zoomScale }}
+              title={isFolded ? "展开窗口" : "折叠最小化窗口"}
+            >
+              {isFolded ? <ChevronDown size={20 * zoomScale} /> : <ChevronUp size={20 * zoomScale} />}
+            </button>
+
+            <button 
+              onClick={() => {
+                const nextPinned = !isPinned;
+                setIsPinned(nextPinned);
+                updateNodeData(id, { isPinned: nextPinned });
+                if (nextPinned && placeholderRef.current) {
+                  const r = placeholderRef.current.getBoundingClientRect();
+                  const pos = { x: r.left, y: r.top - 60 };
+                  setPinnedPos(pos);
+                  updateNodeData(id, { pinnedPos: pos });
+                }
+              }}
+              className={`hover:bg-white/5 rounded-2xl transition-all transform hover:scale-105 active:scale-95 ${isPinned ? 'text-yellow-400 bg-yellow-500/15' : 'text-gray-500 hover:text-white'}`}
+              style={{ padding: 12 * zoomScale }}
+              title={isPinned ? "取消视口固定" : "固定在当前视口位置(不随画布缩放)"}
+            >
+              {isPinned ? <PinOff size={20 * zoomScale} /> : <Pin size={20 * zoomScale} />}
+            </button>
+
             <button 
               onClick={() => setIsOverlayOpen(true)}
               className="hover:bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all transform hover:scale-105 active:scale-95"
@@ -1982,69 +2100,44 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
           </div>
         </div>
 
-        <div 
-          className="flex-1 flex flex-col overflow-hidden nodrag"
-          style={{ padding: 20 * zoomScale, gap: 16 * zoomScale }}
-        >
+        {!isFolded && (
+          isPinned ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none bg-black/20 rounded-b-3xl min-h-[220px]" style={{ padding: 40 * zoomScale }}>
+              <Anchor size={48 * zoomScale} className="text-yellow-400 mb-4 animate-[spin_10s_linear_infinite]" />
+              <h4 className="text-sm font-black text-white uppercase tracking-widest" style={{ fontSize: 13 * zoomScale }}>已开启视口固定</h4>
+              <p className="text-xs text-gray-400 max-w-[280px] mt-2 font-medium leading-relaxed" style={{ fontSize: 11 * zoomScale }}>
+                浏览器窗口已脱离画布流，保持在固定屏幕坐标。你可以通过顶部的黄色指示条在屏幕上无级拖拽，并且它完全不受画布缩放与移动(Zoom/Pan)的影响。
+              </p>
+              <button 
+                onClick={() => {
+                  setIsPinned(false);
+                  updateNodeData(id, { isPinned: false });
+                }}
+                className="mt-6 px-5 py-2.5 bg-yellow-500/20 hover:bg-yellow-550/30 text-yellow-300 font-extrabold rounded-2xl border border-yellow-500/30 transition-all tracking-wider uppercase shadow-lg shadow-yellow-500/5 active:scale-95 cursor-pointer"
+                style={{ fontSize: 10 * zoomScale, padding: `${8 * zoomScale}px ${16 * zoomScale}px` }}
+              >
+                收回至画布
+              </button>
+            </div>
+          ) : (
+            <>
+              <div 
+                className="flex-1 flex flex-col overflow-hidden nodrag"
+                style={{ padding: 20 * zoomScale, gap: 16 * zoomScale }}
+              >
           {viewMode === 'scraper' ? (
             <>
-              {/* Original Scraper UI */}
               <div 
-                className="grid grid-cols-5 shrink-0"
-                style={{ gap: 12 * zoomScale }}
+                ref={placeholderRef} 
+                className="relative flex-1 w-full min-h-0 overflow-hidden rounded-2xl bg-black/20 border border-[var(--border)]"
               >
-                <div 
-                  className="col-span-3 bg-black/40 border border-[var(--border)] rounded-[24px] group focus-within:border-indigo-500/50 transition-colors"
-                  style={{ padding: 16 * zoomScale, gap: 8 * zoomScale, display: 'flex', flexDirection: 'column' }}
-                >
-                  <label 
-                    className="font-black text-gray-600 uppercase tracking-[0.2em] flex items-center"
-                    style={{ fontSize: 9 * zoomScale, gap: 8 * zoomScale }}
-                  >
-                    <LinkIcon size={10 * zoomScale} /> Online Assets Hub
-                  </label>
-                  <textarea 
-                    className="w-full bg-transparent text-white/80 outline-none resize-none font-mono custom-scrollbar placeholder:text-gray-700"
-                    style={{ height: 60 * zoomScale, fontSize: 11 * zoomScale }}
-                    value={imageAddress}
-                    onChange={(e) => setImageAddress(e.target.value)}
-                    placeholder="Paste raw links or HTML snippet here..."
-                  />
+                {/* Visual placeholder inside the actual React Flow node */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 opacity-20 select-none pointer-events-none">
+                  <Globe2 size={32 * zoomScale} />
+                  <span className="text-[10px] font-mono font-bold mt-2 uppercase tracking-widest text-center px-4">
+                    Desktop Sandbox Webview Active
+                  </span>
                 </div>
-                <div 
-                  className="col-span-2 flex flex-col"
-                  style={{ gap: 8 * zoomScale }}
-                >
-                   <button 
-                     onClick={handleAddOnlineImage}
-                     className="flex-1 flex flex-col items-center justify-center bg-indigo-600 hover:bg-indigo-500 rounded-[20px] text-white transition-all shadow-xl shadow-indigo-900/10 group active:scale-[0.98]"
-                     style={{ borderRadius: 20 * zoomScale }}
-                   >
-                      <ImagePlus size={24 * zoomScale} className="group-hover:scale-110 transition-transform" style={{ marginBottom: 4 * zoomScale }} />
-                      <span className="font-black uppercase tracking-[0.3em]" style={{ fontSize: 10 * zoomScale }}>Harvest</span>
-                   </button>
-                   <div 
-                     className="flex items-center bg-white/5 border border-[var(--border)]"
-                     style={{ height: 48 * zoomScale, borderRadius: 16 * zoomScale, paddingLeft: 16 * zoomScale, paddingRight: 16 * zoomScale }}
-                   >
-                      <span className="font-black text-gray-600 uppercase tracking-[0.1em]" style={{ fontSize: 9 * zoomScale, marginRight: 16 * zoomScale }}>Pool Limit</span>
-                      <input 
-                        type="number" 
-                        className="flex-1 bg-transparent text-right text-indigo-400 font-black outline-none"
-                        style={{ fontSize: 12 * zoomScale }}
-                        value={imageCount}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value) || 1;
-                          setImageCount(val);
-                          updateStore({ imageCount: val });
-                        }}
-                      />
-                   </div>
-                </div>
-              </div>
-
-              <div className="relative flex-1 w-full min-h-0 overflow-hidden rounded-2xl">
-                {BrowserFrameComponent(false)}
               </div>
 
               {/* Collection Bar */}
@@ -2785,48 +2878,139 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
           )}
         </div>
 
-        <div 
-          className="bg-black/60 border-t border-[var(--border)] flex items-center justify-between shrink-0"
-          style={{ padding: `${12 * zoomScale}px ${24 * zoomScale}px` }}
-        >
-          <div 
-            className="flex items-center font-mono italic truncate"
-            style={{ gap: 12 * zoomScale, fontSize: 10 * zoomScale, maxWidth: 500 * zoomScale }}
-          >
-             <Info size={14 * zoomScale} className="text-indigo-600 shrink-0" />
-             <span className="truncate">{status}</span>
-          </div>
-          <div 
-            className="flex items-center shrink-0"
-            style={{ gap: 16 * zoomScale }}
-          >
-             <div 
-               className="bg-white/10"
-               style={{ height: 16 * zoomScale, width: 1 }}
-             />
-             <span 
-              className="font-black text-indigo-500 uppercase tracking-[0.3em]"
-              style={{ fontSize: 9 * zoomScale }}
-             >
-               Stream Active
-             </span>
-          </div>
-        </div>
+              <div 
+                className="bg-black/60 border-t border-[var(--border)] flex items-center justify-between shrink-0"
+                style={{ padding: `${12 * zoomScale}px ${24 * zoomScale}px` }}
+              >
+                <div 
+                  className="flex items-center font-mono italic truncate"
+                  style={{ gap: 12 * zoomScale, fontSize: 10 * zoomScale, maxWidth: 500 * zoomScale }}
+                >
+                   <Info size={14 * zoomScale} className="text-indigo-600 shrink-0" />
+                   <span className="truncate">{status}</span>
+                </div>
+                <div 
+                  className="flex items-center shrink-0"
+                  style={{ gap: 16 * zoomScale }}
+                >
+                   <div 
+                     className="bg-white/10"
+                     style={{ height: 16 * zoomScale, width: 1 }}
+                   />
+                   <span 
+                    className="font-black text-indigo-500 uppercase tracking-[0.3em]"
+                    style={{ fontSize: 9 * zoomScale }}
+                   >
+                     Stream Active
+                   </span>
+                </div>
+              </div>
+            </>
+          )
+        )}
       </div>
 
-      {/* PORTAL OVERLAY */}
+      {/* ALWAYS ACTIVE WEB BROWSER PORTAL CONTAINER */}
+      {createPortal(
+        <div 
+          onPointerDown={e => {
+            e.stopPropagation();
+            if (isPinned) handlePinnedHeaderPointerDown(e);
+          }}
+          onPointerMove={e => {
+            if (isPinned) handlePinnedHeaderPointerMove(e);
+          }}
+          onPointerUp={e => {
+            if (isPinned) handlePinnedHeaderPointerUp(e);
+          }}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+          className="fixed border overflow-hidden shadow-2xl bg-[var(--bg-secondary)] flex flex-col"
+          style={
+            isOverlayOpen 
+              ? {
+                  left: '48px',
+                  top: '12%',
+                  width: 'calc(100vw - 96px)',
+                  height: '80%',
+                  zIndex: 10001,
+                  pointerEvents: 'auto',
+                  display: viewMode === 'scraper' ? 'flex' : 'none',
+                  borderRadius: '24px',
+                  border: '1px solid var(--border)',
+                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                }
+              : (isPinned
+                  ? {
+                      left: `${pinnedPos.x}px`,
+                      top: `${pinnedPos.y}px`,
+                      width: '800px',
+                      height: '600px',
+                      zIndex: 10002,
+                      pointerEvents: (viewMode === 'scraper' && !isFolded) ? 'auto' : 'none',
+                      display: (viewMode === 'scraper' && !isFolded) ? 'flex' : 'none',
+                      borderRadius: '24px',
+                      boxShadow: '0 25px 50px -12px rgba(0,0,0,0.85), 0 0 25px rgba(234,179,8,0.2)',
+                      border: '2px solid rgba(234,179,8,0.45)',
+                      transition: 'none',
+                    }
+                  : {
+                      left: (rect && !isFolded) ? `${rect.left}px` : '-9999px',
+                      top: (rect && !isFolded) ? `${rect.top}px` : '-9999px',
+                      width: (rect && !isFolded) ? `${rect.width}px` : '0px',
+                      height: (rect && !isFolded) ? `${rect.height}px` : '0px',
+                      zIndex: 40,
+                      pointerEvents: (viewMode === 'scraper' && rect && !isFolded) ? 'auto' : 'none',
+                      display: (viewMode === 'scraper' && !isFolded) ? 'flex' : 'none',
+                      borderRadius: '16px',
+                      border: '1px solid var(--border)',
+                      transition: 'none',
+                    }
+                )
+          }
+        >
+          {isPinned && (
+            <div 
+              className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 cursor-move select-none shrink-0"
+            >
+              <div className="flex items-center gap-1.5 text-[10px] font-black text-yellow-400 tracking-wider font-mono">
+                <Pin size={10} className="animate-pulse text-yellow-500" />
+                <span>FLOATING VIEWPORT PINNED [按住此处拖拽面板]</span>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsPinned(false);
+                  updateNodeData(id, { isPinned: false });
+                }}
+                className="text-gray-500 hover:text-white p-0.5 rounded transition-all bg-transparent border-none cursor-pointer"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {BrowserFrameComponent(isOverlayOpen)}
+        </div>,
+        document.body
+      )}
+
+      {/* FULLSCREEN OVERLAY BACKGROUND & COMFYUI PORTAL */}
       {isOverlayOpen && createPortal(
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-12 bg-black/85 backdrop-blur-3xl" onPointerDown={e => e.stopPropagation()}>
-           <motion.div 
-             initial={{ opacity: 0, scale: 0.9, y: 40 }}
-             animate={{ opacity: 1, scale: 1, y: 0 }}
-             exit={{ opacity: 0, scale: 0.9, y: 40 }}
-             className="w-full h-full"
-           >
-              {viewMode === 'scraper' ? BrowserFrameComponent(true) : ComfyUIOverlay()}
-           </motion.div>
-           {/* Background Click to Close - Optional, but let's keep it robust */}
-           <div className="absolute inset-0 -z-10" onClick={() => setIsOverlayOpen(false)} />
+        <div 
+          className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-3xl" 
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => setIsOverlayOpen(false)}
+        >
+          <div className="absolute top-4 right-12 text-gray-500 font-bold select-none text-xs tracking-widest pointer-events-none uppercase">
+            点击空白区域退出全屏
+          </div>
+          {viewMode === 'comfy' && (
+            <div 
+              className="absolute inset-12" 
+              onClick={e => e.stopPropagation()}
+            >
+              <ComfyUIOverlay />
+            </div>
+          )}
         </div>,
         document.body
       )}
