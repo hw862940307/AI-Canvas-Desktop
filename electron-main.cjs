@@ -22,15 +22,29 @@ function createWindow() {
 
   // In development, load from the local dev server
   // In production, we'd load the bundled files
+  const startUrl = 'http://127.0.0.1:3000';
+  
   if (isDev) {
-    win.loadURL('http://localhost:3000');
+    win.loadURL(startUrl);
     // Open DevTools in development
     win.webContents.openDevTools();
   } else {
     // If we have a build, we could use path.join(__dirname, 'dist/index.html')
     // But since the project is a full-stack App, we usually want it to talk to the local express server
-    win.loadURL('http://localhost:3000');
+    win.loadURL(startUrl);
   }
+
+  // Automatic retry on connection failure (e.g. if dev server is booting a bit slowly)
+  win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    if (validatedURL.startsWith('http://127.0.0.1:3000')) {
+      console.log(`[Electron] Startup connection waiting: ${errorDescription}. Retrying page load in 2s...`);
+      setTimeout(() => {
+        if (!win.isDestroyed()) {
+          win.loadURL(startUrl);
+        }
+      }, 2000);
+    }
+  });
 }
 
 app.whenReady().then(createWindow);
