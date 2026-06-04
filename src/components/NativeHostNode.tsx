@@ -6,11 +6,12 @@ import {
   Monitor, Maximize2, Minimize2, Play, Loader2, AlertCircle, X,
   Compass, Pin, PinOff, ChevronUp, ChevronDown, Anchor, Terminal,
   Cpu, Database, Activity, PlayCircle, StopCircle, Sliders, Palette,
-  Layers, Code, LayoutGrid, Zap, PlaySquare, Workflow
+  Layers, Code, LayoutGrid, Zap, PlaySquare, Workflow, Plus
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
+import { SimulatedFileExplorer } from './SimulatedFileExplorer';
 
 const isElectron = typeof window !== 'undefined' && 
   window.navigator && 
@@ -146,6 +147,23 @@ const PRESET_PROGRAMS = [
   }
 ];
 
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  Monitor: Monitor,
+  Cpu: Cpu,
+  Palette: Palette,
+  Workflow: Workflow,
+  Code: Code,
+  Layers: Layers,
+  Zap: Zap,
+  LayoutGrid: LayoutGrid,
+  Activity: Activity,
+  Database: Database,
+  Compass: Compass,
+  PlaySquare: PlaySquare,
+  Play: Play,
+  Globe2: Globe2
+};
+
 // Reusable drawing board canvas component for Photoshop Studio
 const PaintCanvas = ({ brushColor, brushSize, tool }: { brushColor: string; brushSize: number; tool: string }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -260,14 +278,120 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
   const [selectedPreset, setSelectedPreset] = useState<string>(nodeData.selectedPreset || 'keyshot');
   const [showConfigRegistry, setShowConfigRegistry] = useState<boolean>(false);
 
+  // Load custom list of integrated software presets and custom entries from local storage
+  const [programsList, setProgramsList] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('NATIVE_PRESET_PROGRAMS');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          return parsed.map((item: any) => ({
+            ...item,
+            icon: ICON_MAP[item.iconName] || Monitor
+          }));
+        }
+      }
+    } catch (e) {}
+
+    return PRESET_PROGRAMS.map(p => ({
+      ...p,
+      iconName: p.icon === Monitor ? 'Monitor' :
+                p.icon === Cpu ? 'Cpu' :
+                p.icon === Palette ? 'Palette' :
+                p.icon === Workflow ? 'Workflow' :
+                p.icon === Code ? 'Code' :
+                p.icon === Layers ? 'Layers' :
+                p.icon === Zap ? 'Zap' :
+                p.icon === LayoutGrid ? 'LayoutGrid' :
+                p.icon === Activity ? 'Activity' :
+                p.icon === Database ? 'Database' : 'Monitor'
+    }));
+  });
+
+  const saveProgramsList = (list: any[]) => {
+    setProgramsList(list);
+    try {
+      const serialized = list.map(({ icon, ...rest }) => rest);
+      localStorage.setItem('NATIVE_PRESET_PROGRAMS', JSON.stringify(serialized));
+    } catch (e) {}
+  };
+
+  // Adding Custom App states
+  const [addingProgram, setAddingProgram] = useState(false);
+  const [newAppName, setNewAppName] = useState('');
+  const [newAppPath, setNewAppPath] = useState('');
+  const [newAppUrl, setNewAppUrl] = useState('http://127.0.0.1:8080');
+  const [newAppArgs, setNewAppArgs] = useState('');
+  const [newAppDesc, setNewAppDesc] = useState('');
+  const [newAppIcon, setNewAppIcon] = useState('Monitor');
+
+  // Custom Right Click Context Menu State
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    programId: string;
+  } | null>(null);
+
+  // Custom Right Click Shortcut Paths Editing States
+  const [rightClickOpen, setRightClickOpen] = useState(false);
+  const [rightClickProgId, setRightClickProgId] = useState('');
+  const [rightClickPath, setRightClickPath] = useState('');
+  const [rightClickArgs, setRightClickArgs] = useState('');
+  const [rightClickUrl, setRightClickUrl] = useState('');
+
+  // File Explorer Modal States
+  const [fileExplorerOpen, setFileExplorerOpen] = useState(false);
+  const [fileExplorerTarget, setFileExplorerTarget] = useState<'addingAppName' | 'rightClickPathName' | 'registryPathName'>('rightClickPathName');
+  const [fileExplorerInitialPath, setFileExplorerInitialPath] = useState('');
+  const [fileExplorerAppName, setFileExplorerAppName] = useState('');
+  const [fileExplorerPresetId, setFileExplorerPresetId] = useState('');
+
+  const handleOpenFileExplorer = (
+    target: 'addingAppName' | 'rightClickPathName' | 'registryPathName',
+    initialPath: string,
+    appName: string,
+    presetId: string
+  ) => {
+    setFileExplorerTarget(target);
+    setFileExplorerInitialPath(initialPath);
+    setFileExplorerAppName(appName);
+    setFileExplorerPresetId(presetId);
+    setFileExplorerOpen(true);
+  };
+
+  const handleFileExplorerSelect = (selectedPath: string) => {
+    if (fileExplorerTarget === 'addingAppName') {
+      setNewAppPath(selectedPath);
+    } else if (fileExplorerTarget === 'rightClickPathName') {
+      setRightClickPath(selectedPath);
+    } else if (fileExplorerTarget === 'registryPathName') {
+      setAppPath(selectedPath);
+      updateSingleAppConfig(selectedPreset, selectedPath, appArgs, appUrl);
+    }
+  };
+
+  // Close context menu on any global click
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      if (contextMenu?.visible) {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+    };
+  }, [contextMenu]);
+
   // Load custom configs for each app from local storage registry (Equivalent to app_paths.json persistence)
   const [appConfigs, setAppConfigs] = useState<Record<string, { path: string; args: string; url: string }>>(() => {
     try {
       const saved = localStorage.getItem('NATIVE_APP_REGISTRY_CONFIGS');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Guarantee backwards compatibility/defaults
-        PRESET_PROGRAMS.forEach(p => {
+        // Guarantee backwards compatibility/defaults across current list
+        programsList.forEach(p => {
           if (!parsed[p.id]) {
             parsed[p.id] = {
               path: p.defaultPath,
@@ -281,7 +405,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
     } catch (e) {}
 
     const initial: Record<string, { path: string; args: string; url: string }> = {};
-    PRESET_PROGRAMS.forEach(p => {
+    programsList.forEach(p => {
       initial[p.id] = {
         path: p.defaultPath,
         args: p.defaultArgs,
@@ -293,9 +417,9 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
 
   // Current inputs bind to the selected preset stored in local appConfigs state
   const currentAppConfig = appConfigs[selectedPreset] || {
-    path: PRESET_PROGRAMS.find(p => p.id === selectedPreset)?.defaultPath || '',
-    args: PRESET_PROGRAMS.find(p => p.id === selectedPreset)?.defaultArgs || '',
-    url: PRESET_PROGRAMS.find(p => p.id === selectedPreset)?.defaultUrl || ''
+    path: programsList.find(p => p.id === selectedPreset)?.defaultPath || '',
+    args: programsList.find(p => p.id === selectedPreset)?.defaultArgs || '',
+    url: programsList.find(p => p.id === selectedPreset)?.defaultUrl || ''
   };
 
   const [appPath, setAppPath] = useState<string>(nodeData.appPath || currentAppConfig.path);
@@ -394,13 +518,150 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
     }
   };
 
+  // Support adding a custom software runtime configuration
+  const handleAddProgram = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAppName.trim()) return;
+
+    const newId = 'custom_' + Date.now();
+    const newProg = {
+      id: newId,
+      name: newAppName.trim(),
+      iconName: newAppIcon,
+      defaultPath: newAppPath.trim() || 'C:\\Program Files\\' + newAppName.trim() + '\\' + newAppName.trim() + '.exe',
+      defaultArgs: newAppArgs.trim(),
+      defaultUrl: newAppUrl.trim(),
+      description: newAppDesc.trim() || '用户自定义原生软件协调环境。',
+      isCustom: true
+    };
+
+    const updatedList = [...programsList, newProg];
+    saveProgramsList(updatedList);
+
+    // Also update current configurations mapping for this new program
+    const configUpdate = {
+      ...appConfigs,
+      [newId]: {
+        path: newProg.defaultPath,
+        args: newProg.defaultArgs,
+        url: newProg.defaultUrl
+      }
+    };
+    setAppConfigs(configUpdate);
+    localStorage.setItem('NATIVE_APP_REGISTRY_CONFIGS', JSON.stringify(configUpdate));
+
+    // Select the newly added app
+    setSelectedPreset(newId);
+    setAppPath(newProg.defaultPath);
+    setAppArgs(newProg.defaultArgs);
+    setAppUrl(newProg.defaultUrl);
+
+    updateNodeData(id, { 
+      selectedPreset: newId,
+      appPath: newProg.defaultPath,
+      appArgs: newProg.defaultArgs,
+      appUrl: newProg.defaultUrl
+    });
+
+    // Reset fields
+    setNewAppName('');
+    setNewAppPath('');
+    setNewAppUrl('http://127.0.0.1:8080');
+    setNewAppArgs('');
+    setNewAppDesc('');
+    setAddingProgram(false);
+  };
+
+  // Support deleting a custom program entry
+  const handleDeleteProgram = (progId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    
+    const remaining = programsList.filter(p => p.id !== progId);
+    saveProgramsList(remaining);
+
+    if (selectedPreset === progId) {
+      const fallback = remaining[0] || null;
+      if (fallback) {
+        handlePresetSelect(fallback.id);
+      } else {
+        setSelectedPreset('');
+        setAppPath('');
+        setAppArgs('');
+        setAppUrl('');
+      }
+    }
+  };
+
+  // Restore preset factory configurations
+  const handleResetToPresets = () => {
+    if (confirm('确认重置吗？这将清除所有自定义软件和当前路径设定，还原回出厂内置软件。')) {
+      localStorage.removeItem('NATIVE_PRESET_PROGRAMS');
+      localStorage.removeItem('NATIVE_APP_REGISTRY_CONFIGS');
+      
+      const defaults = PRESET_PROGRAMS.map(p => ({
+        ...p,
+        iconName: p.icon === Monitor ? 'Monitor' :
+                  p.icon === Cpu ? 'Cpu' :
+                  p.icon === Palette ? 'Palette' :
+                  p.icon === Workflow ? 'Workflow' :
+                  p.icon === Code ? 'Code' :
+                  p.icon === Layers ? 'Layers' :
+                  p.icon === Zap ? 'Zap' :
+                  p.icon === LayoutGrid ? 'LayoutGrid' :
+                  p.icon === Activity ? 'Activity' :
+                  p.icon === Database ? 'Database' : 'Monitor'
+      }));
+      setProgramsList(defaults);
+      
+      const initialConfigs: Record<string, { path: string; args: string; url: string }> = {};
+      defaults.forEach(p => {
+        initialConfigs[p.id] = {
+          path: p.defaultPath,
+          args: p.defaultArgs,
+          url: p.defaultUrl
+        };
+      });
+      setAppConfigs(initialConfigs);
+      
+      const defaultActiveId = 'keyshot';
+      setSelectedPreset(defaultActiveId);
+      const conf = initialConfigs[defaultActiveId];
+      setAppPath(conf.path);
+      setAppArgs(conf.args);
+      setAppUrl(conf.url);
+
+      updateNodeData(id, {
+        selectedPreset: defaultActiveId,
+        appPath: conf.path,
+        appArgs: conf.args,
+        appUrl: conf.url
+      });
+    }
+  };
+
+  // Right click handler for rendering custom dropdown context options
+  const handleContextMenu = (e: React.MouseEvent, progId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      programId: progId
+    });
+  };
+
   // Switch presets
   const handlePresetSelect = (presetId: string) => {
     setSelectedPreset(presetId);
     const config = appConfigs[presetId] || {
-      path: PRESET_PROGRAMS.find(p => p.id === presetId)?.defaultPath || '',
-      args: PRESET_PROGRAMS.find(p => p.id === presetId)?.defaultArgs || '',
-      url: PRESET_PROGRAMS.find(p => p.id === presetId)?.defaultUrl || ''
+      path: programsList.find(p => p.id === presetId)?.defaultPath || '',
+      args: programsList.find(p => p.id === presetId)?.defaultArgs || '',
+      url: programsList.find(p => p.id === presetId)?.defaultUrl || ''
     };
 
     setAppPath(config.path);
@@ -414,7 +675,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       appUrl: config.url
     });
 
-    const presetName = PRESET_PROGRAMS.find(p => p.id === presetId)?.name || presetId;
+    const presetName = programsList.find(p => p.id === presetId)?.name || presetId;
     setProcLogs(prev => [
       ...prev,
       `[系统] [App_Registry] 同步切换本地可执行总线为: ${presetName}`,
@@ -1484,11 +1745,13 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
   };
 
   const renderGenericWorkspace = () => {
-    const currentProg = PRESET_PROGRAMS.find(p => p.id === selectedPreset) || {
+    const currentProg = programsList.find(p => p.id === selectedPreset) || {
       name: selectedPreset,
       defaultPath: appPath,
       description: '本地物理启动的原生应用程序。'
     };
+
+    const IconToRender = currentProg.icon || Monitor;
 
     return (
       <div className="flex-grow flex flex-col bg-slate-950 p-6 items-center justify-center text-center pointer-events-auto select-none overflow-hidden h-full">
@@ -1496,7 +1759,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
 
         <div className="relative flex flex-col items-center max-w-[320px] bg-slate-900/40 p-5 rounded-2xl border border-indigo-500/10 shadow-inner">
           <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center mb-3">
-            <Monitor size={18} className="text-indigo-400 animate-pulse" />
+            <IconToRender size={18} className="text-indigo-400 animate-pulse" />
           </div>
 
           <h4 className="text-[12px] font-black text-indigo-300 uppercase tracking-widest leading-none">
@@ -1666,41 +1929,165 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
             {/* Sidebar selector presets & custom configurations */}
             <div className="w-full lg:w-[260px] border-r border-indigo-500/10 bg-slate-900/40 p-4 flex flex-col gap-3 shrink-0 overflow-y-auto">
               {/* App register index & pathway tabs switcher */}
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black tracking-widest text-indigo-455 uppercase font-mono flex items-center gap-1.5 select-none">
+              <div className="flex items-center justify-between gap-1 select-none">
+                <span className="text-[10px] font-black tracking-widest text-indigo-455 uppercase font-mono flex items-center gap-1 shrink-0">
                   <LayoutGrid size={11} /> 
                   本地原生集成总线
                 </span>
                 
-                <button
-                  type="button"
-                  onClick={() => setShowConfigRegistry(!showConfigRegistry)}
-                  className={`px-2 py-0.5 rounded text-[8px] font-black border uppercase tracking-wider transition-all cursor-pointer ${showConfigRegistry ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-indigo-500/10 text-indigo-400 hover:text-white'}`}
-                >
-                  {showConfigRegistry ? '查看预设' : '⚙️ 注册中心'}
-                </button>
+                <div className="flex items-center gap-1">
+                  {/* Reset/Restore Presets Button */}
+                  <button
+                    type="button"
+                    onClick={handleResetToPresets}
+                    title="还原所有内置预设及自定义清除"
+                    className="p-1 rounded text-[10px] font-black border border-indigo-500/10 bg-slate-950 hover:bg-slate-900 text-indigo-400 hover:text-white cursor-pointer"
+                  >
+                    🔄
+                  </button>
+                  {/* Add App Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowConfigRegistry(false);
+                      setAddingProgram(prev => !prev);
+                    }}
+                    title="添加自定义软件"
+                    className={`p-1 rounded text-[10px] font-black border transition-all cursor-pointer ${addingProgram ? 'bg-[#ff9c00]/20 border-[#ff9c00]/50 text-[#ff9c00]' : 'bg-slate-950 border-indigo-500/10 text-indigo-400 hover:text-white'}`}
+                  >
+                    <Plus size={11} />
+                  </button>
+                  {/* Registry configuration Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingProgram(false);
+                      setShowConfigRegistry(!showConfigRegistry);
+                    }}
+                    className={`px-2 py-0.5 rounded text-[8px] font-black border uppercase tracking-wider transition-all cursor-pointer ${showConfigRegistry ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-950 border-indigo-500/10 text-indigo-400 hover:text-white'}`}
+                  >
+                    {showConfigRegistry ? '查看预设' : '⚙️ 注册中心'}
+                  </button>
+                </div>
               </div>
+
+              {addingProgram && (
+                <form onSubmit={handleAddProgram} className="bg-slate-950/40 p-3 rounded-xl border border-indigo-500/10 space-y-3 shrink-0 flex flex-col pointer-events-auto text-left">
+                  <div className="text-[9px] font-black text-indigo-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>➕ 添加自定义本地软件</span>
+                    <button type="button" onClick={() => setAddingProgram(false)} className="text-[10px] text-slate-500 hover:text-white bg-transparent border-none cursor-pointer">✕</button>
+                  </div>
+                  
+                  {/* App Name */}
+                  <div className="space-y-1">
+                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest font-mono">软件名称 <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text"
+                      required
+                      value={newAppName}
+                      onChange={e => setNewAppName(e.target.value)}
+                      placeholder="例如: Unreal Engine 5"
+                      className="w-full bg-slate-950 border border-indigo-500/15 text-white rounded-lg px-2 py-1 text-[9.5px] focus:outline-none focus:border-indigo-500/50 font-sans"
+                    />
+                  </div>
+
+                  {/* App Path */}
+                  <div className="space-y-1 bg-transparent">
+                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest font-mono">绝对路径 (.exe) <span className="text-red-500">*</span></label>
+                    <div className="flex gap-1 bg-transparent">
+                      <input 
+                        type="text"
+                        value={newAppPath}
+                        onChange={e => setNewAppPath(e.target.value)}
+                        placeholder="C:\Program Files\..."
+                        className="flex-1 min-w-0 bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[9.5px] focus:outline-none focus:border-indigo-500/50 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFileExplorer('addingAppName', newAppPath, newAppName, 'custom')}
+                        className="px-2 py-1 bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/30 text-indigo-300 hover:text-white rounded-lg text-[9px] font-black cursor-pointer shrink-0 transition-colors"
+                        title="打开虚拟文件选取器"
+                      >
+                        📁 浏览
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Connection Stream URL */}
+                  <div className="space-y-1">
+                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest font-mono">协同流测试端口 URL</label>
+                    <input 
+                      type="text"
+                      value={newAppUrl}
+                      onChange={e => setNewAppUrl(e.target.value)}
+                      placeholder="http://127.0.0.1:8080"
+                      className="w-full bg-slate-950 border border-indigo-500/15 text-indigo-300 rounded-lg px-2 py-1 text-[9.5px] focus:outline-none focus:border-indigo-500/50 font-mono"
+                    />
+                  </div>
+
+                  {/* Icon and actions */}
+                  <div className="flex gap-2.5 items-end justify-between pt-1">
+                    <div className="flex-1">
+                      <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 font-mono">图标类型</label>
+                      <select 
+                        value={newAppIcon}
+                        onChange={e => setNewAppIcon(e.target.value)}
+                        className="bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[9.5px] focus:outline-none focus:border-indigo-500/50"
+                      >
+                        <option value="Monitor">🖥️ 显示器</option>
+                        <option value="Cpu">📟 处理器</option>
+                        <option value="Palette">🎨 调色板</option>
+                        <option value="Workflow">⚙️ 节点流</option>
+                        <option value="Code">💻 代码</option>
+                        <option value="Layers">📁 图层</option>
+                        <option value="Zap">⚡ 闪电</option>
+                        <option value="LayoutGrid">格子</option>
+                        <option value="Activity">📈 活跃度</option>
+                        <option value="Database">🛢️ 数据库</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-550 text-white rounded-lg text-[9.5px] font-black cursor-pointer border-none"
+                    >
+                      保存
+                    </button>
+                  </div>
+                </form>
+              )}
 
               {!showConfigRegistry ? (
                 // Group 1: Modern lists of 14 supportable native softwares for high precision overlay sync
-                <div className="flex flex-col gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
-                  {PRESET_PROGRAMS.map(p => {
-                    const IconComp = p.icon;
+                <div className="flex flex-col gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5 select-none">
+                  {programsList.map(p => {
+                    const IconComp = p.icon || Monitor;
                     const isActive = selectedPreset === p.id;
                     return (
                       <button
                         key={p.id}
                         type="button"
                         onClick={() => handlePresetSelect(p.id)}
+                        onContextMenu={(e) => handleContextMenu(e, p.id)}
                         className={`w-full group text-left px-2.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 border ${isActive ? 'bg-indigo-600/15 border-indigo-500 text-white shadow-md' : 'bg-slate-950/15 hover:bg-slate-900/30 border-indigo-500/5 text-slate-400 hover:text-slate-200'}`}
                       >
                         <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400 group-hover:text-white'}`}>
                           <IconComp size={12} />
                         </div>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 relative group/item">
                           <div className="font-extrabold text-[11px] leading-tight flex items-center justify-between">
-                            <span className="truncate">{p.name}</span>
-                            {isActive && <span className="text-[7px] bg-green-500/20 text-green-400 border border-green-500/30 px-1 py-0.2 rounded font-black scale-90 uppercase">Active</span>}
+                            <span className="truncate pr-4">{p.name}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {isActive && <span className="text-[7px] bg-green-500/20 text-green-400 border border-green-500/30 px-1 py-0.2 rounded font-black scale-90 uppercase">Active</span>}
+                              {p.isCustom && (
+                                <span
+                                  onClick={(e) => handleDeleteProgram(p.id, e)}
+                                  title="删除软件"
+                                  className="hidden group-hover/item:flex items-center justify-center p-0.5 rounded bg-red-500/10 hover:bg-red-500 hover:text-white text-rose-450 transition-all border-none cursor-pointer"
+                                >
+                                  <X size={10} />
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </button>
@@ -1724,8 +2111,9 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                           当前软件绝对路径 (.exe)
                         </label>
                         <button
+                          type="button"
                           onClick={() => {
-                            const def = PRESET_PROGRAMS.find(p => p.id === selectedPreset);
+                            const def = programsList.find(p => p.id === selectedPreset);
                             if (def) updateSingleAppConfig(selectedPreset, def.defaultPath, appArgs, appUrl);
                           }}
                           className="text-[8px] text-indigo-405/60 hover:text-indigo-400 font-bold hover:underline cursor-pointer border-none bg-transparent"
@@ -1733,13 +2121,23 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                           恢复初始值
                         </button>
                       </div>
-                      <input 
-                        type="text"
-                        value={appPath}
-                        onChange={e => updateSingleAppConfig(selectedPreset, e.target.value, appArgs, appUrl)}
-                        className="w-full bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[10px] focus:border-indigo-500/50 focus:outline-none transition-all font-mono"
-                        placeholder="请输入绝对路径, 比如 C:\..."
-                      />
+                      <div className="flex gap-1">
+                        <input 
+                          type="text"
+                          value={appPath}
+                          onChange={e => updateSingleAppConfig(selectedPreset, e.target.value, appArgs, appUrl)}
+                          className="flex-1 min-w-0 bg-slate-950 border border-indigo-500/15 text-white/80 rounded-lg px-2 py-1 text-[10px] focus:border-indigo-500/50 focus:outline-none transition-all font-mono"
+                          placeholder="请输入绝对路径, 比如 C:\..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleOpenFileExplorer('registryPathName', appPath, programsList.find(p => p.id === selectedPreset)?.name || '', selectedPreset)}
+                          className="px-2 py-1 bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/30 text-indigo-300 hover:text-white rounded-lg text-[9px] font-black cursor-pointer shrink-0 transition-colors"
+                          title="打开虚拟文件选取器"
+                        >
+                          📁 浏览
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -2409,6 +2807,233 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
             {renderInteractiveContent()}
           </div>
         </div>,
+        document.body
+      )}
+
+      {/* Dynamic Right Click Context Menu Overlay */}
+      {contextMenu?.visible && createPortal(
+        <div 
+          style={{ 
+            position: 'fixed', 
+            top: contextMenu.y, 
+            left: contextMenu.x, 
+            zIndex: 99999,
+          }}
+          className="bg-slate-900/95 border border-indigo-500/25 min-w-[150px] p-1.5 rounded-xl shadow-2xl select-none backdrop-blur-md flex flex-col pointer-events-auto animate-fade-in"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Option 1: Right click set custom path & launch */}
+          <button
+            type="button"
+            onClick={() => {
+              const progId = contextMenu.programId;
+              const prog = programsList.find(p => p.id === progId);
+              const conf = appConfigs[progId] || {
+                path: prog?.defaultPath || '',
+                args: prog?.defaultArgs || '',
+                url: prog?.defaultUrl || 'http://127.0.0.1:8080'
+              };
+              setRightClickProgId(progId);
+              setRightClickPath(conf.path);
+              setRightClickArgs(conf.args);
+              setRightClickUrl(conf.url);
+              setRightClickOpen(true);
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-1.5 text-[9.5px] font-black text-slate-300 hover:text-white hover:bg-indigo-600/20 rounded-lg transition-all flex items-center gap-2 cursor-pointer border-none bg-transparent"
+          >
+            <Sliders size={11} className="text-indigo-400" />
+            <span>设置路径启动</span>
+          </button>
+
+          {/* Option 2: Launch immediately */}
+          <button
+            type="button"
+            onClick={() => {
+              const progId = contextMenu.programId;
+              handlePresetSelect(progId);
+              setContextMenu(null);
+              // Small delay to let selection settle
+              setTimeout(() => {
+                handleLaunchNativeApp();
+              }, 100);
+            }}
+            className="w-full text-left px-3 py-1.5 text-[9.5px] font-black text-slate-300 hover:text-white hover:bg-emerald-600/20 rounded-lg transition-all flex items-center gap-2 cursor-pointer border-none bg-transparent"
+          >
+            <PlayCircle size={11} className="text-emerald-400" />
+            <span>极速调起映射</span>
+          </button>
+
+          {/* Option 3: Delete App */}
+          <button
+            type="button"
+            onClick={() => {
+              const progId = contextMenu.programId;
+              handleDeleteProgram(progId);
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-1.5 text-[9.5px] font-black text-rose-400 hover:text-white hover:bg-rose-600/20 rounded-lg transition-all flex items-center gap-2 cursor-pointer border-none bg-transparent"
+          >
+            <X size={11} className="text-rose-450" />
+            <span>删除此软件</span>
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {/* Absolute Path Setup and Immediate Launch Modal Dialogue */}
+      {rightClickOpen && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 transition-all" onMouseDown={e => e.stopPropagation()} onClick={() => { setRightClickOpen(false); setRightClickProgId(''); }}>
+          <div className="bg-slate-900 border border-indigo-500/20 max-w-sm w-full rounded-2xl p-5 shadow-2xl text-left select-none relative pointer-events-auto" onClick={e => e.stopPropagation()}>
+            {/* Close button */}
+            <button 
+              type="button"
+              onClick={() => {
+                setRightClickOpen(false);
+                setRightClickProgId('');
+              }}
+              className="absolute top-4 right-4 text-slate-450 hover:text-white transition-all cursor-pointer border-none bg-transparent"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Title */}
+            <div className="flex items-center gap-2 mb-3">
+              <div className="p-2 rounded-xl bg-indigo-650/25 border border-indigo-550/20 text-indigo-400">
+                <Sliders size={14} />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-white uppercase tracking-widest leading-none">自定义路径启动设置</h3>
+                <span className="text-[8.5px] text-indigo-400 font-mono font-bold uppercase mt-1 tracking-widest block">
+                  {programsList.find(p => p.id === rightClickProgId)?.name || '软件启动 parameters'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[9.5px] text-slate-400 leading-normal font-sans mb-4">
+              手动配置底层进程在您本地计算机中运行的绝对路径文件<b>【支持自定义 .exe 及其他可执行拓展名】</b>。
+            </p>
+
+            <div className="space-y-3">
+              {/* Path Input */}
+              <div className="space-y-1">
+                <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest font-mono">
+                  程序绝对路径 (.exe 等可执行文件) <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-1.5">
+                  <input 
+                    type="text"
+                    value={rightClickPath}
+                    onChange={e => setRightClickPath(e.target.value)}
+                    placeholder="C:\Program Files\..."
+                    className="flex-1 min-w-0 bg-slate-950 border border-indigo-500/15 text-white rounded-lg px-2.5 py-2 text-[10px] focus:border-indigo-505/50 focus:outline-none transition-all font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleOpenFileExplorer('rightClickPathName', rightClickPath, programsList.find(p => p.id === rightClickProgId)?.name || '', rightClickProgId)}
+                    className="px-3 py-2 bg-indigo-600/30 hover:bg-indigo-600 border border-indigo-500/30 text-indigo-300 hover:text-white rounded-xl text-[10px] font-black cursor-pointer shrink-0 transition-all"
+                    title="打开虚拟文件选取器"
+                  >
+                    📁 浏览
+                  </button>
+                </div>
+              </div>
+
+              {/* Arguments Input */}
+              <div>
+                <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 font-mono">
+                  附加启动参数 (Arguments, 可选)
+                </label>
+                <input 
+                  type="text"
+                  value={rightClickArgs}
+                  onChange={e => setRightClickArgs(e.target.value)}
+                  placeholder="-mode window -mode server"
+                  className="w-full bg-slate-950 border border-indigo-500/15 text-white/90 rounded-lg px-2.5 py-2 text-[10px] focus:border-indigo-505/50 focus:outline-none transition-all font-mono"
+                />
+              </div>
+
+              {/* URL Input */}
+              <div>
+                <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 font-mono">
+                  远程协同流挂载地址 (Stream URL, 默认 http)
+                </label>
+                <input 
+                  type="text"
+                  value={rightClickUrl}
+                  onChange={e => setRightClickUrl(e.target.value)}
+                  placeholder="http://127.0.0.1:8080"
+                  className="w-full bg-slate-950 border border-indigo-500/15 text-indigo-305 rounded-lg px-2.5 py-2 text-[10px] focus:border-indigo-500/50 focus:outline-none transition-all font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setRightClickOpen(false);
+                  setRightClickProgId('');
+                }}
+                className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-750 border border-indigo-500/10 hover:border-indigo-500/30 text-slate-300 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Save custom path and configs
+                  updateSingleAppConfig(rightClickProgId, rightClickPath, rightClickArgs, rightClickUrl);
+                  
+                  // Also select it
+                  handlePresetSelect(rightClickProgId);
+
+                  setRightClickOpen(false);
+                  setRightClickProgId('');
+                }}
+                className="flex-1 py-1.5 bg-indigo-600/25 hover:bg-indigo-600/50 border border-indigo-500/30 text-indigo-305 hover:text-white rounded-xl text-[10px] font-black transition-all cursor-pointer"
+              >
+                保存设置
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  // 1. Save config
+                  updateSingleAppConfig(rightClickProgId, rightClickPath, rightClickArgs, rightClickUrl);
+                  
+                  // 2. Select it
+                  handlePresetSelect(rightClickProgId);
+
+                  // 3. Close modal
+                  setRightClickOpen(false);
+                  setRightClickProgId('');
+
+                  // 4. Trigger direct launch immediately
+                  setTimeout(async () => {
+                    await handleLaunchNativeApp();
+                  }, 150);
+                }}
+                className="flex-[1.5] py-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-[10px] font-black shadow-lg transition-all transform active:scale-95 cursor-pointer border-none"
+              >
+                保存并极速启动
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Simulated File / Folder Interactive Explorer Portal overlay */}
+      {fileExplorerOpen && createPortal(
+        <SimulatedFileExplorer 
+          isOpen={fileExplorerOpen}
+          onClose={() => setFileExplorerOpen(false)}
+          onSelect={handleFileExplorerSelect}
+          initialPath={fileExplorerInitialPath}
+          appName={fileExplorerAppName}
+          appPresetId={fileExplorerPresetId}
+        />,
         document.body
       )}
     </>
