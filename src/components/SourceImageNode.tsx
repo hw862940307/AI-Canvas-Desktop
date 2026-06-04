@@ -38,7 +38,9 @@ const CROP_ASPECTS = [
 ];
 
 export const SourceImageNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
-  const { updateNodeData, addNode, settings, nodes, setNodes } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const addNode = useStore((s) => s.addNode);
+  const settings = useStore((s) => s.settings);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   
@@ -66,6 +68,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
+
+
   useEffect(() => {
     if (errorText) {
       const timer = setTimeout(() => setErrorText(null), 4000);
@@ -82,7 +86,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
       
       const targetH = Math.round(width / ratio);
       
-      const updatedNodes = nodes.map(n => {
+      const freshNodes = useStore.getState().nodes;
+      const updatedNodes = freshNodes.map(n => {
         if (n.id === id) {
           return {
             ...n,
@@ -103,9 +108,9 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
         }
         return n;
       });
-      setNodes(updatedNodes);
+      useStore.getState().setNodes(updatedNodes);
     }
-  }, [data.originalWidth, data.originalHeight, data.url, id, nodes, setNodes]);
+  }, [data.originalWidth, data.originalHeight, data.url, id]);
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight } = e.currentTarget;
@@ -150,7 +155,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
             }
             return n;
           });
-          setNodes(updatedNodes);
+          useStore.getState().setNodes(updatedNodes);
         }
       }
     }
@@ -241,7 +246,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
               }
               return n;
             });
-            setNodes(updatedNodes);
+            useStore.getState().setNodes(updatedNodes);
           } else {
             setErrorText("上传失败：无法创建 Canvas 2D 绘图上下文环境！");
           }
@@ -373,6 +378,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   const handleImageMouseUp = () => {
     setIsDraggingImage(false);
   };
+
+
     
   const clearImage = () => {
     // Atomically reset both data and style using the fresh node list
@@ -398,7 +405,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
       }
       return n;
     });
-    setNodes(updatedNodes);
+    useStore.getState().setNodes(updatedNodes);
   };
 
   const getCroppedImg = useCallback((image: HTMLImageElement, pixelCrop: PixelCrop): string => {
@@ -494,7 +501,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
 
       {/* Floating Header Tag at the top-left (outside ScaleWrapper, so it doesn't scale / stays sharp and clean) */}
       {data.url && (
-        <div className="absolute left-0 -top-[32px] flex items-center gap-1.5 bg-[#0d0d0d]/95 backdrop-blur-md border border-[var(--border)] rounded-xl py-1 px-2.5 shadow-xl z-[150] pointer-events-none whitespace-nowrap text-zinc-300">
+        <div className="absolute left-0 -top-[32px] flex items-center gap-1.5 bg-[#0d0d0d]/95 backdrop-blur-md border border-[var(--border)] rounded-xl py-1 px-2.5 shadow-xl z-[150] whitespace-nowrap text-zinc-300 react-flow__node-draghandle cursor-grab active:cursor-grabbing">
           <ImageIcon size={12} className="text-green-400 shrink-0" />
           <span className="text-[11px] font-bold truncate max-w-[150px]">{data.name || "源图像"}</span>
         </div>
@@ -570,7 +577,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
           </div>
         )}
 
-        <div className={`relative w-full flex-1 flex flex-col min-h-0 nodrag ${data.url ? 'p-0 pb-0' : 'p-5'}`}>
+        <div className={`relative w-full flex-1 flex flex-col min-h-0 ${data.url ? 'p-0 pb-0' : 'p-5 nodrag'}`}>
           {/* Elegant inside-node error notification banner */}
           <AnimatePresence>
             {errorText && (
@@ -602,8 +609,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                 ? 'bg-transparent h-full' 
                 : 'rounded-[18px] border-2 border-dashed border-[var(--border)] hover:border-green-500/50 cursor-pointer bg-[var(--bg-primary)]/24 flex flex-col items-center justify-center gap-3 p-6 min-h-[200px] nodrag'
             }`}
-            onMouseDown={(e) => { e.stopPropagation(); }}
-            onPointerDown={(e) => { e.stopPropagation(); }}
+            onMouseDown={(e) => { if (!data.url) e.stopPropagation(); }}
+            onPointerDown={(e) => { if (!data.url) e.stopPropagation(); }}
             onClick={(e) => {
               if (!data.url) {
                 e.stopPropagation();
@@ -612,7 +619,9 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
             }}
           >
             {data.url ? (
-              <div className="w-full h-full relative group/img-container flex items-center justify-center">
+              <div 
+                className="w-full h-full relative group/img-container flex items-center justify-center overflow-hidden rounded-3xl cursor-grab active:cursor-grabbing select-none react-flow__node-draghandle"
+              >
                 <img 
                   draggable={false} 
                   src={data.url} 
@@ -792,7 +801,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                          if (completedCrop && imgRef.current) {
                             try {
                               const croppedImageUrl = getCroppedImg(imgRef.current, completedCrop);
-                              const currentNode = nodes.find(n => n.id === id);
+                              const currentNode = useStore.getState().nodes.find(n => n.id === id);
                                const currentX = currentNode?.position?.x ?? 100;
                                const currentY = currentNode?.position?.y ?? 100;
                                

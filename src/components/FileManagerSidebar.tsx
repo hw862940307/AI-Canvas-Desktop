@@ -16,9 +16,13 @@ import {
   Image as ImageIcon,
   Video,
   Music,
-  FileText
+  FileText,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { createPortal } from 'react-dom';
 import { useStore, FileItem, FolderItem } from '../store/useStore';
 import { useReactFlow } from '@xyflow/react';
 
@@ -46,6 +50,43 @@ export const FileManagerSidebar = () => {
   const [activeTab, setActiveTab] = useState<'history' | 'materials' | 'output'>('history');
   const [activeCategory, setActiveCategory] = useState<'all' | 'image' | 'video' | 'audio'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  const handleDoubleClickImage = (url: string) => {
+    setFullscreenUrl(url);
+    setZoomScale(1);
+    setZoomOffset({ x: 0, y: 0 });
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    const newScale = Math.min(Math.max(zoomScale + delta, 0.5), 5);
+    setZoomScale(newScale);
+  };
+
+  const handleImageMouseDown = (e: React.MouseEvent) => {
+    if (zoomScale <= 1) return;
+    setIsDraggingImage(true);
+    setDragStart({ x: e.clientX - zoomOffset.x, y: e.clientY - zoomOffset.y });
+  };
+
+  const handleImageMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingImage) return;
+    setZoomOffset({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  const handleImageMouseUp = () => {
+    setIsDraggingImage(false);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isResizing = useRef(false);
@@ -81,7 +122,7 @@ export const FileManagerSidebar = () => {
       x: window.innerWidth / 2,
       y: window.innerHeight / 2
     });
-    addNode('image', center.x - 150, center.y - 120, { imageUrl: file.url });
+    addNode('image-source', center.x - 150, center.y - 120, { url: file.url, name: file.name });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, folderId?: string) => {
@@ -105,8 +146,8 @@ export const FileManagerSidebar = () => {
   };
 
   const handleDragStart = (event: React.DragEvent, file: FileItem) => {
-    event.dataTransfer.setData('application/reactflow/type', 'image');
-    event.dataTransfer.setData('application/reactflow/data', JSON.stringify({ imageUrl: file.url }));
+    event.dataTransfer.setData('application/reactflow/type', 'image-source');
+    event.dataTransfer.setData('application/reactflow/data', JSON.stringify({ url: file.url, name: file.name }));
     event.dataTransfer.effectAllowed = 'move';
   };
 
@@ -119,7 +160,8 @@ export const FileManagerSidebar = () => {
   });
 
   return (
-    <motion.div 
+    <>
+      <motion.div 
       initial={{ x: -fileManagerWidth - 72 }}
       animate={{ x: 72 }}
       exit={{ x: -fileManagerWidth - 72 }}
@@ -184,6 +226,7 @@ export const FileManagerSidebar = () => {
           onAdd={handleAddFileToCanvas}
           onDelete={(id: string) => removeFile(id, false)}
           onDragStart={handleDragStart}
+          onDoubleClickImage={handleDoubleClickImage}
         />
       ) : activeTab === 'materials' ? (
         <MaterialsView 
@@ -201,11 +244,13 @@ export const FileManagerSidebar = () => {
           onDelete={(id: string) => removeFile(id, true)}
           onUploadClick={() => fileInputRef.current?.click()}
           onDragStart={handleDragStart}
+          onDoubleClickImage={handleDoubleClickImage}
         />
       ) : (
         <OutputView 
           onAdd={handleAddFileToCanvas}
           onDragStart={handleDragStart}
+          onDoubleClickImage={handleDoubleClickImage}
         />
       )}
 
@@ -217,10 +262,96 @@ export const FileManagerSidebar = () => {
         onChange={(e) => handleFileUpload(e)}
       />
     </motion.div>
+
+    {fullscreenUrl && createPortal(
+      <AnimatePresence>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onWheel={handleWheel}
+          className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-hidden"
+        >
+          <div className="absolute top-6 right-6 flex items-center gap-3 z-100">
+            <div className="flex items-center gap-2 bg-white/5 backdrop-blur-md rounded-2xl border border-[var(--border)] p-1.5 px-3">
+              <button 
+                onClick={() => setZoomScale(Math.max(zoomScale - 0.2, 0.5))}
+                className="p-2 hover:bg-white/10 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
+              >
+                <ZoomOut size={20} />
+              </button>
+              <span className="text-white/80 font-mono text-lg min-w-[60px] text-center">
+                {Math.round(zoomScale * 100)}%
+              </span>
+              <button 
+                onClick={() => setZoomScale(Math.min(zoomScale + 0.2, 5))}
+                className="p-2 hover:bg-white/10 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
+              >
+                <ZoomIn size={20} />
+              </button>
+              <div className="w-px h-4 bg-white/10 mx-1" />
+              <button 
+                onClick={() => { setZoomScale(1); setZoomOffset({ x: 0, y: 0 }); }}
+                className="p-2 hover:bg-white/10 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
+                title="Reset"
+              >
+                <RotateCcw size={18} />
+              </button>
+            </div>
+
+            <button 
+              onClick={() => { setFullscreenUrl(null); setZoomScale(1); setZoomOffset({ x: 0, y: 0 }); }} 
+              className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-red-500 text-white rounded-2xl transition-all border border-[var(--border)] shadow-2xl cursor-pointer"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          <div 
+            className={`w-full h-full flex items-center justify-center overflow-hidden ${zoomScale > 1 ? 'cursor-move' : 'cursor-default'}`}
+            onMouseDown={handleImageMouseDown}
+            onMouseMove={handleImageMouseMove}
+            onMouseUp={handleImageMouseUp}
+            onMouseLeave={handleImageMouseUp}
+          >
+            <motion.div 
+              animate={{ 
+                scale: zoomScale,
+                x: zoomOffset.x,
+                y: zoomOffset.y
+              }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative max-w-full max-h-full flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img draggable={false} 
+                src={fullscreenUrl} 
+                alt="Fullscreen" 
+                className="max-w-[90vw] max-h-[85vh] object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-3xl border border-[var(--border)] select-none pointer-events-none" 
+              />
+            </motion.div>
+          </div>
+
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 px-6 py-3 bg-white/5 backdrop-blur-xl border border-[var(--border)] rounded-[24px] z-50">
+             <div className="flex items-center gap-2 pr-4 border-r border-[var(--border)]">
+               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+               <span className="text-sm font-bold text-white/40 tracking-wider">FILE MANAGER VIEW</span>
+             </div>
+             <span className="text-sm font-mono text-white/60">
+               PREVIEW MODE
+             </span>
+          </div>
+        </motion.div>
+      </AnimatePresence>,
+      document.body
+    )}
+    </>
   );
 };
 
-const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery, onAdd, onDelete, onDragStart }: any) => {
+const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery, onAdd, onDelete, onDragStart, onDoubleClickImage }: any) => {
   return (
     <div className="flex-1 flex flex-col bg-[var(--bg-primary)]/50">
       <div className="p-6 pb-0 space-y-4">
@@ -231,11 +362,11 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
           {(['all', 'image', 'video', 'audio'] as const).map((cat) => (
             <button
-              key={cat}
+               key={cat}
               onClick={() => setCategory(cat)}
               className={`px-4 py-1.5 rounded-full text-sm font-bold whitespace-nowrap transition-all border ${
                 category === cat 
-                  ? 'bg-accent border-accent text-white shadow-lg shadow-accent/20' 
+                   ? 'bg-accent border-accent text-white shadow-lg shadow-accent/20' 
                   : 'bg-white/5 border-[var(--border)] text-gray-400 hover:bg-white/10'
               }`}
             >
@@ -269,6 +400,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
                 key={file.id} 
                 draggable
                 onDragStart={(e) => onDragStart(e, file)}
+                onDoubleClick={() => file.type === 'image' && onDoubleClickImage?.(file.url)}
                 className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent/30 transition-all cursor-pointer"
               >
                 {file.type === 'image' ? (
@@ -304,7 +436,7 @@ const HistoryView = ({ category, setCategory, files, searchQuery, setSearchQuery
   );
 };
 
-const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFolder, removeFolder, updateFolder, onAdd, onDelete, addMaterial, clearFolderMaterials, onDragStart }: any) => {
+const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFolder, removeFolder, updateFolder, onAdd, onDelete, addMaterial, clearFolderMaterials, onDragStart, onDoubleClickImage }: any) => {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [isEditingPath, setIsEditingPath] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -531,6 +663,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
                       key={file.id} 
                       draggable
                       onDragStart={(e) => onDragStart(e, file)}
+                      onDoubleClick={() => onDoubleClickImage?.(file.url)}
                       className="group relative aspect-square bg-black/20 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent/30 transition-all cursor-pointer shadow-lg active:scale-95"
                     >
                       <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
@@ -587,7 +720,7 @@ const MaterialsView = ({ folders, materials, searchQuery, setSearchQuery, addFol
   );
 };
 
-const OutputView = ({ onAdd, onDragStart }: any) => {
+const OutputView = ({ onAdd, onDragStart, onDoubleClickImage }: any) => {
   const [folders] = useState([
     { name: 'Multiple grids', id: 'out-1' },
     { name: 'mask_preview', id: 'out-2' },
@@ -635,6 +768,7 @@ const OutputView = ({ onAdd, onDragStart }: any) => {
               key={file.id} 
               draggable
               onDragStart={(e) => onDragStart(e, file)}
+              onDoubleClick={() => onDoubleClickImage?.(file.url)}
               className="group relative aspect-[3/4] bg-black/20 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent/30 transition-all cursor-pointer"
             >
               <img draggable={false} src={file.url} alt={file.name} className="w-full h-full object-cover" />

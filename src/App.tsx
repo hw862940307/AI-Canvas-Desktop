@@ -18,7 +18,7 @@ import {
   SelectionMode,
   Node,
 } from "@xyflow/react";
-import { useStore } from "./store/useStore";
+import { useStore, getFreshWf4Content } from "./store/useStore";
 import { TextNode } from "./components/TextNode";
 import { ImageGenNode } from "./components/ImageGenNode";
 import { TextGenNode } from "./components/TextGenNode";
@@ -98,22 +98,22 @@ import { GroupNode } from "./components/GroupNode";
 // Gemini initialization logic removed here, handled by getGenAI utility
 
 const nodeTypes = {
-  text: TextNode,
-  "image-gen": ImageGenNode,
-  "text-gen": TextGenNode,
-  "image-source": SourceImageNode,
-  "text-source": SourceTextNode,
-  "prompt-engine": PromptEngineNode,
-  "logic-engine": LogicEngineNode,
-  "translate-engine": TranslateEngineNode,
-  "fusion-master": FusionMasterNode,
-  "spatial-view": SpatialViewNode,
-  "apt-web-tool": AptWebToolNode,
-  "io-image-list": IoImageListNode,
-  "double-box-transform": DoubleBoxTransformNode,
-  reverse: ReverseNode,
-  "ms-gen": MsGenNode,
-  "group-node": GroupNode,
+  text: React.memo(TextNode),
+  "image-gen": React.memo(ImageGenNode),
+  "text-gen": React.memo(TextGenNode),
+  "image-source": React.memo(SourceImageNode),
+  "text-source": React.memo(SourceTextNode),
+  "prompt-engine": React.memo(PromptEngineNode),
+  "logic-engine": React.memo(LogicEngineNode),
+  "translate-engine": React.memo(TranslateEngineNode),
+  "fusion-master": React.memo(FusionMasterNode),
+  "spatial-view": React.memo(SpatialViewNode),
+  "apt-web-tool": React.memo(AptWebToolNode),
+  "io-image-list": React.memo(IoImageListNode),
+  "double-box-transform": React.memo(DoubleBoxTransformNode),
+  reverse: React.memo(ReverseNode),
+  "ms-gen": React.memo(MsGenNode),
+  "group-node": React.memo(GroupNode),
 };
 
 function ZoomDisplay() {
@@ -229,6 +229,45 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     groupSelectedNodes,
     ungroupNode,
   } = useStore();
+
+  // Overwrite stale cached default settings in localStorage with latest full 30-node "Flux2+Klein单图编辑" preset configuration on startup
+  useEffect(() => {
+    if (settings && settings.apiSettings && settings.apiSettings.comfyWorkflowsDetails) {
+      const details = settings.apiSettings.comfyWorkflowsDetails;
+      const wf4 = details.find((w: any) => w.id === 'wf-4');
+      if (wf4 && (!wf4.content || wf4.content.length < 5000)) {
+        console.log("Healing workflow cache for 'Flux2+Klein单图编辑.json'...");
+        const updatedDetails = details.map((w: any) => {
+          if (w.id === 'wf-4') {
+            return {
+              ...w,
+              size: "36 KB",
+              content: getFreshWf4Content()
+            };
+          }
+          return w;
+        });
+        updateSettings({
+          apiSettings: {
+            ...settings.apiSettings,
+            comfyWorkflowsDetails: updatedDetails
+          }
+        });
+      }
+    }
+  }, [settings, updateSettings]);
+
+  // Sync history files with backend physical storage on startup
+  useEffect(() => {
+    fetch('/api/history-files')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          useStore.setState({ files: data });
+        }
+      })
+      .catch(err => console.error('Failed to sync history files:', err));
+  }, []);
 
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const [cuttingPoints, setCuttingPoints] = useState<Array<{ x: number; y: number }>>([]);

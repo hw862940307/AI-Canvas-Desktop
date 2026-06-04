@@ -13,7 +13,8 @@ interface GroupNodeProps {
 }
 
 export const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
-  const { updateNodeData, ungroupNode } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const ungroupNode = useStore((s) => s.ungroupNode);
   const node = useStore((state) => state.nodes.find((n) => n.id === id));
   const settings = useStore((state) => state.settings);
   const [isEditing, setIsEditing] = useState(false);

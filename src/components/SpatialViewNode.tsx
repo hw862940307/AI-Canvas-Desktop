@@ -746,7 +746,7 @@ const NodeUI = ({
 };
 
 export const SpatialViewNode = React.memo(({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
-  const { updateNodeData } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
   const { deleteElements } = useReactFlow();
   const edges = useEdges();
   const nodes = useNodes();

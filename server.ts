@@ -25,13 +25,7 @@ function appendLog(message: string) {
 const upload = multer({ storage: multer.memoryStorage() });
 
 const isLocalUrl = (url: string) => {
-  if (!url) return true; // Treat empty as local/invalid
-  const normalized = url.toLowerCase().trim();
-  return normalized.includes('127.0.0.1') || 
-         normalized.includes('localhost') || 
-         normalized.startsWith('http://192.168.') || 
-         normalized.startsWith('http://10.') ||
-         normalized.startsWith('http://172.');
+  return false; // Relax restriction to allow proxying to local server instances
 };
 
 function decompressBuffer(buffer: Buffer, encoding: string): Buffer {
@@ -57,12 +51,78 @@ function decompressBuffer(buffer: Buffer, encoding: string): Buffer {
   return buffer;
 }
 
+const historyDir = path.join(__dirname, 'history');
+if (!fs.existsSync(historyDir)) {
+  fs.mkdirSync(historyDir, { recursive: true });
+}
+
+async function saveImageToHistory(urlOrBase64: string): Promise<string> {
+  const timestamp = Date.now();
+  const randomSuffix = Math.floor(Math.random() * 10000);
+  const fileName = `gen_${timestamp}_${randomSuffix}.png`;
+  const filePath = path.join(historyDir, fileName);
+
+  try {
+    if (urlOrBase64.startsWith('data:')) {
+      const matches = urlOrBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const base64Data = matches[2];
+        fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+        return `/history/${fileName}`;
+      } else {
+        const base64Data = urlOrBase64.replace(/^data:image\/\w+;base64,/, '');
+        fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+        return `/history/${fileName}`;
+      }
+    } else if (urlOrBase64.startsWith('http')) {
+      const response = await axios.get(urlOrBase64, { responseType: 'arraybuffer', timeout: 30000 });
+      fs.writeFileSync(filePath, Buffer.from(response.data));
+      return `/history/${fileName}`;
+    } else if (urlOrBase64.length > 200) {
+      fs.writeFileSync(filePath, Buffer.from(urlOrBase64, 'base64'));
+      return `/history/${fileName}`;
+    }
+  } catch (error: any) {
+    console.error('Failed to save image to history folder:', error.message);
+  }
+  return urlOrBase64;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  
+  app.use('/history', express.static(historyDir));
+
+  app.get('/api/history-files', (req, res) => {
+    try {
+      if (!fs.existsSync(historyDir)) {
+        return res.json([]);
+      }
+      const files = fs.readdirSync(historyDir);
+      const fileList = files
+        .filter(file => file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg'))
+        .map(file => {
+          const stats = fs.statSync(path.join(historyDir, file));
+          return {
+            id: `server-${file}`,
+            name: file,
+            type: 'image',
+            url: `/history/${file}`,
+            createdAt: stats.mtimeMs,
+            size: stats.size
+          };
+        })
+        .sort((a, b) => b.createdAt - a.createdAt);
+      res.json(fileList);
+    } catch (error: any) {
+      console.error('Failed to read history directory:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   // Browser log receiver for real-time monitoring of sandboxed iframe events
   app.post('/api/browser-log', (req, res) => {
@@ -1327,7 +1387,7 @@ async function startServer() {
 
   // Proxy for LLM Image Generations (OpenAI format and Gemini format)
   app.post('/api/images', async (req, res) => {
-    const { engine, baseUrl, apiKey, modelId, prompt, size, n, quality, lora, msAsync } = req.body;
+    const { engine, baseUrl, apiKey, modelId, prompt, size, n, quality, lora, msAsync, opMode, images, format, background, moderation } = req.body;
 
     if (!apiKey) {
       return res.status(400).json({ error: 'API Key is missing' });
@@ -1373,7 +1433,9 @@ async function startServer() {
         const ratio = size || '1:1';
         const resType = quality || '1K';
 
-        if (resType === '512x512' || resType === '768x768') {
+        if (ratio.toLowerCase().includes('x')) {
+          finalSize = ratio.toLowerCase();
+        } else if (resType === '512x512' || resType === '768x768') {
           finalSize = resType;
         } else {
           const is2K = resType === '2K';
@@ -1628,36 +1690,348 @@ async function startServer() {
         const urls = response.data.predictions?.map((p: any) => `data:${p.mimeType || 'image/jpeg'};base64,${p.bytesBase64}`) || [];
         return res.json({ urls });
       } else {
-        const finalBaseUrl = baseUrl || 'https://api.openai.com/v1';
-        const url = `${finalBaseUrl.replace(/\/$/, '')}/images/generations`;
+        let finalBaseUrl = (baseUrl || 'https://api.openai.com/v1').trim().replace(/\/$/, '');
+        if (finalBaseUrl.endsWith('/images/generations')) {
+          finalBaseUrl = finalBaseUrl.slice(0, -'/images/generations'.length);
+        } else if (finalBaseUrl.endsWith('/images/edits')) {
+          finalBaseUrl = finalBaseUrl.slice(0, -'/images/edits'.length);
+        } else if (finalBaseUrl.endsWith('/images')) {
+          finalBaseUrl = finalBaseUrl.slice(0, -'/images'.length);
+        }
+        finalBaseUrl = finalBaseUrl.replace(/\/$/, '');
         
-        const payload: any = {
-          prompt: prompt,
-          model: modelId || 'dall-e-3',
-          n: parseInt(n) || 1,
-          size: size || '1024x1024'
-        };
-        if (quality) {
-           payload.quality = quality;
+        const modelLower = String(modelId || '').toLowerCase();
+        const isDallE3 = modelLower.includes('dall-e-3');
+        const isDallE2 = modelLower.includes('dall-e-2') || (modelLower.includes('dall') && !isDallE3);
+
+        let mappedSize = size || '1024x1024';
+        if (mappedSize === '自动' || mappedSize === 'Auto' || !mappedSize) {
+          mappedSize = '1024x1024';
+        } else if (mappedSize === '1:1') {
+          mappedSize = '1024x1024';
+        } else if (mappedSize === '16:9') {
+          mappedSize = isDallE3 ? '1792x1024' : '1024x576';
+        } else if (mappedSize === '9:16') {
+          mappedSize = isDallE3 ? '1024x1792' : '576x1024';
+        } else if (mappedSize === '4:3') {
+          mappedSize = '1024x768';
+        } else if (mappedSize === '3:4') {
+          mappedSize = '768x1024';
+        } else if (mappedSize === '3:2') {
+          mappedSize = '1536x1024';
+        } else if (mappedSize === '2:3') {
+          mappedSize = '1024x1536';
+        } else if (mappedSize === '21:9') {
+          mappedSize = '2048x858';
         }
 
-        const response = await axios.post(url, payload, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
+        // For DALL-E-3, force standard resolutions for parameters safety
+        if (isDallE3) {
+          if (!['1024x1024', '1792x1024', '1024x1792'].includes(mappedSize)) {
+            mappedSize = '1024x1024';
           }
-        });
+        } else if (isDallE2) {
+          if (!['1024x1024', '512x512', '256x256'].includes(mappedSize)) {
+            mappedSize = '1024x1024';
+          }
+        }
 
-        // Map through all returned data objects and extract URLs
-        const urls = response.data.data?.map((d: any) => d.url) || [];
-        return res.json({ urls });
+        // Filter and normalize quality values to match model compliance
+        let finalQuality: string | undefined = undefined;
+        if (quality && quality !== 'auto') {
+          if (isDallE3) {
+            if (quality === 'standard' || quality === 'hd') {
+              finalQuality = quality;
+            }
+          } else if (isDallE2) {
+            finalQuality = undefined;
+          } else {
+            finalQuality = quality;
+          }
+        }
+
+        // Custom parameters formatting safety (ignore on standard DALL-E)
+        let finalFormat: string | undefined = undefined;
+        if (format && format !== 'auto' && !isDallE3 && !isDallE2) {
+          finalFormat = format;
+        }
+
+        let finalBackground: string | undefined = undefined;
+        if (background && background !== 'auto' && !background.includes('auto') && !isDallE3 && !isDallE2) {
+          finalBackground = background;
+        }
+
+        let finalModeration: string | undefined = undefined;
+        if (moderation && moderation !== 'auto' && !isDallE3 && !isDallE2) {
+          finalModeration = moderation;
+        }
+        
+        if (opMode === 'edits') {
+          const url = `${finalBaseUrl}/images/edits`;
+          const form = new FormData();
+          form.append('model', modelId || 'gpt-image-2');
+          form.append('prompt', prompt || '');
+          form.append('n', parseInt(n) || 1);
+          form.append('size', mappedSize);
+          if (finalQuality) form.append('quality', finalQuality);
+          if (finalFormat) form.append('format', finalFormat);
+          if (finalBackground) form.append('background', finalBackground);
+          if (finalModeration) form.append('moderation', finalModeration);
+
+          if (images && Array.isArray(images) && images.length > 0) {
+            for (let i = 0; i < images.length; i++) {
+              const imageStr = images[i];
+              if (!imageStr) continue;
+              try {
+                if (imageStr.startsWith('data:')) {
+                  const matches = imageStr.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+                  if (matches && matches.length === 3) {
+                    const mime = matches[1];
+                    const buffer = Buffer.from(matches[2], 'base64');
+                    let ext = 'png';
+                    if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpeg';
+                    else if (mime.includes('webp')) ext = 'webp';
+                    form.append('image', buffer, { filename: `file_${i}.${ext}`, contentType: mime });
+                  }
+                } else {
+                  let downloadUrl = imageStr;
+                  if (imageStr.startsWith('/')) {
+                    downloadUrl = `http://localhost:3000${imageStr}`;
+                    appendLog(`[Image Edit Fetch] Client-relative path detected. Normalizing source target to self: ${downloadUrl}`);
+                  }
+                  if (downloadUrl.startsWith('http://') || downloadUrl.startsWith('https://')) {
+                    appendLog(`[Image Edit Fetch] Downloading ${downloadUrl}`);
+                    const imgRes = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+                    const buffer = Buffer.from(imgRes.data);
+                    const contentType = String(imgRes.headers['content-type'] || 'image/png');
+                    let ext = 'png';
+                    if (contentType.includes('jpeg') || contentType.includes('jpg')) ext = 'jpeg';
+                    else if (contentType.includes('webp')) ext = 'webp';
+                    form.append('image', buffer, { filename: `file_${i}.${ext}`, contentType });
+                  }
+                }
+              } catch (imgErr: any) {
+                appendLog(`[Image Edit Fetch Error] Failed to process image index ${i}: ${imgErr.message}`);
+              }
+            }
+          }
+
+          appendLog(`[Image Edit Request] URL: ${url}, Model: ${modelId}, Size: ${mappedSize}`);
+          const response = await axios.post(url, form, {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              ...form.getHeaders()
+            },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+            timeout: 240000
+          });
+
+          const parseImageResponse = (responseData: any): string[] => {
+            if (!responseData) return [];
+            appendLog(`[Image API Success] Response keys: ${Object.keys(responseData)}`);
+            appendLog(`[Image API Success] Response preview: ${JSON.stringify(responseData).substring(0, 1000)}`);
+
+            let extractedUrls: string[] = [];
+
+            // 1. Try to find from standard pathways: data, images, results, output
+            const arraysToTry = [
+              responseData.data,
+              responseData.images,
+              responseData.results,
+              responseData.output?.results,
+              responseData.output
+            ];
+
+            for (const item of arraysToTry) {
+              if (Array.isArray(item)) {
+                const parsed = item.map((d: any) => {
+                  if (typeof d === 'string') {
+                    if (d.startsWith('http://') || d.startsWith('https://') || d.startsWith('data:')) {
+                      return d;
+                    }
+                    if (d.length > 50) { // likely raw base64 data
+                      return d.startsWith('data:') ? d : `data:image/png;base64,${d}`;
+                    }
+                    return null;
+                  }
+                  if (d && typeof d === 'object') {
+                    if (d.url) return d.url;
+                    if (d.b64_json) {
+                      return d.b64_json.startsWith('data:') ? d.b64_json : `data:image/png;base64,${d.b64_json}`;
+                    }
+                    if (d.image) return d.image;
+                    if (d.base64) {
+                      return d.base64.startsWith('data:') ? d.base64 : `data:image/png;base64,${d.base64}`;
+                    }
+                  }
+                  return null;
+                }).filter(Boolean) as string[];
+
+                if (parsed.length > 0) {
+                  extractedUrls = parsed;
+                  break;
+                }
+              }
+            }
+
+            // 2. Fallback to generic URL deep scanning
+            if (extractedUrls.length === 0) {
+              const scannedFromKeys = extractImageUrls(responseData);
+              if (scannedFromKeys.length > 0) {
+                extractedUrls = scannedFromKeys;
+              }
+            }
+
+            // 3. Fallback to raw base64 check inside keys if nothing else worked
+            if (extractedUrls.length === 0) {
+              if (typeof responseData === 'string' && responseData.length > 1000) {
+                extractedUrls = [responseData.startsWith('data:') ? responseData : `data:image/png;base64,${responseData}`];
+              } else if (responseData && typeof responseData === 'object') {
+                const checkedKeys = ['b64_json', 'base64', 'image', 'url'];
+                for (const key of checkedKeys) {
+                  if (typeof responseData[key] === 'string' && responseData[key].length > 10) {
+                    const content = responseData[key];
+                    if (content.startsWith('http://') || content.startsWith('https://')) {
+                      extractedUrls = [content];
+                      break;
+                    } else if (content.length > 100) {
+                      extractedUrls = [content.startsWith('data:') ? content : `data:image/png;base64,${content}`];
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            appendLog(`[Parser Result] Extracted URLs count: ${extractedUrls.length}. Previews: ${extractedUrls.map(u => u.substring(0, 80) + '...').join(', ')}`);
+            return extractedUrls;
+          };
+
+          const urls = parseImageResponse(response.data);
+          const savedUrls = await Promise.all(urls.map(u => saveImageToHistory(u)));
+          return res.json({ urls: savedUrls });
+        } else {
+          const url = `${finalBaseUrl}/images/generations`;
+          
+          const payload: any = {
+            prompt: prompt,
+            model: modelId || 'dall-e-3',
+            n: parseInt(n) || 1,
+            size: mappedSize
+          };
+          if (finalQuality) {
+             payload.quality = finalQuality;
+          }
+
+          appendLog(`[Image Gen Request] URL: ${url}, Model: ${payload.model}, Size: ${payload.size}`);
+          const response = await axios.post(url, payload, {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 240000
+          });
+
+          const parseImageResponse = (responseData: any): string[] => {
+            if (!responseData) return [];
+            appendLog(`[Image API Success] Response keys: ${Object.keys(responseData)}`);
+            appendLog(`[Image API Success] Response preview: ${JSON.stringify(responseData).substring(0, 1000)}`);
+
+            let extractedUrls: string[] = [];
+
+            // 1. Try to find from standard pathways: data, images, results, output
+            const arraysToTry = [
+              responseData.data,
+              responseData.images,
+              responseData.results,
+              responseData.output?.results,
+              responseData.output
+            ];
+
+            for (const item of arraysToTry) {
+              if (Array.isArray(item)) {
+                const parsed = item.map((d: any) => {
+                  if (typeof d === 'string') {
+                    if (d.startsWith('http://') || d.startsWith('https://') || d.startsWith('data:')) {
+                      return d;
+                    }
+                    if (d.length > 50) { // likely raw base64 data
+                      return d.startsWith('data:') ? d : `data:image/png;base64,${d}`;
+                    }
+                    return null;
+                  }
+                  if (d && typeof d === 'object') {
+                    if (d.url) return d.url;
+                    if (d.b64_json) {
+                      return d.b64_json.startsWith('data:') ? d.b64_json : `data:image/png;base64,${d.b64_json}`;
+                    }
+                    if (d.image) return d.image;
+                    if (d.base64) {
+                      return d.base64.startsWith('data:') ? d.base64 : `data:image/png;base64,${d.base64}`;
+                    }
+                  }
+                  return null;
+                }).filter(Boolean) as string[];
+
+                if (parsed.length > 0) {
+                  extractedUrls = parsed;
+                  break;
+                }
+              }
+            }
+
+            // 2. Fallback to generic URL deep scanning
+            if (extractedUrls.length === 0) {
+              const scannedFromKeys = extractImageUrls(responseData);
+              if (scannedFromKeys.length > 0) {
+                extractedUrls = scannedFromKeys;
+              }
+            }
+
+            // 3. Fallback to raw base64 check inside keys if nothing else worked
+            if (extractedUrls.length === 0) {
+              if (typeof responseData === 'string' && responseData.length > 1000) {
+                extractedUrls = [responseData.startsWith('data:') ? responseData : `data:image/png;base64,${responseData}`];
+              } else if (responseData && typeof responseData === 'object') {
+                const checkedKeys = ['b64_json', 'base64', 'image', 'url'];
+                for (const key of checkedKeys) {
+                  if (typeof responseData[key] === 'string' && responseData[key].length > 10) {
+                    const content = responseData[key];
+                    if (content.startsWith('http://') || content.startsWith('https://')) {
+                      extractedUrls = [content];
+                      break;
+                    } else if (content.length > 100) {
+                      extractedUrls = [content.startsWith('data:') ? content : `data:image/png;base64,${content}`];
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            appendLog(`[Parser Result] Extracted URLs count: ${extractedUrls.length}. Previews: ${extractedUrls.map(u => u.substring(0, 80) + '...').join(', ')}`);
+            return extractedUrls;
+          };
+
+          const urls = parseImageResponse(response.data);
+          const savedUrls = await Promise.all(urls.map(u => saveImageToHistory(u)));
+          return res.json({ urls: savedUrls });
+        }
       }
     } catch (error: any) {
-      const errDetails = error?.response?.data ? JSON.stringify(error.response.data) : error.message;
+      const errDetails = error?.response?.data ? (typeof error.response.data === 'object' ? JSON.stringify(error.response.data) : String(error.response.data)) : error.message;
       appendLog(`[Image API Error] Details: ${errDetails}`);
       console.error('Image API Error:', error?.response?.data || error.message);
-      const errMsg = error?.response?.data?.error?.message || error?.response?.data?.error || error.message || 'Unknown API Error';
-      res.status(500).json({ error: typeof errMsg === 'object' ? JSON.stringify(errMsg) : errMsg });
+      
+      let errMsg = '';
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+        errMsg = `中转接口通道超时 (Timeout of 4 minutes reached)。请确认您连接的第三方中转 API (如 yuli.host) 实际渲染耗时或通道排队情况。`;
+      } else {
+        errMsg = error?.response?.data?.error?.message || error?.response?.data?.error || error.message || 'Unknown API Error';
+      }
+      
+      res.status(500).json({ error: typeof errMsg === 'object' ? JSON.stringify(errMsg) : String(errMsg) });
     }
   });
 
@@ -1683,13 +2057,19 @@ async function startServer() {
           return res.json({ ok: false, error: `Http Code: ${response.status}` });
         }
       } else {
-        const finalBaseUrl = baseUrl || 'https://api.openai.com/v1';
+        let finalBaseUrl = (baseUrl || 'https://api.openai.com/v1').trim().replace(/\/$/, '');
+        if (finalBaseUrl.endsWith('/images/generations')) {
+          finalBaseUrl = finalBaseUrl.slice(0, -'/images/generations'.length);
+        } else if (finalBaseUrl.endsWith('/images')) {
+          finalBaseUrl = finalBaseUrl.slice(0, -'/images'.length);
+        }
+        finalBaseUrl = finalBaseUrl.replace(/\/$/, '');
 
         // Check if this is a ModelScope models list request
         const isModelScopeList = (engine === 'modelscope');
 
         if (isModelScopeList) {
-          const finalModelUrl = modelUrl || `${finalBaseUrl.replace(/\/$/, '')}/models`;
+          const finalModelUrl = modelUrl || `${finalBaseUrl}/models`;
           appendLog(`[ModelScope Test Connection] GET request to modelUrl: ${finalModelUrl}`);
           try {
             const response = await axios.get(finalModelUrl, {
@@ -1717,25 +2097,91 @@ async function startServer() {
           }
         }
 
-        const url = `${finalBaseUrl.replace(/\/$/, '')}/chat/completions`;
-        const payload = {
-          model: modelId || 'gpt-3.5-turbo',
-          messages: [{ role: 'user', content: 'test connection' }],
-          max_tokens: 1
-        };
+        // Standard OpenAI-compatible testing: Try GET /models first (most safe, free, and supports image-only keys/scopes)
+        let testOk = false;
+        let testError = '';
 
-        const response = await axios.post(url, payload, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 8000
-        });
+        try {
+          appendLog(`[Test Connection] Attempting models list test: GET ${finalBaseUrl}/models`);
+          const modelsRes = await axios.get(`${finalBaseUrl}/models`, {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`
+            },
+            timeout: 6000
+          });
+          if (modelsRes.status === 200 || modelsRes.status === 201) {
+            appendLog(`[Test Connection] Models list test succeeded!`);
+            return res.json({ ok: true });
+          }
+        } catch (modelsErr: any) {
+          const details = modelsErr?.response?.data ? JSON.stringify(modelsErr.response.data) : modelsErr.message;
+          appendLog(`[Test Connection] Models list test failed (expected for some narrow-scope keys or proxy routing): ${details}`);
+          testError = modelsErr?.response?.data?.error?.message || modelsErr?.response?.data?.error || modelsErr.message;
+        }
 
-        if (response.status === 200 || response.status === 201) {
-          return res.json({ ok: true });
+        // Fallback to image generation or chat completion test if models list was rejected or unsupported
+        const isImageOnlyModel = modelId && (
+          modelId.toLowerCase().includes('image') ||
+          modelId.toLowerCase().includes('dall') ||
+          modelId.toLowerCase().includes('sd_') ||
+          modelId.toLowerCase().includes('sdxl') ||
+          modelId.toLowerCase().includes('flux') ||
+          modelId.toLowerCase().includes('midjourney')
+        );
+
+        if (isImageOnlyModel) {
+          const url = `${finalBaseUrl}/images/generations`;
+          const payload = {
+            model: modelId || 'gpt-image-2',
+            prompt: 'a simple design dot',
+            n: 1,
+            size: '1024x1024'
+          };
+          appendLog(`[Test Connection] Image-only model detected. Trying image generation test: POST ${url}`);
+          try {
+            const imgRes = await axios.post(url, payload, {
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 10000
+            });
+            if (imgRes.status === 200 || imgRes.status === 201) {
+              appendLog(`[Test Connection] Image generation test succeeded!`);
+              return res.json({ ok: true });
+            } else {
+              return res.json({ ok: false, error: `Http Code: ${imgRes.status}` });
+            }
+          } catch (imgErr: any) {
+            const details = imgErr?.response?.data ? JSON.stringify(imgErr.response.data) : imgErr.message;
+            appendLog(`[Test Connection] Image generation test failed: ${details}`);
+            const errMsg = imgErr?.response?.data?.error?.message || imgErr?.response?.data?.error || imgErr.message;
+            return res.json({ ok: false, error: `图像生成测试失败: ${typeof errMsg === 'object' ? JSON.stringify(errMsg) : errMsg}` });
+          }
         } else {
-          return res.json({ ok: false, error: `Http Code: ${response.status}` });
+          const testModel = modelId || 'gpt-3.5-turbo';
+          const url = `${finalBaseUrl}/chat/completions`;
+          const payload = {
+            model: testModel,
+            messages: [{ role: 'user', content: 'test connection' }],
+            max_tokens: 1
+          };
+
+          appendLog(`[Test Connection] Fallback to chat completion: POST ${url} with model ${testModel}`);
+          const response = await axios.post(url, payload, {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 8000
+          });
+
+          if (response.status === 200 || response.status === 201) {
+            appendLog(`[Test Connection] Chat completions test succeeded!`);
+            return res.json({ ok: true });
+          } else {
+            return res.json({ ok: false, error: `Http Code: ${response.status} (Models endpoint error: ${testError})` });
+          }
         }
       }
     } catch (error: any) {

@@ -13,7 +13,8 @@ const MS_MODELS = [
 ];
 
 export function MsGenNode({ id, data, selected }: NodeProps) {
-  const { updateNodeData, getIncomingData } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const getIncomingData = useStore((s) => s.getIncomingData);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [model, setModel] = useState(data.model || 'zimage');

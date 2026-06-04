@@ -18,7 +18,9 @@ import { FullscreenTextEditor } from './FullscreenTextEditor';
 import { ScaleWrapper } from './ScaleWrapper';
 
 export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
-  const { updateNodeData, removeNode, settings } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const removeNode = useStore((s) => s.removeNode);
+  const settings = useStore((s) => s.settings);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [localText, setLocalText] = useState(data.text || '');
 

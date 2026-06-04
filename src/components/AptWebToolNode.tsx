@@ -18,6 +18,7 @@ import {
   RefreshCw, 
   Send,
   CloudLightning,
+  Server,
   Terminal,
   FileJson,
   Database,
@@ -38,6 +39,7 @@ import {
   Check
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { normalizeWorkflowToPrompt } from './SettingsModal';
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 
@@ -136,8 +138,10 @@ function scanComfyWorkflow(workflow: any): WorkflowScanResult {
   
   if (!workflow || typeof workflow !== 'object') return { imageInputs: [], imageOutputs: [], exposedParams: [] };
   
+  const normalized = normalizeWorkflowToPrompt(workflow);
+  
   // First pass: identify all nodes
-  for (const [nodeId, node] of Object.entries<any>(workflow)) {
+  for (const [nodeId, node] of Object.entries<any>(normalized)) {
     const classType = node.class_type || node.type;
     const title = node._meta?.title || node.title || classType || `Node ${nodeId}`;
     
@@ -185,6 +189,7 @@ interface BrowserTab {
   id: string;
   title: string;
   url: string;
+  forceProxy?: boolean;
 }
 
 const shouldProxyUrl = (url: string) => {
@@ -242,6 +247,7 @@ interface BrowserFrameProps {
   onDeleteCredential: (id: string) => void;
   iframeRef?: React.RefObject<HTMLIFrameElement | null>;
   onIframeLoad?: (e: React.SyntheticEvent<HTMLIFrameElement>) => void;
+  onToggleForceProxy?: (tabId: string) => void;
 }
 
 const BrowserFrame = React.memo(({ 
@@ -272,7 +278,8 @@ const BrowserFrame = React.memo(({
   onSaveCredential,
   onDeleteCredential,
   iframeRef,
-  onIframeLoad
+  onIframeLoad,
+  onToggleForceProxy
 }: BrowserFrameProps) => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'history' | 'passwords'>('history');
@@ -328,7 +335,9 @@ const BrowserFrame = React.memo(({
   };
 
   const isLocaltunnel = (iframeUrl || '').includes('.loca.lt');
-  const resolvedIframeSrc = (iframeUrl && shouldProxyUrl(iframeUrl))
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+  const isTabProxied = activeTab?.forceProxy || (iframeUrl && shouldProxyUrl(iframeUrl));
+  const resolvedIframeSrc = isTabProxied
     ? `/api/proxy?url=${encodeURIComponent(iframeUrl)}`
     : iframeUrl;
 
@@ -395,12 +404,21 @@ const BrowserFrame = React.memo(({
           {/* Sleek Bottom Address Input exactly matching Image 1 */}
           <div className="flex-1 flex items-center gap-3 bg-[#0d0d0f]/65 border border-[#27272a] rounded-xl px-4 py-2 hover:bg-[#0d0d0f]/90 transition-all font-sans relative">
             <input 
-              className="flex-1 bg-transparent text-[14px] text-zinc-200 outline-none pr-8 font-mono placeholder:text-zinc-650 border-none h-full"
+              className="flex-1 bg-transparent text-[14px] text-zinc-200 outline-none pr-16 font-mono placeholder:text-zinc-650 border-none h-full"
               value={pageUrl || ''}
               onChange={(e) => setPageUrl(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onNavigate()}
               placeholder="输入网址或进行搜索..."
             />
+            {onToggleForceProxy && (
+              <button 
+                onClick={() => onToggleForceProxy(activeTabId)}
+                className={`absolute right-10 top-1/2 -translate-y-1/2 transition-colors border-none bg-transparent cursor-pointer ${activeTab?.forceProxy ? 'text-indigo-400 hover:text-indigo-300' : 'text-zinc-550 hover:text-white'}`}
+                title={activeTab?.forceProxy ? "已启用「服务器中转代理」" : "未启用「服务器中转代理」"}
+              >
+                <Server size={15} />
+              </button>
+            )}
             <button 
               onClick={() => onAddFavorite()}
               className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors border-none bg-transparent cursor-pointer ${favorites.includes(pageUrl) ? 'text-yellow-500' : 'text-zinc-500 hover:text-white'}`}
@@ -507,6 +525,16 @@ const BrowserFrame = React.memo(({
             placeholder="Search or enter URL"
           />
           <div className="flex items-center gap-2">
+            {onToggleForceProxy && (
+              <button 
+                onClick={() => onToggleForceProxy(activeTabId)}
+                className={`p-1 px-1.5 rounded transition-all duration-200 flex items-center gap-1 ${activeTab?.forceProxy ? 'text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 border border-indigo-400/20' : 'text-gray-550 hover:text-white'}`}
+                title={activeTab?.forceProxy ? "已启用「服务器中转代理」：加载此网址时通过后台中转，安全突破跨域和本地端口混合内容拦截政策" : "直连访问：直接由浏览器与网址域名握手（支持 https 网址或已做内网穿透的端口）"}
+              >
+                <Server size={14} />
+                <span className="text-[9px] font-black uppercase tracking-wider hidden sm:inline">{activeTab?.forceProxy ? "代理中" : "直连"}</span>
+              </button>
+            )}
             <button 
               onClick={onNavigate}
               className="text-indigo-400 hover:text-indigo-300 transition-colors p-1"
@@ -634,7 +662,8 @@ const BrowserFrame = React.memo(({
           {tabs.map((tab) => {
             const isTabActive = tab.id === activeTabId;
             const tabIframeUrl = tab.url;
-            const resolvedSrc = (tabIframeUrl && shouldProxyUrl(tabIframeUrl))
+            const isTabProxied = tab.forceProxy || (tabIframeUrl && shouldProxyUrl(tabIframeUrl));
+            const resolvedSrc = isTabProxied
               ? `/api/proxy?url=${encodeURIComponent(tabIframeUrl)}`
               : tabIframeUrl;
 
@@ -895,7 +924,10 @@ const TabButton = ({ active, onClick, icon, label }: { active: boolean, onClick:
 
 export function AptWebToolNode({ id, data, selected }: NodeProps) {
   const nodeData = data as any;
-  const { updateNodeData, getIncomingData, addFile, settings } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const getIncomingData = useStore((s) => s.getIncomingData);
+  const addFile = useStore((s) => s.addFile);
+  const settings = useStore((s) => s.settings);
   
   // Calculate zoom scale based on current node width (baseline is 1000px for this wide tool)
   const baselineWidth = 1000;
@@ -950,7 +982,8 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
   const [outputImages, setOutputImages] = useState<any[]>(nodeData.outputs?.images || []);
   const [comfyView, setComfyView] = useState<'browser' | 'source'>(nodeData.comfyView || 'browser');
   const [isComfyIframeLoading, setIsComfyIframeLoading] = useState(true);
-  const [showLocalHelp, setShowLocalHelp] = useState(false);
+  const [showLocalHelp, setShowLocalHelp] = useState(true);
+  const [forceProxyComfy, setForceProxyComfy] = useState<boolean>(nodeData.forceProxyComfy || false);
 
   const comfyIframeRef = useRef<HTMLIFrameElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -1206,8 +1239,8 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
         .filter(d => (d as any).url || (d as any).imageUrl)
         .map(d => (d as any).url || (d as any).imageUrl);
       
-      // DEEP CLONE for execution payload
-      let updatedWorkflow = JSON.parse(JSON.stringify(workflowJson));
+      // DEEP CLONE and normalize for execution payload
+      let updatedWorkflow = normalizeWorkflowToPrompt(workflowJson);
 
       // 1. Sync Exposed Parameters
       addLog('Step 2: 正在映射参数面板数值到工作流...');
@@ -1393,7 +1426,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
             });
             
             setImages(newImagesForScraper);
-            updateNodeData(id, { 
+            updateStore({ 
               images: newImagesForScraper,
               outputs: { 
                 status: 'success', 
@@ -1414,8 +1447,24 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
   };
 
   const updateStore = useCallback((updates: any) => {
+    const isCloudHost = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (updates.forceProxyComfy && checkIsLocal(comfyUrl) && isCloudHost) {
+      alert("【⚠️ 本地连接代理警报】\n\n当前输入的 ComfyUI 是本地或局域网IP地址 (" + comfyUrl + ")。\n\n由于「服务器中转代理模式」是在我们的云端后台上部署网络请求的，云端服务器在公网上无法触连您自家的电脑网路（也无法解析本地 127.0.0.1 / localhost 节点）。因此，强行开启中转中连通常会遭遇 Connection refused (ECONNREFUSED) 错误报错。\n\n本地 IP 必须以非中转的「直连本地」模式运作。我们将代由帮您关闭该代理中转设置，并请您参考视图中间的「极速排障指南」来极速设置您的浏览器或者穿透通道进行连通。");
+      setForceProxyComfy(false);
+      updates.forceProxyComfy = false;
+    }
     updateNodeData(id, updates);
-  }, [id, updateNodeData]);
+  }, [id, updateNodeData, comfyUrl]);
+
+  // Local address restriction: Server-side proxy cannot access loopback/internal addresses when on a cloud host.
+  // We automatically revert forceProxyComfy to false if comfyUrl is a local IP and on a cloud host.
+  useEffect(() => {
+    const isCloudHost = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (checkIsLocal(comfyUrl) && forceProxyComfy && isCloudHost) {
+      setForceProxyComfy(false);
+      updateStore({ forceProxyComfy: false });
+    }
+  }, [comfyUrl, forceProxyComfy, updateStore]);
 
   const handleClearHistory = useCallback(() => {
     setHistoryEntries([]);
@@ -1441,6 +1490,14 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
       const updated = prev.filter(c => c.id !== id);
       updateStore({ savedCredentials: updated });
       return updated;
+    });
+  }, [updateStore]);
+
+  const handleToggleForceProxy = useCallback((tabId: string) => {
+    setTabs(prev => {
+      const nextTabs = prev.map(t => t.id === tabId ? { ...t, forceProxy: !t.forceProxy } : t);
+      updateStore({ tabs: nextTabs });
+      return nextTabs;
     });
   }, [updateStore]);
 
@@ -1732,6 +1789,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
       onDeleteCredential={handleDeleteCredential}
       iframeRef={iframeRef}
       onIframeLoad={handleIframeLoad}
+      onToggleForceProxy={handleToggleForceProxy}
     />
   );
 
@@ -1766,7 +1824,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
       <div className="flex-1 relative overflow-hidden">
         <iframe 
           key={`${refreshKey}-portal`}
-          src={comfyUrl}
+          src={forceProxyComfy ? `/api/proxy?url=${encodeURIComponent(comfyUrl)}` : comfyUrl}
           className="w-full h-full border-none"
         />
       </div>
@@ -2041,6 +2099,17 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                             }`} />
                          </div>
                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                           <button 
+                             onClick={() => {
+                               const nextVal = !forceProxyComfy;
+                               setForceProxyComfy(nextVal);
+                               updateStore({ forceProxyComfy: nextVal });
+                             }}
+                             className={`p-2 rounded-xl transition-all ${forceProxyComfy ? 'text-indigo-400 hover:text-indigo-300 bg-indigo-500/10' : 'text-gray-500 hover:text-white hover:bg-white/10'}`} 
+                             title={forceProxyComfy ? "已启用「服务器中转代理模式」：突破浏览器跨域和本地 HTTP 端口加载阻碍" : "已切换为「直连本地」：直连模式拥有最好的加载速度"}
+                           >
+                             <Server size={14} />
+                           </button>
                            <button onClick={() => window.open(comfyUrl, '_blank')} className="p-2 hover:bg-white/10 rounded-xl text-orange-400/60 hover:text-orange-400 transition-all" title="Open in New Tab (Bypass HTTPS block)">
                               <ExternalLink size={14} />
                            </button>
@@ -2075,34 +2144,58 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                     <motion.div 
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
-                      className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex flex-col gap-2 overflow-hidden"
+                      className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col gap-2 overflow-hidden"
                     >
-                      <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
-                        <AlertCircle size={14} />
-                        <span>本地连接受阻：浏览器禁止跨域访问 HTTP (混合内容拦截)</span>
+                      <div className="flex items-center gap-2 text-amber-450 font-bold text-sm">
+                        <AlertCircle size={14} className="shrink-0" />
+                        <span>🔌 本地 ComfyUI 连接障碍与极速排障指南</span>
                       </div>
-                      <p className="text-sm text-gray-400 leading-relaxed">
-                        您正在通过 HTTPS 访问此应用，而 ComfyUI 运行在 HTTP。请按照以下步骤解决：
+                      <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                        由于本系统运行在安全的 <b>HTTPS</b> 环境中，而您的本地 ComfyUI 是未加密的 <b>HTTP (127.0.0.1)</b>。出于安全防范，现代浏览器会默认拦截此类混合内容（导致内嵌黑屏）。同时，<b>云端后台服务器无法越过公网访问您电脑本机的 127.0.0.1 (本地局域网) 地址</b>，因此对本地 IP 开启后台中转代理 (Server 图标) 必会报错 Connection Refused (ECONNREFUSED)。
                       </p>
-                      <ul className="text-sm text-gray-500 space-y-1 list-decimal list-inside px-1">
-                        <li>点击浏览器地址栏左侧的 <span className="text-gray-300 font-bold">🔒 锁头图标</span></li>
-                        <li>选择 <span className="text-gray-300 font-bold">“网站设置” (Site settings)</span></li>
-                        <li>找到 <span className="text-gray-300 font-bold">“不安全内容” (Insecure content)</span></li>
-                        <li>将其设置为 <span className="text-accent font-black">“允许” (Allow)</span> 并刷新页面</li>
-                      </ul>
-                      <div className="flex gap-2 mt-1">
-                        <button 
-                          onClick={() => window.open('https://npx.is/localtunnel', '_blank')}
-                          className="text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1 rounded text-accent font-mono"
-                        >
-                          npx localtunnel --port 8188
-                        </button>
-                        <button 
-                          onClick={() => setShowLocalHelp(false)}
-                          className="text-[10px] ml-auto text-gray-600 hover:text-white"
-                        >
-                          [ 隐藏提示 ]
-                        </button>
+                      <p className="text-xs text-zinc-300 font-bold mt-1">请任选以下一种极速打通方案来实现完全内嵌显示：</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                        <div className="bg-black/45 p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1.5 justify-between">
+                          <div>
+                            <span className="text-[11px] font-black text-indigo-400 uppercase tracking-wider block">方案 A：复制本地穿透 (完美推荐 🔑)</span>
+                            <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                              在您本机的终端/命令行运行穿透工具，获取一个公网 HTTPS 临时安全网址（如 <span className="font-mono text-indigo-300">https://xxx.loca.lt</span>），将其粘贴到上方地址栏中。无需修改浏览器任何安全设置，完美渲染连接！
+                            </p>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              try {
+                                navigator.clipboard.writeText('npx localtunnel --port 8188');
+                                alert('📋 穿透命令已复制成功！\n\n请在您运行 ComfyUI 的电脑上打开终端（Windows 的 CMD 或 PowerShell，Mac 的 Terminal），粘贴并按回车执行此命令。\n\n执行成功后，终端中会输出一个类似 "your url is: https://xxxx.loca.lt" 的网址，将其复制并粘贴到上方的 ComfyUI 地址栏即可连接！');
+                              } catch (err) {
+                                alert('复制失败，请手动选择复制以下命令：\nnpx localtunnel --port 8188');
+                              }
+                            }}
+                            className="w-full text-[10px] bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 px-2 py-1.5 rounded-lg border border-indigo-500/20 cursor-pointer font-mono font-bold transition-all text-center"
+                          >
+                            ⚡ 复制命令: npx localtunnel --port 8188
+                          </button>
+                        </div>
+                        
+                        <div className="bg-black/45 p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1.5 justify-between">
+                          <div>
+                            <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider block">方案 B：配置浏览器不安全内容白名单 (直连精简 ⚡)</span>
+                            <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                              继续使用 <span className="font-mono text-emerald-300">http://127.0.0.1:8188</span>（确保 Server 按钮为白色关闭状态）：
+                              <br />1. 点击浏览器最顶部地址栏（包含本网页 https://...）左侧的 <b>🔒 锁头图标</b>
+                              <br />2. 选择 <b>“网站设置” (Site Settings)</b>
+                              <br />3. 找到 <b>“不安全内容” (Insecure Content)</b> 并改为 <b>“允许” (Allow)</b>
+                              <br />4. 返回此网页刷新，即可完美突破加密内嵌限制，完全显示本地界面！
+                            </p>
+                          </div>
+                          <button 
+                            onClick={() => setShowLocalHelp(false)}
+                            className="w-full text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1.5 rounded-lg border border-[var(--border)] text-gray-400 cursor-pointer transition-all text-center font-bold"
+                          >
+                            💡 明白，保持直连并暂时隐藏此提示
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -2118,7 +2211,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                           <iframe 
                             key={refreshKey}
                             ref={comfyIframeRef}
-                            src={comfyUrl}
+                            src={forceProxyComfy ? `/api/proxy?url=${encodeURIComponent(comfyUrl)}` : comfyUrl}
                             className="w-full h-full border-none"
                             onLoad={() => setIsComfyIframeLoading(false)}
                           />

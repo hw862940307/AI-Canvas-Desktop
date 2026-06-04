@@ -5,7 +5,9 @@ import { useStore } from '../store/useStore';
 import { ScaleWrapper } from './ScaleWrapper';
 
 export const TextNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
-  const { updateNodeData, removeNode, settings } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const removeNode = useStore((s) => s.removeNode);
+  const settings = useStore((s) => s.settings);
 
   const getFontSizeStyle = () => {
     return typeof settings.inputFontSize === 'number' 

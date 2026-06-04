@@ -34,7 +34,7 @@ import { DEFAULT_FRAMEWORK } from '../data/defaultFramework';
 import { ScaleWrapper } from './ScaleWrapper';
 
 const FusionMasterNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
-  const { settings } = useStore();
+  const settings = useStore((s) => s.settings);
   const getFontSizeStyle = () => {
     return typeof settings.inputFontSize === 'number' 
       ? { fontSize: `${settings.inputFontSize}px` } 

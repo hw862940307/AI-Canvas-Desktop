@@ -23,7 +23,9 @@ import { FullscreenTextEditor } from './FullscreenTextEditor';
 
 
 export const TextGenNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
-  const { updateNodeData, removeNode, settings } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const removeNode = useStore((s) => s.removeNode);
+  const settings = useStore((s) => s.settings);
   const [loading, setLoading] = useState(false);
   const [prompt, setPrompt] = useState(data.prompt || '');
   const [isFullScreen, setIsFullScreen] = useState(false);

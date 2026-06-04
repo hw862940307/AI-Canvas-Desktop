@@ -37,7 +37,10 @@ interface BoxState {
 
 export function DoubleBoxTransformNode({ id, data, selected }: NodeProps) {
   const nodeData = data as any;
-  const { updateNodeData, getIncomingData, removeNode, settings } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const getIncomingData = useStore((s) => s.getIncomingData);
+  const removeNode = useStore((s) => s.removeNode);
+  const settings = useStore((s) => s.settings);
   const incomingData = useNodeIncomingData(id);
 
   const getFontSizeStyle = () => {

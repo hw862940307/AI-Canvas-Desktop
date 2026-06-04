@@ -13,7 +13,10 @@ const LOGIC_PRESETS = [
 ];
 
 export const LogicEngineNode = ({ id, data, selected }: { id: string; data: any; selected?: boolean }) => {
-  const { updateNodeData, removeNode, getIncomingData, settings } = useStore();
+  const updateNodeData = useStore((s) => s.updateNodeData);
+  const removeNode = useStore((s) => s.removeNode);
+  const getIncomingData = useStore((s) => s.getIncomingData);
+  const settings = useStore((s) => s.settings);
   const [loading, setLoading] = useState(false);
 
   const handleRun = async () => {
