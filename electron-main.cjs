@@ -11,6 +11,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      webviewTag: true,
     },
     // Set icon if available
     icon: path.join(__dirname, 'public/favicon.ico'),
