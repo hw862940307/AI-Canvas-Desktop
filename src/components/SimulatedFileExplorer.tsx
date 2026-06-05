@@ -43,6 +43,15 @@ const MOCK_FS: Record<string, FileItem[]> = {
               ]
             },
             {
+              id: 'c_pf_adobe_ps_2026',
+              name: 'Adobe Photoshop 2026',
+              type: 'folder',
+              children: [
+                { id: 'c_pf_adobe_ps_2026_exe', name: 'Photoshop.exe', type: 'file' },
+                { id: 'c_pf_adobe_ps_2026_dll', name: 'amtlib.dll', type: 'file' }
+              ]
+            },
+            {
               id: 'c_pf_adobe_sub_p',
               name: 'Adobe Substance 3D Painter',
               type: 'folder',
@@ -430,11 +439,23 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
       setLocalFileName(file.name);
       
       // Since browser masks real paths, construct an intelligent fake absolute path
-      const baseFolder = appPresetId ? (
+      const baseFolder = pathSegments.length > 0 ? (currentDrive + '\\' + pathSegments.join('\\')) : (appPresetId ? (
         appPresetId === 'comfyui' ? 'D:\\ai-draw\\ComfyUI_windows_portable' :
         appPresetId === 'vscode' ? 'C:\\Users\\Administrator\\AppData\\Local\\Programs\\Microsoft VS Code' :
+        appPresetId === 'keyshot' ? 'C:\\Program Files\\KeyShot11\\bin' :
+        appPresetId === 'blender' ? 'C:\\Program Files\\Blender Foundation\\Blender 4.0' :
+        appPresetId === 'photoshop' ? 'C:\\Program Files\\Adobe\\Adobe Photoshop 2024' :
+        appPresetId === 'painter' ? 'C:\\Program Files\\Adobe\\Adobe Substance 3D Painter' :
+        appPresetId === 'designer' ? 'C:\\Program Files\\Adobe\\Adobe Substance 3D Designer' :
+        appPresetId === 'marvelous' ? 'C:\\Program Files\\Marvelous Designer' :
+        appPresetId === 'zbrush' ? 'C:\\Program Files\\Maxon ZBrush 2024' :
+        appPresetId === 'maya' ? 'C:\\Program Files\\Autodesk\\Maya2024\\bin' :
+        appPresetId === '3dsmax' ? 'C:\\Program Files\\Autodesk\\3ds Max 2024' :
+        appPresetId === 'houdini' ? 'C:\\Program Files\\Side Effects Software\\Houdini 20.0\\bin' :
+        appPresetId === 'unreal' ? 'C:\\Program Files\\Epic Games\\UE_5.3\\Engine\\Binaries\\Win64' :
+        appPresetId === 'realitycapture' ? 'C:\\Program Files\\Capturing Reality\\RealityCapture' :
         'C:\\Program Files\\' + (appName ? appName : 'CustomApp')
-      ) : 'C:\\Program Files\\CustomApp';
+      ) : 'C:\\Program Files\\CustomApp');
 
       const guessedPath = `${baseFolder}\\${file.name}`;
       setLocalFileConstructedPath(guessedPath);
