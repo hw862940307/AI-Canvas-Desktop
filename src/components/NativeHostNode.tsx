@@ -98,6 +98,12 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
   const [headlessMode, setHeadlessMode] = useState<boolean>((data?.headlessMode as boolean) !== false);
   const [syncRate, setSyncRate] = useState<number>(33); // 30FPS = 33ms interval
   const [viewTab, setViewTab] = useState<'simulation' | 'console' | 'config'>('simulation');
+
+  // Sub-pixel Calibration offsets for specialized OS/DPI overrides
+  const [calibX, setCalibX] = useState<number>((data?.calibX as number) || 0);
+  const [calibY, setCalibY] = useState<number>((data?.calibY as number) || 0);
+  const [calibW, setCalibW] = useState<number>((data?.calibW as number) || 0);
+  const [calibH, setCalibH] = useState<number>((data?.calibH as number) || 0);
   
   // Custom execution paths matching user settings schema
   const [appPath, setAppPath] = useState<string>((data?.appPath as string) || NATIVE_APP_REGISTRY[0].defaultPath);
@@ -262,11 +268,11 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       const screenLeft = window.screenLeft ?? window.screenX ?? 0;
       const screenTop = window.screenTop ?? window.screenY ?? 0;
 
-      // Default scale factor (logical screen + CSS offset multiplied by DPI)
-      const x = Math.round((screenLeft + bounds.left) * currentScale);
-      const y = Math.round((screenTop + bounds.top) * currentScale);
-      const w = Math.round(bounds.width * currentScale);
-      const h = Math.round(bounds.height * currentScale);
+      // Default scale factor (logical screen + CSS offset multiplied by DPI) with sub-pixel micro-calibration
+      const x = Math.round((screenLeft + bounds.left) * currentScale) + calibX;
+      const y = Math.round((screenTop + bounds.top) * currentScale) + calibY;
+      const w = Math.round(bounds.width * currentScale) + calibW;
+      const h = Math.round(bounds.height * currentScale) + calibH;
 
       setContentRect({ x, y, w, h });
 
@@ -811,6 +817,107 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                         }}
                         className="w-3.5 h-3.5 rounded border-indigo-500/30 text-indigo-600 focus:ring-indigo-500 accent-indigo-600"
                       />
+                    </div>
+
+                    {/* Calibration Adjustment Panel */}
+                    <div className="bg-slate-900 p-3 rounded space-y-2.5 border border-indigo-500/10 font-sans text-[8.5px]">
+                      <div className="text-[9px] font-black text-indigo-450 uppercase tracking-widest mb-1 pb-1 border-b border-indigo-500/10 flex items-center justify-between select-none">
+                        <span>📐 HWND 位移与缩放微调 (Sub-pixel Calibration)</span>
+                        <button
+                          onClick={() => {
+                            setCalibX(0); setCalibY(0); setCalibW(0); setCalibH(0);
+                            updateNodeData(id, { calibX: 0, calibY: 0, calibW: 0, calibH: 0 });
+                          }}
+                          className="text-[7.5px] bg-indigo-500/20 text-indigo-300 px-1 py-0.5 rounded border-none cursor-pointer font-mono hover:bg-indigo-500/40"
+                        >
+                          RESET
+                        </button>
+                      </div>
+                      <p className="text-[7.5px] text-zinc-400 leading-normal mb-1.5 leading-normal">
+                        若多显卡或 Windows 系统的缩放设置 (如 125%/150% 缩放) 产生定位误差，请微调以下偏移量实现完美的节点贴合：
+                      </p>
+                      
+                      <div className="space-y-2">
+                        {/* calibX */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-zinc-400 text-[8px] font-mono">
+                            <span>水平偏移 (Offset X):</span>
+                            <span className="text-emerald-400 font-bold">{calibX >= 0 ? `+${calibX}` : calibX} px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-150"
+                            max="150"
+                            value={calibX}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setCalibX(val);
+                              updateNodeData(id, { calibX: val });
+                            }}
+                            className="w-full accent-indigo-500 cursor-ew-resize h-1 bg-slate-950 rounded-lg appearance-none"
+                          />
+                        </div>
+
+                        {/* calibY */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-zinc-400 text-[8px] font-mono">
+                            <span>垂直偏移 (Offset Y):</span>
+                            <span className="text-emerald-400 font-bold">{calibY >= 0 ? `+${calibY}` : calibY} px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-150"
+                            max="150"
+                            value={calibY}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setCalibY(val);
+                              updateNodeData(id, { calibY: val });
+                            }}
+                            className="w-full accent-indigo-500 cursor-ew-resize h-1 bg-slate-950 rounded-lg appearance-none"
+                          />
+                        </div>
+
+                        {/* calibW */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-zinc-400 text-[8px] font-mono">
+                            <span>宽度微调 (Width Offset):</span>
+                            <span className="text-emerald-400 font-bold">{calibW >= 0 ? `+${calibW}` : calibW} px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-150"
+                            max="150"
+                            value={calibW}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setCalibW(val);
+                              updateNodeData(id, { calibW: val });
+                            }}
+                            className="w-full accent-indigo-500 cursor-ew-resize h-1 bg-slate-950 rounded-lg appearance-none"
+                          />
+                        </div>
+
+                        {/* calibH */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex justify-between text-zinc-400 text-[8px] font-mono">
+                            <span>高度微调 (Height Offset):</span>
+                            <span className="text-emerald-400 font-bold">{calibH >= 0 ? `+${calibH}` : calibH} px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-150"
+                            max="150"
+                            value={calibH}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setCalibH(val);
+                              updateNodeData(id, { calibH: val });
+                            }}
+                            className="w-full accent-indigo-500 cursor-ew-resize h-1 bg-slate-950 rounded-lg appearance-none"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     {/* Matrix Stats */}
