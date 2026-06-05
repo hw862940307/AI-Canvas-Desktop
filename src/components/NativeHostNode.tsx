@@ -2444,7 +2444,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
             </div>
 
             {/* Main overlay stream mapping and coordinator view */}
-            <div className="flex-1 flex flex-col min-h-0 bg-slate-950 relative">
+            <div ref={placeholderRef} className="flex-1 flex flex-col min-h-0 bg-slate-950 relative">
               {/* Virtual mapping window frame header */}
               <div className="flex-1 min-h-0 relative flex flex-col border-b border-indigo-500/10">
                 <div className="absolute top-3 left-4 z-20 flex items-center gap-2 pointer-events-none select-none">
@@ -2457,12 +2457,12 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                 </div>
 
                 {procStatus === 'running' ? (
-                  <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden font-sans">
+                  <div className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden font-sans">
                     {renderEmbeddedAppWorkspace()}
                   </div>
                 ) : (
                   // Offline Standby Screen - Workspace Settings Board matching Figure 4
-                  <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-y-auto p-6 scrollbar-thin select-none text-left flex flex-col gap-6">
+                  <div className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-y-auto p-6 scrollbar-thin select-none text-left flex flex-col gap-6">
                     {/* Header card with metadata */}
                     <div className="flex flex-col gap-1.5 border-b border-indigo-500/10 pb-4 shrink-0 font-sans">
                       <div className="flex items-center gap-2">
@@ -3249,7 +3249,41 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
         document.body
       )}
 
-      {/* PORTLED NATIVE APP STREAM IFRAME LAYER FOR DIRECT SCALED OVERLAY PLACEMENT DEPRECATED AND REMOVED TO PREVENT BLANK COVERING OVER CRYSTAL-CLEAR INNER SIMULATOR */}
+      {/* PORTLED NATIVE APP STREAM IFRAME LAYER FOR DIRECT SCALED OVERLAY PLACEMENT */}
+      {viewTab === 'native-app' && procStatus === 'running' && appUrl && appUrl.trim() !== '' && !isFolded && !isPinned && !isFullscreen && rect && createPortal(
+        <div 
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+          className="fixed overflow-hidden bg-slate-950 shadow-xl flex flex-col border border-indigo-500/10 rounded-b-[28px]"
+          style={{
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
+            zIndex: 40,
+            pointerEvents: 'auto',
+            display: 'flex',
+            transition: 'none',
+          }}
+        >
+          {isElectron ? (
+            <webview
+              key={`${id}-${refreshKey}`}
+              src={shouldProxyUrl(appUrl) ? `/api/proxy?url=${encodeURIComponent(appUrl)}` : appUrl}
+              style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+              allowpopups={true}
+            />
+          ) : (
+            <iframe 
+              key={`${id}-${refreshKey}`}
+              src={shouldProxyUrl(appUrl) ? `/api/proxy?url=${encodeURIComponent(appUrl)}` : appUrl} 
+              className="w-full h-full border-0 bg-white" 
+              referrerPolicy="no-referrer" 
+            />
+          )}
+        </div>,
+        document.body
+      )}
 
       {/* IMMERSIVE FULLSCREEN SYSTEM OVERLAY COOPERATOR PORTAL */}
       {isFullscreen && createPortal(
