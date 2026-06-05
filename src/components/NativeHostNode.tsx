@@ -17,6 +17,33 @@ const isElectron = typeof window !== 'undefined' &&
   window.navigator && 
   window.navigator.userAgent.toLowerCase().includes('electron');
 
+// Helper to check if url should be routed through server proxy
+const shouldProxyUrl = (url: string): boolean => {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase().trim();
+  
+  let currentOrigin = '';
+  try {
+    currentOrigin = window.location.origin.toLowerCase();
+  } catch (e) {}
+  
+  if (
+    lowerUrl.includes('localhost') ||
+    lowerUrl.includes('127.0.0.1') ||
+    lowerUrl.includes('.loca.lt') ||
+    lowerUrl.includes('accounts.google.com') ||
+    lowerUrl.includes('google.com/gsi/') ||
+    lowerUrl.startsWith('/') ||
+    lowerUrl.startsWith('data:') ||
+    lowerUrl.startsWith('blob:') ||
+    (currentOrigin && lowerUrl.startsWith(currentOrigin))
+  ) {
+    return false;
+  }
+  
+  return lowerUrl.startsWith('http://') || lowerUrl.startsWith('https://');
+};
+
 // Auto detect launcher executable from raw folder path
 const autoDetectExecutableFromPath = (rawPath: string, appNameHint: string = ''): string => {
   if (!rawPath) return '';
@@ -980,6 +1007,29 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
   }, [history, historyIndex, id, updateNodeData]);
+
+  // Catch iframe inner navigation events and proxy redirection signals
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && typeof event.data === 'object') {
+        if (event.data.type === 'NAVIGATE_CURRENT_TAB' || event.data.type === 'OPEN_INTERNAL_TAB') {
+          const { url } = event.data;
+          if (url) {
+            navigateTo(url);
+          }
+        } else if (event.data.type === 'OPEN_EXTERNAL_TAB') {
+          const { url } = event.data;
+          if (url) {
+            window.open(url, '_blank');
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [navigateTo]);
 
   const handleGoBack = () => {
     if (historyIndex > 0) {
@@ -1984,32 +2034,20 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
               ref={placeholderRef} 
               className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden"
             >
-              {isPinned || isFullscreen ? (
-                isElectron ? (
-                  <webview
-                    key={`${id}-${refreshKey}`}
-                    src={currentUrl}
-                    style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
-                    allowpopups={true}
-                  />
-                ) : (
-                  <iframe 
-                    key={`${id}-${refreshKey}`}
-                    src={currentUrl} 
-                    className="w-full h-full border-0 bg-white" 
-                    referrerPolicy="no-referrer" 
-                  />
-                )
+              {isElectron ? (
+                <webview
+                  key={`${id}-${refreshKey}`}
+                  src={shouldProxyUrl(currentUrl) ? `/api/proxy?url=${encodeURIComponent(currentUrl)}` : currentUrl}
+                  style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+                  allowpopups={true}
+                />
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-700 select-none p-6 text-center">
-                  <Compass size={28} className="mb-2 text-indigo-500/25 animate-spin" style={{ animationDuration: '24s' }} />
-                  <div className="text-[10px] font-bold text-indigo-400/30 font-mono uppercase tracking-widest">
-                    安全沙核视窗已挂载
-                  </div>
-                  <div className="text-[9px] text-slate-500 max-w-xs mt-1.5 font-sans leading-relaxed">
-                    为了提供不受主 Canvas 画布物理拖动影响的精细画面与安全控制，真实的页面视窗已叠加至屏幕上方最顶层层级。您可在画布中随意拖放并保持实时锁定。
-                  </div>
-                </div>
+                <iframe 
+                  key={`${id}-${refreshKey}`}
+                  src={shouldProxyUrl(currentUrl) ? `/api/proxy?url=${encodeURIComponent(currentUrl)}` : currentUrl} 
+                  className="w-full h-full border-0 bg-white shadow-2xl relative z-10" 
+                  referrerPolicy="no-referrer" 
+                />
               )}
             </div>
           </>
@@ -2280,31 +2318,23 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                 </div>
 
                 {procStatus === 'running' ? (
-                  isPinned || isFullscreen ? (
-                    // In detached portal views (pinned window or full-screen), we render actual interactive iframes inline smoothly
-                    <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden">
-                      {isElectron ? (
-                        <webview
-                          key={`${id}-${refreshKey}`}
-                          src={appUrl}
-                          style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
-                          allowpopups={true}
-                        />
-                      ) : (
-                        <iframe 
-                          key={`${id}-${refreshKey}`}
-                          src={appUrl} 
-                          className="w-full h-full border-0 bg-white" 
-                          referrerPolicy="no-referrer" 
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    // In standard canvas inline view, we render our rich embedded workspace simulator within the node's ContentRect boundaries
-                    <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden flex flex-col">
-                      {renderEmbeddedAppWorkspace()}
-                    </div>
-                  )
+                  <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden">
+                    {isElectron ? (
+                      <webview
+                        key={`${id}-${refreshKey}`}
+                        src={shouldProxyUrl(appUrl) ? `/api/proxy?url=${encodeURIComponent(appUrl)}` : appUrl}
+                        style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
+                        allowpopups={true}
+                      />
+                    ) : (
+                      <iframe 
+                        key={`${id}-${refreshKey}`}
+                        src={shouldProxyUrl(appUrl) ? `/api/proxy?url=${encodeURIComponent(appUrl)}` : appUrl} 
+                        className="w-full h-full border-0 bg-white shadow-2xl relative z-10" 
+                        referrerPolicy="no-referrer" 
+                      />
+                    )}
+                  </div>
                 ) : (
                   // Offline Standby Screen
                   <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden flex flex-col items-center justify-center p-6 text-center select-none">
