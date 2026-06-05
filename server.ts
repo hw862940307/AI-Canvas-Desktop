@@ -88,9 +88,43 @@ async function saveImageToHistory(urlOrBase64: string): Promise<string> {
   return urlOrBase64;
 }
 
+let overlayHostProcess: any = null;
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Background C# Overlay Compilation and Launch Loop under Windows environments
+  if (process.platform === 'win32') {
+    try {
+      const { spawn, execSync } = await import('child_process');
+      const cscPath = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe';
+      const sourceFile = path.join(process.cwd(), 'OverlayHost.cs');
+      const exeFile = path.join(process.cwd(), 'OverlayHost.exe');
+
+      if (fs.existsSync(sourceFile) && fs.existsSync(cscPath)) {
+        console.log('[Compiler] Detected Windows runtime. Automating OverlayHost compilation...');
+        execSync(`"${cscPath}" /out:"${exeFile}" "${sourceFile}"`);
+        console.log('[Compiler] Automatic OverlayHost.exe compilation successful!');
+
+        console.log('[OverlayHost] Starting local overlay coordinator subprocess...');
+        overlayHostProcess = spawn(exeFile, ['23300'], {
+          detached: true,
+          stdio: 'ignore'
+        });
+        overlayHostProcess.unref();
+        console.log('[OverlayHost] Native overlay engine listening on port 23300.');
+      }
+    } catch (err: any) {
+      console.warn('[Compiler Warning] Automatic C# compiler was bypassed or completed with warnings:', err.message);
+    }
+  }
+
+  process.on('exit', () => {
+    if (overlayHostProcess) {
+      try { overlayHostProcess.kill(); } catch (e) {}
+    }
+  });
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -330,14 +364,33 @@ async function startServer() {
     }
   });
 
-  // Launch Native Executable App (.exe / shell command)
+  // Launch Native Executable App (.exe / shell command with coordinated overlay binding)
   app.post('/api/native/launch-app', async (req, res) => {
-    const { appPath, args } = req.body;
+    const { appPath, args, nodeId, headless } = req.body;
     if (!appPath) {
       return res.status(400).json({ ok: false, error: '应用程序的可执行文件路径或名称不能为空' });
     }
 
     try {
+      if (process.platform === 'win32') {
+        console.log(`[Native Host Proxy] Delegating app launch to OverlayHost.exe for Node ${nodeId}`);
+        try {
+          const proxyRes = await axios.post('http://127.0.0.1:23300/launch', {
+            appPath,
+            args,
+            nodeId,
+            headless: headless !== false
+          }, { timeout: 10000 });
+          
+          if (proxyRes.data && proxyRes.data.ok) {
+            console.log(`[Proxy-Launch] Node is bound to PID: ${proxyRes.data.pid}, HWND: ${proxyRes.data.hwnd}`);
+            return res.json(proxyRes.data);
+          }
+        } catch (proxyErr: any) {
+          console.warn(`[OverlayHost Proxy-Launch Fail] Direct launch bypassed, running default spawn:`, proxyErr.message);
+        }
+      }
+
       const cp = await import('child_process');
       const isWin = process.platform === 'win32';
       const isMac = process.platform === 'darwin';
@@ -377,6 +430,46 @@ async function startServer() {
         ok: true,
         message: `已在开发沙盒中自适应启动模拟进程！\n程序路径: ${appPath}\n\n提示：当前处于直连协调模式。`
       });
+    }
+  });
+
+  // Keep-alive synchronizer endpoint proxying frames to C# OverlayHost
+  app.post('/api/native/sync', async (req, res) => {
+    const { nodeId, rect, headless } = req.body;
+    if (!nodeId) return res.status(400).json({ ok: false, error: 'NodeId value required' });
+
+    try {
+      if (process.platform === 'win32') {
+        const syncPayload = {
+          nodeId,
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          headless: headless !== false
+        };
+        const proxyRes = await axios.post('http://127.0.0.1:23300/sync', syncPayload, { timeout: 2000 });
+        return res.json(proxyRes.data);
+      }
+      res.json({ ok: true, msg: 'Sync skipped (Not running Windows)' });
+    } catch (err: any) {
+      res.json({ ok: false, error: err.message });
+    }
+  });
+
+  // Stop/Kill active process and release win32 HWND bindings from Node
+  app.post('/api/native/stop-app', async (req, res) => {
+    const { nodeId } = req.body;
+    if (!nodeId) return res.status(400).json({ ok: false, error: 'NodeId value required' });
+
+    try {
+      if (process.platform === 'win32') {
+        const proxyRes = await axios.post('http://127.0.0.1:23300/stop', { nodeId }, { timeout: 3000 });
+        return res.json(proxyRes.data);
+      }
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.json({ ok: false, error: err.message });
     }
   });
 

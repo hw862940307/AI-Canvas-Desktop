@@ -113,6 +113,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
   
   // Viewport tracking references
   const placeholderRef = useRef<HTMLDivElement>(null);
+  const lastSyncRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const [contentRect, setContentRect] = useState<{ x: number; y: number; w: number; h: number }>({ x: 0, y: 0, w: 500, h: 420 });
 
   // Folding & scale states
@@ -141,6 +142,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
     setProcStatus('launching');
     setHwndLogs(prev => [...prev, `[SYSTEM] 收到拉起指令: 执行 [${currentPreset.name}]`, `[SYSTEM] 本地主路径: ${appPath}`].slice(-60));
 
+    let localLaunched = false;
     try {
       // Send real action to host system backend
       const res = await fetch('/api/native/launch-app', {
@@ -150,37 +152,58 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
         },
         body: JSON.stringify({
           appPath: appPath,
-          args: appArgs
+          args: appArgs,
+          nodeId: id,
+          headless: headlessMode
         })
       });
       const resData = await res.json();
       if (res.ok && resData.ok) {
-        setHwndLogs(prev => [...prev, `[SYSTEM] 本地启动成功: ${resData.message}`].slice(-60));
+        setHwndLogs(prev => [...prev, `[SYSTEM] 本地启动指令发起成功！`].slice(-60));
+        if (resData.pid && resData.hwnd) {
+          setPidHandle(resData.pid);
+          setHwndHandle(resData.hwnd);
+          setProcStatus('running');
+          localLaunched = true;
+          
+          setHwndLogs(prev => [
+            ...prev,
+            `[PROCESS] 宿主程序初始化完成。分配进程 PID: ${resData.pid}`,
+            `[WIN32] 精确捕获到原生视窗 Hwnd 句柄: ${resData.hwnd}`,
+            headlessMode 
+              ? `[OVERLAY] 无边框封闭嵌入 (Win32 Borders Cropped & Docked)` 
+              : `[OVERLAY] 经典带标题栏融合模式 (With Caption Frame)`,
+            `[OVERLAY] 亚像素对齐线程准备就绪，工作心跳: ${syncRate}ms (30FPS)`,
+          ].slice(-60));
+          return;
+        }
       } else {
-        setHwndLogs(prev => [...prev, `[SYSTEM] [ERR] 启动返回错误: ${resData.error || '未知接口错误'}`].slice(-60));
+        setHwndLogs(prev => [...prev, `[SYSTEM] [ERR] 本地后台拉起错误: ${resData.error || '未知接口错误'}`].slice(-60));
       }
     } catch (apiErr: any) {
       console.warn("Launch API fail, running sandbox simulation fallback:", apiErr);
       setHwndLogs(prev => [...prev, `[SYSTEM] [WARN] 连接宿主拉起接口异常，进入本地开发沙盒模拟中...`].slice(-60));
     }
 
-    setTimeout(() => {
-      const randomPid = Math.floor(Math.random() * 8000) + 1200;
-      const hexHwnd = `0x00${Math.floor(Math.random() * 5000 + 3000).toString(16).toUpperCase()}`;
-      setPidHandle(randomPid);
-      setHwndHandle(hexHwnd);
-      setProcStatus('running');
-      
-      setHwndLogs(prev => [
-        ...prev,
-        `[PROCESS] 宿主程序初始化完成。分配 PID: ${randomPid}`,
-        `[WIN32] 调用 EnumWindows 成功查找到窗口句柄 HWND: ${hexHwnd}`,
-        headlessMode 
-          ? `[OVERLAY] 开启无边框 Headless 模式 (已裁剪原有 Win32 标题栏与边框)` 
-          : `[OVERLAY] 开启经典边框融合模式`,
-        `[OVERLAY] HWND 坐标同步线程已开启，刷新频率设定：${syncRate}ms (30FPS)`,
-      ].slice(-60));
-    }, 1200);
+    if (!localLaunched) {
+      setTimeout(() => {
+        const randomPid = Math.floor(Math.random() * 8000) + 1200;
+        const hexHwnd = `0x00${Math.floor(Math.random() * 5000 + 3000).toString(16).toUpperCase()}`;
+        setPidHandle(randomPid);
+        setHwndHandle(hexHwnd);
+        setProcStatus('running');
+        
+        setHwndLogs(prev => [
+          ...prev,
+          `[PROCESS] 宿主程序初始化完成。分配 PID: ${randomPid} (模拟)`,
+          `[WIN32] 成功拉起虚拟沙盒视图，分配 HWND: ${hexHwnd}`,
+          headlessMode 
+            ? `[OVERLAY] 开启无边框 Headless 模式 (已裁剪原有 Win32 标题栏与边框)` 
+            : `[OVERLAY] 开启经典边框融合模式`,
+          `[OVERLAY] HWND 坐标同步线程已开启，刷新频率设定：${syncRate}ms (30FPS)`,
+        ].slice(-60));
+      }, 1200);
+    }
   };
 
   // Terminate software action
@@ -195,8 +218,18 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       `[PROCESS] 成功杀死 PID ${pidHandle} 的相关本地子进程。`,
       `[OVERLAY] HWND 同步线程已强制终止。进入 STANDBY 监听模式。`
     ].slice(-60));
+
+    fetch('/api/native/stop-app', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ nodeId: id })
+    }).catch(() => {});
+
     setHwndHandle('0x00000000');
     setPidHandle(0);
+    lastSyncRectRef.current = null;
   };
 
   // Bring native app to foreground focus
@@ -216,7 +249,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
     setFileExplorerOpen(false);
   };
 
-  // Calculate coordinates and dispatch via real Electron IPC & WebView2 WebView channels
+  // Calculate coordinates and dispatch via real Electron IPC, WebView2 channels, and Express HTTP API
   useEffect(() => {
     const el = placeholderRef.current;
     if (!el || isFolded) return;
@@ -225,48 +258,73 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       const bounds = el.getBoundingClientRect();
       const currentScale = window.devicePixelRatio || 1;
 
-      // Real hardware screen coordinates computing (including browser page bounds and desktop margins)
-      const x = Math.round((window.screenX || 0) + bounds.left);
-      const y = Math.round((window.screenY || 0) + bounds.top);
-      const w = Math.round(bounds.width);
-      const h = Math.round(bounds.height);
+      // Real absolute physical screen coordinates (compensates for High DPI scaling on Win32 and Electron containers)
+      const screenLeft = window.screenLeft ?? window.screenX ?? 0;
+      const screenTop = window.screenTop ?? window.screenY ?? 0;
+
+      // Default scale factor (logical screen + CSS offset multiplied by DPI)
+      const x = Math.round((screenLeft + bounds.left) * currentScale);
+      const y = Math.round((screenTop + bounds.top) * currentScale);
+      const w = Math.round(bounds.width * currentScale);
+      const h = Math.round(bounds.height * currentScale);
 
       setContentRect({ x, y, w, h });
 
-      // Build precise overlay payload
-      const syncPayload = {
-        type: 'overlay-sync',
-        nodeId: id,
-        app: selectedPreset,
-        headless: headlessMode,
-        pid: pidHandle,
-        hwnd: hwndHandle,
-        rect: {
-          x: x,
-          y: y,
-          width: w,
-          height: h,
-          zoom: currentScale
+      // Check if coordinates or boundaries actually changed to skip redundant HTTP requests (Optimizes Node loop)
+      const last = lastSyncRectRef.current;
+      const changed = !last || last.x !== x || last.y !== y || last.w !== w || last.h !== h;
+
+      if (changed) {
+        lastSyncRectRef.current = { x, y, w, h };
+
+        // Build precise overlay payload
+        const syncPayload = {
+          type: 'overlay-sync',
+          nodeId: id,
+          app: selectedPreset,
+          headless: headlessMode,
+          pid: pidHandle,
+          hwnd: hwndHandle,
+          rect: {
+            x: x,
+            y: y,
+            width: w,
+            height: h,
+            zoom: currentScale
+          }
+        };
+
+        // 1. Send via standard Web Express backend (highly general, works in all environments)
+        fetch('/api/native/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            nodeId: id,
+            headless: headlessMode,
+            rect: { x, y, width: w, height: h }
+          })
+        }).catch(() => {});
+
+        // 2. Send via WebView2 API channel
+        const win = window as any;
+        if (win.chrome?.webview?.postMessage) {
+          try {
+            win.chrome.webview.postMessage(syncPayload);
+          } catch (e) {}
         }
-      };
 
-      // 1. Send via WebView2 API channel
-      const win = window as any;
-      if (win.chrome?.webview?.postMessage) {
-        try {
-          win.chrome.webview.postMessage(syncPayload);
-        } catch (e) {}
-      }
-
-      // 2. Send via Electron native bridge channel
-      if (win.electron?.ipcRenderer?.send) {
-        try {
-          win.electron.ipcRenderer.send('overlay-sync', syncPayload);
-        } catch (e) {}
-      } else if (win.ipcRenderer?.send) {
-        try {
-          win.ipcRenderer.send('overlay-sync', syncPayload);
-        } catch (e) {}
+        // 3. Send via Electron native bridge channel
+        if (win.electron?.ipcRenderer?.send) {
+          try {
+            win.electron.ipcRenderer.send('overlay-sync', syncPayload);
+          } catch (e) {}
+        } else if (win.ipcRenderer?.send) {
+          try {
+            win.ipcRenderer.send('overlay-sync', syncPayload);
+          } catch (e) {}
+        }
       }
     };
 
