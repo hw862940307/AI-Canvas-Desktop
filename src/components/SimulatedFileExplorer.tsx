@@ -27,6 +27,9 @@ interface SimulatedFileExplorerProps {
   appPresetId?: string;
 }
 
+// Drive types
+type DriveType = 'C:' | 'D:' | 'E:' | 'F:' | 'WPS:' | 'Baidu:' | 'Quark:';
+
 // Format byte sizes nicely
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
@@ -39,16 +42,18 @@ const formatBytes = (bytes: number): string => {
 // Parse a standard Windows path to extract drive letter and directory segments
 const parseWindowsPath = (winPath: string) => {
   const parts = winPath.split('\\').filter(Boolean);
-  if (parts.length === 0) return { drive: 'F:' as const, segments: [] };
+  if (parts.length === 0) return { drive: 'F:' as DriveType, segments: [] };
   
   let driveStr = parts[0].toUpperCase();
   if (!driveStr.includes(':')) {
     driveStr = driveStr + ':';
   }
   
-  let drive: 'C:' | 'D:' | 'E:' | 'F:' = 'F:';
-  if (['C:', 'D:', 'E:', 'F:'].includes(driveStr)) {
-    drive = driveStr as any;
+  let drive: DriveType = 'F:';
+  const validDrives: DriveType[] = ['C:', 'D:', 'E:', 'F:', 'WPS:', 'Baidu:', 'Quark:'];
+  const matched = validDrives.find(d => d.toLowerCase() === driveStr.toLowerCase());
+  if (matched) {
+    drive = matched;
   }
   
   return {
@@ -57,7 +62,7 @@ const parseWindowsPath = (winPath: string) => {
   };
 };
 
-// Complete Windows 11 baseline filesystem roots
+// Windows 11 baseline filesystem roots (with Cloud network sync disks included)
 const BASE_FS: Record<string, FileItem[]> = {
   'C:': [
     {
@@ -201,7 +206,82 @@ const BASE_FS: Record<string, FileItem[]> = {
         }
       ]
     }
+  ],
+  'WPS:': [
+    {
+      id: 'wps_root',
+      name: '我的云文档',
+      type: 'folder',
+      children: [
+        { id: 'wps_file_csv', name: 'ComfyUI配置对线表.csv', type: 'file', size: '1.2 KB', modified: '2026-06-05 10:15' },
+        { id: 'wps_file_txt', name: 'WPS同步冲突记录描述.txt', type: 'file', size: '4.5 KB', modified: '2026-06-04 11:10' }
+      ]
+    },
+    {
+      id: 'wps_share',
+      name: '共享团队空间',
+      type: 'folder',
+      children: [
+        { id: 'wps_share_img', name: 'WPS_云协作参考图.png', type: 'file', size: '1.8 MB', modified: '2026-06-03 14:22' }
+      ]
+    }
+  ],
+  'Baidu:': [
+    {
+      id: 'baidu_workflows',
+      name: 'BaiduNetdiskDownload',
+      type: 'folder',
+      children: [
+        {
+          id: 'baidu_wf_folder',
+          name: 'ComfyUI流程备份',
+          type: 'folder',
+          children: [
+            { id: 'baidu_wf_json1', name: 'flux_comfy_workflow_core.json', type: 'file', size: '36 KB', modified: '2026-06-05 12:10' },
+            { id: 'baidu_wf_zip1', name: 'stable_diffusion_xl_upscale.zip', type: 'file', size: '28.4 MB', modified: '2026-06-04 18:45' }
+          ]
+        }
+      ]
+    }
+  ],
+  'Quark:': [
+    {
+      id: 'quark_root',
+      name: '夸克同步盘',
+      type: 'folder',
+      children: [
+        {
+          id: 'quark_bin',
+          name: '智能高光渲染库',
+          type: 'folder',
+          children: [
+            { id: 'quark_keyshot_matte', name: 'keyshot_rendered_matte.png', type: 'file', size: '2.5 MB', modified: '2026-06-05 09:30' }
+          ]
+        }
+      ]
+    }
   ]
+};
+
+// Map drive types to Windows system friendly paths with custom labels
+const DRIVE_LABELS: Record<DriveType, string> = {
+  'C:': '系统磁盘卷',
+  'D:': '辅助软件卷',
+  'E:': '空间资料卷',
+  'F:': '数字绘图卷',
+  'WPS:': 'WPS 云同步盘柜',
+  'Baidu:': '百度云盘同步备份',
+  'Quark:': '夸克云速递卷柜'
+};
+
+const DRIVE_MOCK_INFOS: Record<DriveType, { percent: string; spacing: string }> = {
+  'C:': { percent: '70%', spacing: '92 GB 可用，共 300 GB' },
+  'D:': { percent: '45%', spacing: '180 GB 可用，共 320 GB' },
+  'E:': { percent: '22%', spacing: '310 GB 可用，共 400 GB' },
+  'F:': { percent: '85%', spacing: '15 GB 可用，共 100 GB' },
+  'WPS:': { percent: '15%', spacing: '170 GB 可用，共 200 GB' },
+  'Baidu:': { percent: '92%', spacing: '800 MB 可用，共 10 GB (极速)' },
+  'Quark:': { percent: '5%', spacing: '950 GB 可用，共 1.0 TB' }
 };
 
 export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
@@ -214,30 +294,34 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  // Initialize the physical path prefix with the user's ComfyUI folder path exactly as shown in screenshot
+  // Initialize the physical path prefix
   const defaultPrefix = initialPath || 'F:\\BaiduNetdiskDownload\\ComfyUI-aki-v3\\ComfyUI\\user\\default\\workflows';
-  
   const [mountPrefix, setMountPrefix] = useState<string>(defaultPrefix);
-  const [virtualFS, setVirtualFS] = useState<Record<string, FileItem[]>>(BASE_FS);
-  const [currentDrive, setCurrentDrive] = useState<'C:' | 'D:' | 'E:' | 'F:'>('F:');
+  
+  // High fidelity states
+  const [virtualFS, setVirtualFS] = useState<Record<string, FileItem[]>>(() => {
+    // Deep copy base filesystem to start with
+    return JSON.parse(JSON.stringify(BASE_FS));
+  });
+  const [currentDrive, setCurrentDrive] = useState<DriveType>('F:');
   const [pathSegments, setPathSegments] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isThisPC, setIsThisPC] = useState<boolean>(false);
 
-  // Loaded real files handle state map
+  // Loaded real files list isolated by each drive/network cloud drive to avoid overwrite!
+  const [driveRealFiles, setDriveRealFiles] = useState<Record<string, File[]>>({});
   const [realFileMap, setRealFileMap] = useState<Record<string, File>>({});
-  const [loadedRealFiles, setLoadedRealFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // Navigation History
-  const [history, setHistory] = useState<{ drive: 'C:' | 'D:' | 'E:' | 'F:'; segments: string[]; isPC: boolean }[]>([]);
+  const [history, setHistory] = useState<{ drive: DriveType; segments: string[]; isPC: boolean }[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
   // Modal active preview states
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
-  // Shares realFileMap with preview component globally and instantly
+  // Feed realFileMap dynamically to window for deep preview loader access
   useEffect(() => {
     (window as any)._explorerRealFileMap = realFileMap;
     return () => {
@@ -245,8 +329,16 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     };
   }, [realFileMap]);
 
+  // Sync mount prefix text box based on current drive/segments selection automatically
+  useEffect(() => {
+    if (!isThisPC) {
+      const fullPath = `${currentDrive}\\${pathSegments.join('\\')}`;
+      setMountPrefix(fullPath);
+    }
+  }, [currentDrive, pathSegments, isThisPC]);
+
   // Navigate utility
-  const navigateTo = (drive: 'C:' | 'D:' | 'E:' | 'F:', segments: string[], isPC: boolean) => {
+  const navigateTo = (drive: DriveType, segments: string[], isPC: boolean) => {
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push({ drive, segments, isPC });
     setHistory(newHistory);
@@ -259,22 +351,37 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     setSearchQuery('');
   };
 
-  // Setup initial route location matching initial path
+  // Setup initial route location matching initial path on open
   useEffect(() => {
-    const startPath = mountPrefix || initialPath;
+    const startPath = initialPath || defaultPrefix;
     if (startPath) {
-      const driveMatch = startPath.match(/^([A-Za-z]):\\/);
+      const driveMatch = startPath.match(/^([A-Za-z0-9]+):\\/);
       if (driveMatch) {
-        const driveLetter = driveMatch[1].toUpperCase();
-        const drive = (driveLetter + ':') as 'C:' | 'D:' | 'E:' | 'F:';
-        
-        const segments = startPath
-          .replace(/^([A-Za-z]):\\/, '')
+        let driveLetter = driveMatch[1];
+        // Standardize drive letter matching WPS, Baidu, Quark, or alphabet letters
+        let drive: DriveType = 'F:';
+        const rawDriveStr = driveLetter.toUpperCase() + ':';
+        const validDrives: DriveType[] = ['C:', 'D:', 'E:', 'F:', 'WPS:', 'Baidu:', 'Quark:'];
+        const matched = validDrives.find(d => d.toLowerCase() === rawDriveStr.toLowerCase());
+        if (matched) {
+          drive = matched;
+        }
+
+        const rawSegments = startPath
+          .replace(/^([A-Za-z0-9]+):\\/, '')
           .split('\\')
-          .filter(s => s && !s.toLowerCase().includes('.exe') && !s.toLowerCase().includes('.bat') && !s.toLowerCase().includes('.json'));
+          .filter(Boolean);
         
-        const filePart = startPath.split('\\').pop() || '';
-        const fileMatch = filePart.includes('.') ? filePart : '';
+        let segments = [...rawSegments];
+        let fileMatch = '';
+        if (segments.length > 0) {
+          const last = segments[segments.length - 1];
+          // Robust file determination (has Extension and does not start with dot)
+          if (last.includes('.') && !last.startsWith('.')) {
+            fileMatch = last;
+            segments.pop(); // Strip file out from pathSegments folder traversal
+          }
+        }
 
         setCurrentDrive(drive);
         setPathSegments(segments);
@@ -282,6 +389,46 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
         if (fileMatch) {
           setSelectedFile(fileMatch);
         }
+
+        // Dynamically inject a dummy fallback index node to virtualFS structure so the initialPath segment
+        // renders smoothly in the tree structure, even if no real folder drag is executed!
+        setVirtualFS(prev => {
+          const copy = { ...prev };
+          if (!copy[drive]) copy[drive] = [];
+          
+          let level = copy[drive];
+          // Re-create folder layers
+          for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            let existing = level.find(item => item.name === seg && item.type === 'folder');
+            if (!existing) {
+              existing = {
+                id: `init_dyn_fld_${drive.replace(':', '')}_${i}_${seg}`,
+                name: seg,
+                type: 'folder',
+                children: []
+              };
+              level.push(existing);
+            }
+            level = existing.children || (existing.children = []);
+          }
+
+          // Append file node if match found
+          if (fileMatch) {
+            const fileExisting = level.find(item => item.name === fileMatch && item.type === 'file');
+            if (!fileExisting) {
+              level.push({
+                id: `init_dyn_file_${drive.replace(':', '')}_${fileMatch}`,
+                name: fileMatch,
+                type: 'file',
+                size: 'Awaiting sync',
+                modified: '2026-06-05 12:00'
+              });
+            }
+          }
+          return copy;
+        });
+
         setHistory([{ drive, segments, isPC: false }]);
         setHistoryIndex(0);
         return;
@@ -295,94 +442,118 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     setHistoryIndex(0);
   }, [initialPath, isOpen]);
 
-  // React to path prefix changes or new file uploads to rebuild filesystem tree on F: / other drives
-  const updateVirtualFSWithRealFiles = (filesList: File[], prefix: string) => {
-    const fsCopy = JSON.parse(JSON.stringify(BASE_FS)) as Record<string, FileItem[]>;
-    const { drive, segments } = parseWindowsPath(prefix);
-    
-    if (!fsCopy[drive]) {
-      fsCopy[drive] = [];
-    }
+  // Build client directory structure fully and natively based on uploaded directory arrays.
+  // Combines base metadata elements with newly synced real folders.
+  const rebuildFilesystemTree = (allFilesByDrive: Record<string, File[]>) => {
+    // Deep copy native baseline templates of ALL drives
+    const newFS = JSON.parse(JSON.stringify(BASE_FS)) as Record<string, FileItem[]>;
+    const newFileMap: Record<string, File> = {};
 
-    // Build absolute host folder nodes automatically
-    let currentLevel = fsCopy[drive];
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      let existingFolder = currentLevel.find(item => item.name === seg && item.type === 'folder');
-      if (!existingFolder) {
-        existingFolder = {
-          id: `mount_folder_${drive.slice(0, 1)}_${i}_${seg}`,
-          name: seg,
-          type: 'folder',
-          children: []
-        };
-        currentLevel.push(existingFolder);
-      }
-      currentLevel = existingFolder.children || (existingFolder.children = []);
-    }
+    Object.keys(allFilesByDrive).forEach((driveKey) => {
+      const drive = driveKey as DriveType;
+      const filesList = allFilesByDrive[drive];
+      if (!filesList || filesList.length === 0) return;
 
-    // Graft all real files recursively onto the leaf node
-    const newFileMap: Record<string, File> = { ...realFileMap };
-    
-    filesList.forEach((file, index) => {
-      const relPath = file.webkitRelativePath || file.name;
-      let parts = relPath.split('/').filter(Boolean);
-      
-      // Prevent duplicating the folder leaf name in tree navigation
-      const leafSegName = segments[segments.length - 1];
-      if (parts.length > 1 && leafSegName && parts[0].toLowerCase() === leafSegName.toLowerCase()) {
-        parts = parts.slice(1);
+      if (!newFS[drive]) {
+        newFS[drive] = [];
       }
-      
-      let level = currentLevel;
-      parts.forEach((part, pIdx) => {
-        const isFile = pIdx === parts.length - 1;
-        let existing = level.find(item => item.name === part && item.type === (isFile ? 'file' : 'folder'));
-        
-        if (!existing) {
-          if (isFile) {
-            const timestamp = new Date(file.lastModified).toISOString().replace('T', ' ').substring(0, 16);
-            const sizeStr = formatBytes(file.size);
-            const fileId = `real_file_${index}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-            
-            newFileMap[fileId] = file;
-            
-            const fileNode: FileItem = {
-              id: fileId,
-              name: part,
-              type: 'file',
-              size: sizeStr,
-              modified: timestamp
-            };
-            level.push(fileNode);
-          } else {
-            const folderNode: FileItem = {
-              id: `real_folder_${index}_${pIdx}_${part}`,
-              name: part,
-              type: 'folder',
-              children: []
-            };
-            level.push(folderNode);
-            existing = folderNode;
+
+      // Read current mountPrefix for mapping root target
+      const targetPrefix = mountPrefix || '';
+      const prefixResult = parseWindowsPath(targetPrefix);
+      let targetSegments = prefixResult.segments;
+
+      // Ensure that if files are mapped to another drive, they're parsed into the root of that drive or specific path
+      if (prefixResult.drive !== drive) {
+        targetSegments = [];
+      }
+
+      // 1. Establish path segments skeleton down to current leaf directory
+      let currentLevel = newFS[drive];
+      for (let i = 0; i < targetSegments.length; i++) {
+        const seg = targetSegments[i];
+        let existingFolder = currentLevel.find(item => item.name === seg && item.type === 'folder');
+        if (!existingFolder) {
+          existingFolder = {
+            id: `host_folder_${drive.slice(0, -1)}_${i}_${seg}`,
+            name: seg,
+            type: 'folder',
+            children: []
+          };
+          currentLevel.push(existingFolder);
+        }
+        currentLevel = existingFolder.children || (existingFolder.children = []);
+      }
+
+      // 2. Map all files in physical array recursively
+      filesList.forEach((file, index) => {
+        // webkitRelativePath contains the inner details from root choice folder
+        const relPath = file.webkitRelativePath || file.name;
+        let parts = relPath.split('/').filter(Boolean);
+
+        // Prevent duplicating target root folder leaf name in children elements
+        const leafSegName = targetSegments[targetSegments.length - 1];
+        if (parts.length > 1 && leafSegName && parts[0].toLowerCase() === leafSegName.toLowerCase()) {
+          parts = parts.slice(1);
+        }
+
+        let level = currentLevel;
+        parts.forEach((part, pIdx) => {
+          const isFile = pIdx === parts.length - 1;
+          let existing = level.find(item => item.name === part && item.type === (isFile ? 'file' : 'folder'));
+
+          if (!existing) {
+            if (isFile) {
+              const timestamp = new Date(file.lastModified).toISOString().replace('T', ' ').substring(0, 16);
+              const sizeStr = formatBytes(file.size);
+              const fileId = `real_file_${drive.replace(':', '')}_${index}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              
+              // Register real File mapping
+              newFileMap[fileId] = file;
+
+              const fileNode: FileItem = {
+                id: fileId,
+                name: part,
+                type: 'file',
+                size: sizeStr,
+                modified: timestamp
+              };
+              level.push(fileNode);
+            } else {
+              const folderNode: FileItem = {
+                id: `real_folder_${drive.replace(':', '')}_${index}_${pIdx}_${part}`,
+                name: part,
+                type: 'folder',
+                children: []
+              };
+              level.push(folderNode);
+              existing = folderNode;
+            }
           }
-        }
-        
-        if (!isFile && existing) {
-          level = existing.children || (existing.children = []);
-        }
+
+          if (!isFile && existing) {
+            level = existing.children || (existing.children = []);
+          }
+        });
       });
     });
 
     setRealFileMap(newFileMap);
-    setVirtualFS(fsCopy);
+    setVirtualFS(newFS);
   };
 
-  // Re-mount automatically when prefix or loaded file arrays are modified
-  useEffect(() => {
-    if (loadedRealFiles.length > 0) {
-      updateVirtualFSWithRealFiles(loadedRealFiles, mountPrefix);
-    }
-  }, [mountPrefix, loadedRealFiles]);
+  // Trigger file-tree rebuild with isolated persistence maps
+  const registerFilesToDrive = (newFiles: File[], targetDrive: DriveType) => {
+    setDriveRealFiles(prev => {
+      const updated = {
+        ...prev,
+        [targetDrive]: [...(prev[targetDrive] || []), ...newFiles]
+      };
+      // Instantly trigger reconstruction
+      rebuildFilesystemTree(updated);
+      return updated;
+    });
+  };
 
   const handleBackward = () => {
     if (historyIndex > 0) {
@@ -418,8 +589,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
   const getContentsAtCurrentPath = (): FileItem[] => {
     if (isThisPC) return [];
     
-    const fsCopy = { ...virtualFS };
-    let current = fsCopy[currentDrive] || [];
+    let current = virtualFS[currentDrive] || [];
 
     for (let i = 0; i < pathSegments.length; i++) {
       const segment = pathSegments[i];
@@ -427,11 +597,12 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
       
       if (!foundFolder) {
         foundFolder = {
-          id: `dyn_idx_${segment}_${i}`,
+          id: `dyn_fld_${segment}_${i}`,
           name: segment,
           type: 'folder',
           children: []
         };
+        // Auto appending missing path structures beautifully rather than failing
         current.push(foundFolder);
       }
       
@@ -445,8 +616,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     navigateTo(currentDrive, [...pathSegments, name], false);
   };
 
-  const handleDriveClick = (drive: 'C:' | 'D:' | 'E:' | 'F:') => {
-    // If we have selected real files and are changing prefix, map directories dynamically
+  const handleDriveClick = (drive: DriveType) => {
     navigateTo(drive, [], false);
   };
 
@@ -454,7 +624,6 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     navigateTo('C:', [], true);
   };
 
-  // Triggers when dragging directories or files over explorer window
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
@@ -464,7 +633,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     setIsDragOver(false);
   };
 
-  // Handle Dragging File System Objects Directly
+  // Direct drags over disk pane natively parsing entire folders or files
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -475,9 +644,8 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
       const traverseEntry = async (entry: any) => {
         if (entry.isFile) {
           const file = await new Promise<File>((resolve) => entry.file(resolve));
-          // Attach relative path for nested elements
           Object.defineProperty(file, 'webkitRelativePath', {
-            value: entry.fullPath.substring(1), // remove starting slash
+            value: entry.fullPath.substring(1), // Strip leading slash
             writable: false
           });
           filesArr.push(file);
@@ -512,8 +680,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
           }
         }
         if (filesArr.length > 0) {
-          // If workflows is the entry, align prefix drive automatically
-          setLoadedRealFiles(prev => [...prev, ...filesArr]);
+          registerFilesToDrive(filesArr, currentDrive);
         }
       };
       
@@ -521,17 +688,16 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     } else {
       const droppedFiles = Array.from(e.dataTransfer.files);
       if (droppedFiles.length > 0) {
-        setLoadedRealFiles(prev => [...prev, ...droppedFiles]);
+        registerFilesToDrive(droppedFiles, currentDrive);
       }
     }
   };
 
-  // Direct directory browser triggering (webkitdirectory)
   const handleFolderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const filesList = e.target.files;
     if (filesList && filesList.length > 0) {
       const arr = Array.from(filesList);
-      setLoadedRealFiles(prev => [...prev, ...arr]);
+      registerFilesToDrive(arr, currentDrive);
     }
   };
 
@@ -539,7 +705,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     const filesList = e.target.files;
     if (filesList && filesList.length > 0) {
       const arr = Array.from(filesList);
-      setLoadedRealFiles(prev => [...prev, ...arr]);
+      registerFilesToDrive(arr, currentDrive);
     }
   };
 
@@ -555,7 +721,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
     onClose();
   };
 
-  // Recursive search matching across nested files
+  // Recursive directory lookup for instantaneous searches
   const performSearch = (items: FileItem[], query: string, prefixPath: string): { path: string; name: string; size?: string }[] => {
     let results: { path: string; name: string; size?: string }[] = [];
     const normalizedQuery = query.toLowerCase();
@@ -589,18 +755,19 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
 
   const getSelectedDetails = () => {
     if (!selectedFile && !isThisPC) {
+      const label = DRIVE_LABELS[currentDrive] || '本地磁盘';
       return {
-        title: isThisPC ? '此电脑' : `本地磁盘 (${currentDrive})`,
-        count: isThisPC ? '4个驱动卷' : `${visibleContents.length} 个子项目`,
-        description: '选择电脑上特定的物理路径、文件夹或文件，深度加载其实际层数据。'
+        title: isThisPC ? '此电脑' : `${label} (${currentDrive})`,
+        count: isThisPC ? '7个驱动卷柜' : `${visibleContents.length} 个子项目`,
+        description: '选择或载入本地真实的文件夹。我们将立即和您电脑本地硬盘的结构与内容完全同频。'
       };
     }
     
     if (isThisPC) {
       return {
         title: '此电脑 (My PC)',
-        count: '设备和驱动器 (4)',
-        description: '操作系统磁盘卷控制器，包含 C、D、E、F 本地物理高带宽连接卷。'
+        count: '物理设备与云盘集成控制 (7)',
+        description: '系统主机驱动控制器，搭载 C、D、E、F 本地硬盘卷及 WPS、百度、夸克专用云网盘镜像。'
       };
     }
 
@@ -614,20 +781,21 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
       else if (ext === 'zip' || ext === 'rar' || ext === '7z') typeDesc = 'ZIP/RAR 压缩备份包';
       else if (ext === 'docx' || ext === 'doc') typeDesc = 'Word 文档';
       else if (ext === 'xlsx' || ext === 'xls') typeDesc = 'Excel 数据度量表';
-      else if (ext === 'csv') typeDesc = '逗号分隔数值数据 (.csv)';
-      else if (ext === 'json') typeDesc = 'ComfyUI 标定流配置 (.json)';
+      else if (ext === 'csv') typeDesc = '高带宽电子表格数据 (.csv)';
+      else if (ext === 'json') typeDesc = '标定流配置文件 (.json)';
       else if (ext === 'txt') typeDesc = '纯文本文件 (.txt)';
 
+      const isReal = item.id.startsWith('real_file_');
       return {
         item,
         title: item.name,
-        count: item.size || '0 Bytes',
+        count: item.size || '36 KB',
         type: typeDesc,
         modified: item.modified || '2026-06-05',
         path: `${currentDrive}\\${pathSegments.join('\\')}\\${selectedFile}`,
-        description: item.id.startsWith('real_file_') 
-          ? '🔌 实机物理文件连接。直接双击或点击下方解码，即可读取图片、工作表格、压缩包或 JSON 工作流全文内容。'
-          : '仿真模拟资产文件。设置上方真实的绝对宿主路径，即可输出正确的 Windows 系统执行句柄。'
+        description: isReal 
+          ? '🔌 物理连接同步中。双击此处的解码预览，可以直接读取实机硬盘上的绝对内容并在本沙箱打开。'
+          : '模拟基准文件。您可以点击左下角载入真实的本地文件夹完成对齐并浏览实际内容。'
       };
     }
 
@@ -654,9 +822,9 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
       >
         {/* Full drag overlay indication */}
         {isDragOver && (
-          <div className="absolute inset-0 bg-emerald-950/90 z-50 flex flex-col items-center justify-center border-4 border-dashed border-emerald-400 p-6 pointer-events-none text-center">
+          <div className="absolute inset-0 bg-emerald-950/95 z-50 flex flex-col items-center justify-center border-4 border-dashed border-emerald-400 p-6 pointer-events-none text-center">
             <Upload size={64} className="text-emerald-400 mb-4 animate-bounce" />
-            <h3 className="text-xl font-black text-white">拽入并挂载真实的本地文件夹 / 物理文件</h3>
+            <h3 className="text-xl font-black text-white">拽入电脑上的本地网盘与流程文件夹</h3>
             <p className="text-sm text-emerald-300 mt-2 max-w-md">
               松开鼠标将电脑上的文件瞬间载入。我们将提取整个文件夹中所有子目录的真实相对结构与文件内容，不上传至任何服务器，100% 浏览器客户端安全解析。
             </p>
@@ -667,7 +835,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
         <div className="bg-[#181818] px-4 pt-2 flex items-center gap-1.5 shrink-0 border-b border-white/5 select-none text-[11px]">
           <div className="flex items-center gap-2 bg-[#2d2d2d] px-3.5 py-1.5 rounded-t-lg border-t border-x border-white/10 text-white font-medium max-w-[200px] truncate">
             <Monitor size={11} className="text-indigo-400" />
-            <span>物理硬盘柜 &raquo; {currentDrive}</span>
+            <span>物理硬盘与网盘柜 &raquo; {currentDrive}</span>
             <X size={10} className="ml-2 hover:bg-white/10 p-0.5 rounded cursor-pointer" onClick={onClose} />
           </div>
           <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
@@ -730,7 +898,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                   onClick={() => handleDriveClick(currentDrive)}
                   className="hover:bg-white/10 px-1 py-0.5 rounded text-indigo-400 border-none bg-transparent cursor-pointer text-[11px]"
                 >
-                  本地磁盘 ({currentDrive})
+                  {DRIVE_LABELS[currentDrive]} ({currentDrive})
                 </button>
               </>
             )}
@@ -786,34 +954,49 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
         <div className="flex flex-1 min-h-0">
           
           {/* Column 1: Navigation and real physical file import hubs */}
-          <div className="w-[190px] border-r border-white/5 bg-[#171717] p-3 flex flex-col gap-4 shrink-0 text-left select-none overflow-y-auto">
+          <div className="w-[190px] border-r border-white/5 bg-[#171717] p-3 flex flex-col gap-4 text-left select-none overflow-y-auto shrink-0">
             
             <div className="space-y-0.5">
               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest pl-2 block mb-1">快速访问</span>
               
               <button onClick={handleThisPCClick} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[11px] text-slate-300 hover:bg-white/5 border-none bg-transparent text-left cursor-pointer">
-                <Monitor size={11} className="text-indigo-405 shrink-0" />
+                <Monitor size={11} className="text-indigo-400 shrink-0" />
                 <span>此电脑 (My PC)</span>
               </button>
 
-              <button onClick={() => navigateTo('F:', ['BaiduNetdiskDownload', 'ComfyUI-aki-v3', 'ComfyUI', 'user', 'default', 'workflows'], false)} className="w-full flex items-center gap-2 px-2 py-1 py-1.5 rounded text-[11px] text-slate-300 hover:bg-white/5 border-none bg-transparent text-left cursor-pointer pl-6 truncate">
+              <button onClick={() => navigateTo('F:', ['BaiduNetdiskDownload', 'ComfyUI-aki-v3', 'ComfyUI', 'user', 'default', 'workflows'], false)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-[11px] text-slate-300 hover:bg-white/5 border-none bg-transparent text-left cursor-pointer pl-6 truncate">
                 <FolderOpen size={11} className="text-amber-500 shrink-0" />
                 <span>Workflows 目录</span>
               </button>
             </div>
 
             <div className="space-y-0.5">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest pl-2 block mb-1">硬盘驱动控制器</span>
-              
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest pl-2 block mb-1">物理磁盘驱动器</span>
               <div className="space-y-0.5 pl-2">
-                {['C:', 'D:', 'E:', 'F:'].map((drv) => (
+                {(['C:', 'D:', 'E:', 'F:'] as DriveType[]).map((drv) => (
                   <button 
                     key={drv}
-                    onClick={() => handleDriveClick(drv as any)} 
-                    className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-[10.5px] border-none bg-transparent text-left cursor-pointer ${!isThisPC && currentDrive === drv ? 'bg-indigo-600/15 text-indigo-300 font-black' : 'text-slate-400 hover:text-white'}`}
+                    onClick={() => handleDriveClick(drv)} 
+                    className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-[10.5px] border-none bg-transparent text-left cursor-pointer ${!isThisPC && currentDrive === drv ? 'bg-indigo-600/20 text-indigo-300 font-black' : 'text-slate-400 hover:text-white'}`}
                   >
                     <HardDrive size={10} className="text-indigo-400 shrink-0" />
                     <span>本地磁盘 ({drv})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-0.5">
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest pl-2 block mb-1">同步网络云盘柜</span>
+              <div className="space-y-0.5 pl-2">
+                {(['WPS:', 'Baidu:', 'Quark:'] as DriveType[]).map((drv) => (
+                  <button 
+                    key={drv}
+                    onClick={() => handleDriveClick(drv)} 
+                    className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-[10.5px] border-none bg-transparent text-left cursor-pointer ${!isThisPC && currentDrive === drv ? 'bg-emerald-600/20 text-emerald-300 font-black' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    {drv === 'WPS:' ? <Cloud size={10} className="text-sky-450 shrink-0" /> : <DownloadCloud size={10} className="text-blue-400 shrink-0" />}
+                    <span>{drv === 'WPS:' ? 'WPS 云盘' : drv === 'Baidu:' ? '百度网盘' : '夸克云盘'}</span>
                   </button>
                 ))}
               </div>
@@ -823,17 +1006,17 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
             <div className="mt-auto border-t border-white/5 pt-4 space-y-3">
               <div className="p-2 bg-indigo-950/20 rounded border border-indigo-500/10 text-[9px] text-indigo-300 space-y-1">
                 <div className="flex items-center gap-1 font-bold">
-                  <ShieldAlert size={10} className="text-indigo-400" />
-                  <span>对接实机物理绝对路径</span>
+                  <ShieldAlert size={10} className="text-indigo-450" />
+                  <span>与本地电脑 100% 同步</span>
                 </div>
                 <p className="text-slate-400 leading-normal">
-                  拖拽或选择文件夹载入。设定相同的 Windows 绝对路径前缀，确保流节点直接获取匹配的文件句柄！
+                  选择文件夹载入，会将您 PC 的真实文件夹目录在树中完整映射同步，并能在右侧直接解码查看！
                 </p>
               </div>
 
               {/* Absolute Prefix Input */}
               <div className="space-y-1 text-[10px]">
-                <label className="text-slate-500 block font-bold">宿主绝对路径前缀 (Mount Base):</label>
+                <label className="text-slate-500 block font-bold">挂载物理绝对路径 (Mount Base):</label>
                 <input 
                   type="text"
                   value={mountPrefix}
@@ -850,7 +1033,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                   className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-indigo-650 hover:bg-indigo-600 border-none text-white text-[10px] font-black cursor-pointer transition-all shadow-md text-center select-none"
                   title="载入一整套硬盘内的文件夹"
                 >
-                  <Folder size={11} />
+                  <FolderOpen size={11} />
                   <span>载入本地文件夹</span>
                 </label>
                 <input 
@@ -882,10 +1065,10 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                 />
               </div>
 
-              {loadedRealFiles.length > 0 && (
+              {driveRealFiles[currentDrive] && driveRealFiles[currentDrive].length > 0 && (
                 <div className="bg-emerald-950/20 border border-emerald-500/15 rounded p-2 text-[9px] text-emerald-400 font-mono">
                   <span className="font-extrabold flex items-center gap-1">
-                    <Check size={10} /> 载入物理: {loadedRealFiles.length} 个
+                    <Check size={10} /> 本盘已同步: {driveRealFiles[currentDrive].length}件
                   </span>
                 </div>
               )}
@@ -899,7 +1082,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
               <div className="space-y-2">
                 <div className="border-b border-white/5 pb-2">
                   <span className="text-[10px] font-black text-slate-400 font-mono uppercase tracking-widest">
-                    在当前物理分卷检索出的成果: ({searchResults.length})
+                    在当前目录检索出的成果: ({searchResults.length})
                   </span>
                 </div>
                 {searchResults.length === 0 ? (
@@ -912,10 +1095,10 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                         type="button"
                         onClick={() => {
                           setSelectedFile(item.name);
-                          const driveSeg = item.path.split('\\')[0] + ':';
+                          const driveSeg = (item.path.split('\\')[0]) as DriveType;
                           const paths = item.path.split('\\').slice(1);
                           paths.pop(); // strip file name
-                          setCurrentDrive(driveSeg as any);
+                          setCurrentDrive(driveSeg);
                           setPathSegments(paths);
                           setIsThisPC(false);
                         }}
@@ -925,7 +1108,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                           <FileCode size={15} className="text-indigo-400 shrink-0" />
                           <div className="min-w-0">
                             <span className="font-bold text-[11.5px] text-white block truncate leading-none">{item.name}</span>
-                            <span className="text-[8.5px] font-mono text-slate-500 block truncate mt-1">{item.path}</span>
+                            <span className="text-[8.5px] font-mono text-slate-505 block truncate mt-1">{item.path}</span>
                           </div>
                         </div>
                         <span className="text-[10px] font-mono text-slate-400 shrink-0">{item.size}</span>
@@ -936,30 +1119,27 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
               </div>
             ) : isThisPC ? (
               // Devices and Drives dashboard (standard Win11 layout)
-              <div className="space-y-6">
+              <div className="space-y-6 select-none font-sans">
                 <div>
-                  <h4 className="text-[10px] font-black text-slate-500 mb-3 uppercase tracking-widest select-none">此电脑 &bull; 本地设备和磁盘驱动器</h4>
+                  <h4 className="text-[10px] font-black text-slate-500 mb-3 uppercase tracking-widest">此电脑 &bull; 本地物理硬盘卷</h4>
                   <div className="grid grid-cols-2 gap-4">
-                    
-                    {['C', 'D', 'E', 'F'].map((drv, idx) => {
-                      const dStr = drv + ':';
-                      const driveLabel = drv === 'C' ? '系统物理卷' : drv === 'D' ? '辅助软件卷' : drv === 'E' ? '空间资料卷' : '数字绘图卷柜 (新加坡卷)';
-                      const percentage = drv === 'C' ? '70%' : drv === 'D' ? '45%' : drv === 'E' ? '22%' : '85%';
-                      const spacingTxt = drv === 'C' ? '92 GB 可用，共 300 GB' : drv === 'D' ? '180 GB 可用，共 320 GB' : drv === 'E' ? '310 GB 可用，共 400 GB' : '15 GB 可用，共 100 GB';
+                    {['C:', 'D:', 'E:', 'F:'].map((drv) => {
+                      const dType = drv as DriveType;
+                      const percentage = dType === 'C:' ? '70%' : dType === 'D:' ? '45%' : dType === 'E:' ? '22%' : '85%';
                       return (
                         <div 
                           key={drv}
-                          onClick={() => handleDriveClick(dStr as any)}
-                          className="bg-[#1e1e1e]/60 p-3.5 rounded-xl border border-white/5 hover:bg-[#252525] hover:border-indigo-500/25 transition-all select-none flex items-center gap-4.5 cursor-pointer group shadow-md"
+                          onClick={() => handleDriveClick(dType)}
+                          className="bg-[#1e1e1e]/60 p-3.5 rounded-xl border border-white/5 hover:bg-[#252525] hover:border-indigo-500/25 transition-all flex items-center gap-4.5 cursor-pointer group shadow-md"
                         >
                           <HardDrive size={24} className="text-indigo-400 shrink-0 group-hover:scale-105 transition-transform" />
-                          <div className="text-left leading-normal min-w-0 flex-1">
-                            <span className="text-[11.5px] font-bold text-white block truncate">本地磁盘 ({dStr})</span>
-                            <span className="text-[8.5px] text-slate-400 block mt-0.5">{driveLabel}</span>
+                          <div className="text-left leading-normal min-w-0 flex-1 pl-1">
+                            <span className="text-[11.5px] font-bold text-white block truncate">本地磁盘 ({drv})</span>
+                            <span className="text-[8.5px] text-slate-400 block mt-0.5">{DRIVE_LABELS[dType]}</span>
                             <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5 border border-black/20">
                               <div className="bg-indigo-600 h-full rounded-full" style={{ width: percentage }} />
                             </div>
-                            <span className="text-[8.5px] text-[#888] block mt-1 font-mono">{spacingTxt}</span>
+                            <span className="text-[8.5px] text-[#888] block mt-1 font-mono">{DRIVE_MOCK_INFOS[dType].spacing}</span>
                           </div>
                         </div>
                       );
@@ -968,22 +1148,31 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                 </div>
 
                 <div className="border-t border-white/5 pt-5 space-y-3">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">云高空带宽映射通道</h4>
+                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">云端网络物理同步云盘 (3)</h4>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-[#1e1e1e]/40 p-3 rounded-lg border border-white/5 flex items-center gap-3">
-                      <Cloud size={20} className="text-sky-400 shrink-0" />
-                      <div className="min-w-0 leading-normal text-left">
-                        <span className="text-[11px] font-bold text-white block truncate">WPS 本地同步卷柜</span>
-                        <span className="text-[8.5px] text-slate-400 block font-mono">200 GB 物理高速镜像通道</span>
-                      </div>
-                    </div>
-                    <div className="bg-[#1e1e1e]/40 p-3 rounded-lg border border-white/5 flex items-center gap-3">
-                      <DownloadCloud size={20} className="text-blue-400 shrink-0" />
-                      <div className="min-w-0 leading-normal text-left">
-                        <span className="text-[11px] font-bold text-white block truncate">百度网盘备份卷</span>
-                        <span className="text-[8.5px] text-slate-400 block font-mono">10 GB 实时极速下载端缓存片</span>
-                      </div>
-                    </div>
+                    {['WPS:', 'Baidu:', 'Quark:'].map((drv) => {
+                      const dType = drv as DriveType;
+                      const isRealSynced = driveRealFiles[dType] && driveRealFiles[dType].length > 0;
+                      return (
+                        <div 
+                          key={drv}
+                          onClick={() => handleDriveClick(dType)}
+                          className="bg-[#1e1e1e]/40 p-3.5 rounded-xl border border-white/5 hover:bg-[#252525] hover:border-emerald-500/25 transition-all flex items-center gap-4.5 cursor-pointer group shadow-md"
+                        >
+                          {dType === 'WPS:' ? <Cloud size={24} className="text-sky-400 shrink-0 group-hover:scale-105 transition-transform" /> : <DownloadCloud size={24} className="text-blue-400 shrink-0 group-hover:scale-105 transition-transform" />}
+                          <div className="min-w-0 leading-normal text-left flex-1 pl-1">
+                            <span className="text-[11.5px] font-bold text-white block truncate">{dType === 'WPS:' ? 'WPS 云端同步盘' : dType === 'Baidu:' ? '百度网盘备份卷' : '夸克极速云盘'}</span>
+                            <span className="text-[8.5px] text-slate-400 block font-mono mt-0.5">
+                              {isRealSynced ? `🟢 物理同步激活中 (${driveRealFiles[dType].length}个文件)` : '🔌 本地路径未激活同步'}
+                            </span>
+                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1.5 border border-black/20">
+                              <div className="bg-emerald-600 h-full rounded-full" style={{ width: DRIVE_MOCK_INFOS[dType].percent }} />
+                            </div>
+                            <span className="text-[8.5px] text-[#888] block mt-1 font-mono">{DRIVE_MOCK_INFOS[dType].spacing}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -992,10 +1181,10 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
               <div className="space-y-4">
                 {visibleContents.length === 0 ? (
                   <div className="py-24 text-center">
-                    <FolderOpen size={40} className="text-slate-600 mx-auto mb-3" />
-                    <span className="text-xs text-slate-500 font-bold font-mono">该分卷文件夹目录暂空</span>
-                    <p className="text-[10px] text-slate-600 mt-2 max-w-sm mx-auto">
-                      请点击左侧面板 <b>[载入本地文件夹]</b> 把您电脑上的 ComfyUI 流程文件夹导入进行同步，即可浏览其中的所有物理文件！
+                    <FolderOpen size={40} className="text-slate-600 mx-auto mb-3 animate-pulse" />
+                    <span className="text-xs text-slate-400 font-bold font-mono">该分卷文件夹目录暂空</span>
+                    <p className="text-[10px] text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
+                      请点击下方左侧面板 <b>[载入本地文件夹]</b> 把您电脑本地对应的硬盘或网盘文件夹导入进行高精同步，即可浏览并解码其中的所有物理文件！
                     </p>
                   </div>
                 ) : (
@@ -1007,11 +1196,11 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                       
                       let colorClass = 'text-indigo-400';
                       if (ext === 'bat') colorClass = 'text-emerald-400 font-bold';
-                      else if (ext === 'zip' || ext === 'rar') colorClass = 'text-amber-500';
+                      else if (ext === 'zip' || ext === 'rar') colorClass = 'text-amber-505';
                       else if (ext === 'json') colorClass = 'text-[#4fcca3]';
                       else if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext || '')) colorClass = 'text-purple-400';
                       else if (ext === 'docx') colorClass = 'text-blue-400';
-                      else if (ext === 'xlsx' || ext === 'csv') colorClass = 'text-emerald-555';
+                      else if (ext === 'xlsx' || ext === 'csv') colorClass = 'text-emerald-500';
 
                       return (
                         <button
@@ -1026,23 +1215,23 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                               setPreviewFile(item);
                             }
                           }}
-                          className={`w-full flex items-center justify-between p-2.5 rounded-lg border-2 text-left transition-all cursor-pointer ${isSelected ? 'bg-indigo-600/15 border-indigo-500 text-white shadow-md' : 'bg-[#181818]/60 hover:bg-[#202020]/80 border-transparent text-slate-300'}`}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-lg border-2 text-left transition-all cursor-pointer ${isSelected ? 'bg-indigo-600/15 border-indigo-500 text-white shadow-md' : 'bg-[#181818]/60 hover:bg-[#202020]/80 border-transparent text-slate-350'}`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {isFolder ? (
-                              <Folder size={16} className="text-yellow-600 fill-yellow-600 shrink-0" />
+                              <Folder size={16} className="text-amber-500 fill-amber-500/80 shrink-0" />
                             ) : (
                               <FileCode size={15} className={`${colorClass} shrink-0`} />
                             )}
-                            <div className="min-w-0">
+                            <div className="min-w-0 pl-1">
                               <span className="text-[11px] font-bold block truncate leading-none text-slate-100">{item.name}</span>
                               <span className="text-[8.5px] font-mono text-slate-500 block mt-1.5">
-                                {isFolder ? '子文件夹' : `文件 &bull; 大小: ${item.size || '1.1 KB'}`}
+                                {isFolder ? '子文件夹' : `文件 &bull; 大小: ${item.size || '36 KB'}`}
                               </span>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 select-none">
-                            <span className="text-[9.5px] font-mono text-slate-505">{item.modified || ''}</span>
+                            <span className="text-[9.5px] font-mono text-slate-500">{item.modified || ''}</span>
                             <div className={`w-3.5 h-3.5 rounded-full border border-indigo-500/20 flex items-center justify-center ${isSelected ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-transparent'}`}>
                               {isSelected && <Check size={8} />}
                             </div>
@@ -1071,25 +1260,25 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                 )}
               </div>
 
-              <div className="space-y-2.5 leading-relaxed text-slate-405">
+              <div className="space-y-2.5 leading-relaxed text-slate-400">
                 <span className="text-[11.5px] font-black text-white block text-center truncate">{details.title}</span>
                 <span className="text-[9.5px] text-slate-400 block text-center font-mono">{details.count}</span>
                 
                 {details.type && (
                   <div className="text-[9.5px] bg-black/40 p-2.5 rounded border border-white/5 mt-3 space-y-2 font-mono text-slate-400 break-all leading-normal">
                     <div>
-                      <span className="text-slate-500 mr-1 font-sans font-bold text-[8.5px]">类别:</span>
+                      <span className="text-slate-505 mr-1 font-sans font-bold text-[8.5px]">类别:</span>
                       <span className="text-white font-bold">{details.type}</span>
                     </div>
                     {details.modified && (
                       <div>
-                        <span className="text-slate-500 mr-1 font-sans font-bold text-[8.5px]">修改日期:</span>
+                        <span className="text-slate-505 mr-1 font-sans font-bold text-[8.5px]">修改日期:</span>
                         <span className="text-white">{details.modified}</span>
                       </div>
                     )}
                     {details.path && (
                       <div className="pt-2 border-t border-white/5">
-                        <span className="text-slate-500 font-sans block mb-1 font-bold text-[8.5px]">绝对物理路径:</span>
+                        <span className="text-slate-505 font-sans block mb-1 font-bold text-[8.5px]">绝对物理路径:</span>
                         <span className="text-indigo-300 font-bold block bg-black/80 px-2 py-1.5 rounded text-[8px] break-all select-all font-mono leading-tight">{details.path}</span>
                       </div>
                     )}
@@ -1104,7 +1293,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                       const item = visibleContents.find(f => f.name === selectedFile);
                       if (item && item.type === 'file') setPreviewFile(item);
                     }}
-                    className="w-full mt-3 py-2 px-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-lg text-[10.5px] font-black cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-md border-none select-none active:scale-[0.98] animate-pulse"
+                    className="w-full mt-3 py-2 px-3 bg-gradient-to-r from-indigo-600 to-violet-650 hover:from-indigo-500 hover:to-violet-550 text-white rounded-lg text-[10.5px] font-black cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-md border-none select-none active:scale-[0.98] animate-pulse"
                   >
                     <Layers size={13} />
                     <span>👁️ 解码预览文件内容</span>
@@ -1112,8 +1301,8 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
                 )}
               </div>
 
-              <div className="p-3 bg-slate-950/40 border border-indigo-550/10 rounded-lg text-[8.5px] text-slate-400 leading-normal text-center select-none font-serif">
-                💡 <b>直觉式操作:</b> Dual-Click (双击) 文件夹进入，双击物理文件打开全文阅读或图像解码标定参数。100% 对齐 Windows 自带句柄架构。
+              <div className="p-3 bg-slate-950/40 border border-indigo-550/10 rounded-lg text-[8.5px] text-slate-400 leading-normal text-center select-none">
+                💡 <b>直觉式操作:</b> 双击文件夹进入，双击物理/云盘文件开启全文多通道解码预览。100% 对齐电脑资源管理器。
               </div>
             </div>
           </div>
@@ -1123,8 +1312,8 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
         <div className="bg-[#242424] py-2 px-4 border-t border-white/5 flex items-center justify-between shrink-0 select-none text-[10px] text-slate-400">
           <div className="text-left font-mono truncate max-w-lg">
             <span>当前选定的物理引用路径 (将输出至节点):</span>
-            <div className="text-[11px] font-bold text-white block mt-0.5 select-all truncate">
-              {fullSelectedPath || '未选定文件 (双击 workflows叶子 文件夹加载 Windows 本地文件)'}
+            <div className="text-[11px] font-bold text-[#4fcca3] block mt-0.5 select-all truncate">
+              {fullSelectedPath || '未选定文件 (双击 workflows 叶子文件夹加载 Windows 本地文件)'}
             </div>
           </div>
 
@@ -1132,7 +1321,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-1.5 bg-[#333] hover:bg-[#3d3d3d] text-slate-305 hover:text-white rounded text-[10.5px] font-bold cursor-pointer transition-colors border-none"
+              className="px-3.5 py-1.5 bg-[#333] hover:bg-[#3d3d3d] text-slate-300 hover:text-white rounded text-[10.5px] font-bold cursor-pointer transition-colors border-none"
             >
               取消
             </button>
@@ -1140,7 +1329,7 @@ export const SimulatedFileExplorer: React.FC<SimulatedFileExplorerProps> = ({
               type="button"
               disabled={!fullSelectedPath}
               onClick={confirmSelection}
-              className="px-5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-[#333] disabled:opacity-30 disabled:text-slate-500 text-white rounded text-[10.5px] font-black cursor-pointer transition-all shadow-md border-none flex items-center gap-1"
+              className="px-5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-[#333] disabled:opacity-30 disabled:text-slate-500 text-white rounded text-[10.5px] font-black cursor-pointer transition-all shadow-md/40 border-none flex items-center gap-1"
             >
               <Check size={11} />
               <span>载入该文件</span>
@@ -1256,7 +1445,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           if (active) setTextContent(text);
         }
       } catch (err: any) {
-        if (active) setErrorText('文件解码分析失败: ' + err.message);
+        if (active) setErrorText('文件读取解码失败: ' + err.message);
       } finally {
         if (active) setLoading(false);
       }
@@ -1297,11 +1486,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   };
 
   const getHeading = () => {
-    if (realFile) return `[物理机硬盘映射解密] ${realFile.type || '物理二进制层'}`;
-    if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif') return '图像静态图层光度计分析';
+    if (realFile) return `[物理硬盘映射解密] 本地 PC 文件通道`;
+    if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif') return '图像静态图层度量校验分析';
     if (ext === 'zip' || ext === 'rar') return 'WIN32 压缩封装结构查看器';
     if (ext === 'xlsx' || ext === 'csv') return '系统度量交互式标定电子明细表';
-    return '纯文本及参数反照编辑器';
+    return '纯文本及流程参数内容预览';
   };
 
   return (
@@ -1315,7 +1504,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <Layers size={14} className="text-indigo-400 animate-pulse" />
           <span className="text-slate-500">Windows 全真解码 &raquo;</span>
           <span className="font-bold text-white text-[12px] truncate max-w-lg">{filename}</span>
-          <span className="ml-auto bg-indigo-500/10 text-indigo-300 font-bold px-2 py-0.5 rounded text-[9px] border border-indigo-400/20">{getHeading()}</span>
+          <span className="ml-auto bg-indigo-505/10 text-indigo-300 font-bold px-2 py-0.5 rounded text-[9px] border border-indigo-400/20">{getHeading()}</span>
           <X size={14} className="hover:bg-red-500 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer" onClick={onClose} />
         </div>
 
@@ -1324,7 +1513,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           {loading && (
             <div className="absolute inset-0 bg-black/70 z-50 flex flex-col items-center justify-center text-center">
               <Loader2 className="text-indigo-400 animate-spin mb-2" size={32} />
-              <span className="text-xs font-mono text-slate-400">正在读取电脑物理硬盘介质，加载全量层数据并反向渲染...</span>
+              <span className="text-xs font-mono text-slate-400">正在读取实机物理介质，加载全量层数据并反向渲染...</span>
             </div>
           )}
 
@@ -1332,7 +1521,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <div className="absolute inset-0 bg-red-950/20 z-50 flex flex-col items-center justify-center p-6 text-center text-red-400 font-mono">
               <ShieldAlert size={40} className="mb-2" />
               <span className="font-bold text-sm">物理介质解析异常</span>
-              <p className="text-xs text-slate-450 max-w-md mt-1">{errorText}</p>
+              <p className="text-xs text-slate-400 max-w-md mt-1">{errorText}</p>
             </div>
           )}
 
@@ -1376,14 +1565,14 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                       transform: `scale(${zoomLevel / 100})`, 
                       filter: imageChannel === 'r' ? 'grayscale(100%) sepia(100%) hue-rotate(330deg) saturate(9)' : imageChannel === 'g' ? 'grayscale(100%) sepia(100%) hue-rotate(80deg) saturate(9)' : imageChannel === 'b' ? 'grayscale(100%) sepia(100%) hue-rotate(190deg) saturate(9)' : 'none' 
                     }} 
-                    className="max-h-[300px] max-w-full rounded-lg shadow-xl overflow-hidden transition-all duration-305 flex items-center justify-center"
+                    className="max-h-[300px] max-w-full rounded-lg shadow-xl overflow-hidden transition-all duration-300 flex items-center justify-center"
                   >
                     {imageBlobUrl ? (
                       <img src={imageBlobUrl} alt={filename} className="max-h-[300px] object-contain select-none" referrerPolicy="no-referrer" />
                     ) : (
                       // Fallback vector container when no real file is available (demo)
                       <div className="w-[450px] h-[220px] bg-gradient-to-br from-indigo-950 via-slate-900 to-black p-4 text-left border border-white/10 flex flex-col justify-between relative font-sans leading-relaxed select-none">
-                        <span className="absolute top-3 right-3 text-[8px] font-mono text-indigo-400/40 bg-indigo-950/20 px-1 rounded border border-indigo-500/20">VIRTUAL_PBR_HOST</span>
+                        <span className="absolute top-3 right-3 text-[8px] font-mono text-indigo-400/40 bg-indigo-950/20 px-1 rounded border border-indigo-550/20">VIRTUAL_PBR_HOST</span>
                         <div className="space-y-1 z-10">
                           <span className="text-[10px] font-mono block text-amber-500 font-extrabold uppercase">3D GPU RENDER OUTPUT PREVIEW</span>
                           <h4 className="text-[13px] font-black text-white">{filename}</h4>
@@ -1412,9 +1601,9 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             {/* B. ZIP file contents unzipper */}
             {(ext === 'zip' || ext === 'rar') && (
               <div className="h-full flex flex-col gap-3 font-sans text-left">
-                <div className="bg-[#181818] p-2 rounded border border-white/5 flex items-center gap-2 text-[10.5px] text-slate-350">
-                  <FileArchive size={14} className="text-amber-500" />
-                  <span>ZIP 物理包内高精度反解压缩叶片目录 tree (双击或单击下属文件看内容):</span>
+                <div className="bg-[#181818] p-2 rounded border border-white/5 flex items-center gap-2 text-[10.5px] text-slate-300">
+                  <FileArchive size={14} className="text-amber-505" />
+                  <span>ZIP 物理包内高精度反解压缩目录树 (双击或单击下属文件查看真实内容):</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 flex-1 min-h-[280px]">
@@ -1429,15 +1618,15 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                         >
                           <FileCode size={12} className={item.dir ? 'text-yellow-600' : 'text-indigo-400'} />
                           <span className="truncate flex-1">{item.name}</span>
-                          <span className="text-[9px] text-slate-500 shrink-0">{formatBytes(item.size)}</span>
+                          <span className="text-[9px] text-slate-505 shrink-0">{formatBytes(item.size)}</span>
                         </button>
                       ))
                     ) : (
                       // Mock simulation entries
-                      <div className="p-4 text-center text-slate-505 font-serif text-[10.5px]">
+                      <div className="p-4 text-center text-slate-400 font-sans text-[10.5px]">
                         <div>/ {filename} (仿真压缩柜)</div>
-                        <p className="mt-2 text-[9px] text-slate-600 leading-normal">
-                          载入一整套含 workflows 文件夹的真实的 zip 提取包后，在此处可以浏览并打开全部物理层文件。
+                        <p className="mt-2 text-[9px] text-slate-500 leading-normal">
+                          载入一整套 workflows 的真实 zip 压缩包后，在此处可以浏览并打开全部物理层文件。
                         </p>
                       </div>
                     )}
@@ -1458,7 +1647,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                       ) : archiveSubText ? (
                         archiveSubText
                       ) : (
-                        <span className="text-slate-600 italic">选中左侧 zip 页目录中的物理资产项，点击载入客户端即时解析查看器</span>
+                        <span className="text-slate-650 italic">选中左侧 zip 目录中的物理资产项，客户端将即时解析呈现</span>
                       )}
                     </div>
                   </div>
@@ -1478,7 +1667,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                   {csvGrid.length > 0 ? (
                     <table className="w-full text-left font-mono text-[10px] text-slate-300 leading-normal border-collapse">
                       <thead>
-                        <tr className="bg-[#242424] border-b border-white/10 text-[9px] text-slate-450 uppercase uppercase-wider">
+                        <tr className="bg-[#242424] border-b border-white/10 text-[9px] text-slate-400 uppercase tracking-wider">
                           <th className="p-2 border border-white/5">轴/格</th>
                           {csvGrid[0]?.map((_, hIdx) => (
                             <th key={hIdx} className="p-2 border border-white/5">列 {hIdx + 1}</th>
@@ -1488,7 +1677,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                       <tbody className="divide-y divide-white/5">
                         {csvGrid.map((row, rIdx) => (
                           <tr key={rIdx} className="hover:bg-white/5 transition-all">
-                            <td className="p-2 border border-white/5 font-extrabold text-yellow-600 bg-black/20">A{rIdx + 1}</td>
+                            <td className="p-2 border border-white/5 font-extrabold text-amber-500 bg-black/20">A{rIdx + 1}</td>
                             {row.map((cell, cIdx) => (
                               <td key={cIdx} className="p-2 border border-white/5 max-w-[120px] truncate">{cell}</td>
                             ))}
@@ -1510,7 +1699,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                       <div className="divide-y divide-white/5 font-mono text-[10px] text-slate-300">
                         {excelRows.map(row => (
                           <div key={row.id} className="grid grid-cols-6 py-2 px-3 items-center hover:bg-white/5">
-                            <span className="text-yellow-600 font-extrabold">A{row.id + 4}</span>
+                            <span className="text-amber-505 font-extrabold">A{row.id + 4}</span>
                             <span className="text-white">{row.name}</span>
                             <input 
                               type="text" 
@@ -1543,12 +1732,12 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                   <Terminal size={12} className="text-yellow-500" />
                   <span className="bg-black/35 text-white font-bold px-3 py-1 rounded border-t border-x border-white/10 truncate max-w-[200px]">{filename}</span>
                   <div className="ml-auto flex items-center gap-2">
-                    <span className="text-[9px] bg-indigo-500/10 text-indigo-300 font-bold px-2 py-0.5 rounded">UTF-8</span>
+                    <span className="text-[9px] bg-indigo-505/10 text-indigo-305 font-bold px-2 py-0.5 rounded">UTF-8</span>
                     <button 
                       onClick={() => {
                         navigator.clipboard.writeText(textContent);
                       }}
-                      className="flex items-center gap-1 py-1 px-2.5 bg-[#2c2c2c] hover:bg-[#383838] hover:text-white text-slate-350 rounded text-[9.5px] cursor-pointer border-none font-bold transition-all"
+                      className="flex items-center gap-1 py-1 px-2.5 bg-[#2c2c2c] hover:bg-[#383838] hover:text-white text-slate-300 rounded text-[9.5px] cursor-pointer border-none font-bold transition-all"
                     >
                       <Copy size={11} />
                       <span>复制代码</span>
@@ -1561,7 +1750,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     // Displays actual real computer files
                     textContent.split('\n').map((line, idx) => (
                       <div key={idx} className="flex gap-4">
-                        <span className="text-slate-650 select-none w-6 text-right font-mono text-[9.5px]">{idx + 1}</span>
+                        <span className="text-slate-600 select-none w-6 text-right font-mono text-[9.5px]">{idx + 1}</span>
                         <span className="whitespace-pre">{line}</span>
                       </div>
                     ))
@@ -1587,7 +1776,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                         <span className="whitespace-pre">
                           {line.includes(':') ? (
                             <>
-                              <span className="text-indigo-300 font-bold">{line.split(':')[0]}</span>:
+                              <span className="text-indigo-305 font-bold">{line.split(':')[0]}</span>:
                               <span className="text-amber-400">{line.split(':')[1]}</span>
                             </>
                           ) : (
@@ -1604,23 +1793,23 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
           {/* Right sidebar details info pane */}
           <div className="w-[190px] border-l border-white/5 bg-[#141414] p-3 flex flex-col gap-4 text-left font-mono text-[9px] shrink-0 select-none">
-            <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 pb-1.5">物理标定详情</h4>
+            <h4 className="text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 pb-1.5">物理及参数详情</h4>
             
             <div className="space-y-4 text-slate-400 leading-normal">
               <div className="space-y-1 bg-black/40 p-2 rounded border border-white/5">
                 <span className="text-white font-bold block mb-1">物理绝对位置:</span>
-                <span className="text-indigo-300 font-bold block break-all text-[8px] bg-black/80 px-1.5 py-1 rounded leading-tight">{absoluteLocation}</span>
+                <span className="text-indigo-350 font-bold block break-all text-[8px] bg-black/80 px-1.5 py-1 rounded leading-tight">{absoluteLocation}</span>
               </div>
 
               <div className="space-y-1.5 bg-black/40 p-2 rounded border border-white/5">
-                <div>媒体尺寸: <span className="text-white font-bold">{file.size || '1.1 KB'}</span></div>
+                <div>文件大小: <span className="text-white font-bold">{file.size || '36 KB'}</span></div>
                 <div>修改时间: <span className="text-white font-bold">{file.modified || '2026-06-05'}</span></div>
-                <div>文件后缀: <span className="text-amber-500 font-bold uppercase">{ext || 'RAW_BIN'}</span></div>
+                <div>扩展后缀: <span className="text-amber-500 font-bold uppercase">{ext || 'RAW_BIN'}</span></div>
               </div>
 
               <div className="p-2.5 bg-indigo-950/20 border border-indigo-500/10 rounded-lg text-slate-350 leading-relaxed text-[8px]">
-                <span className="text-indigo-300 font-bold block mb-1">客户端直接解析</span>
-                本项目完全通过浏览器 File API 直接在本地机解码分析，保护数据隐私，0延迟反解。
+                <span className="text-indigo-300 font-bold block mb-1">同步沙盒直读</span>
+                本项目通过先进 HTML5 API 反馈读取真实文件，不发起任何后台云端上传，极速离线对焦。
               </div>
             </div>
           </div>
@@ -1629,7 +1818,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         {/* preview modal footer */}
         <div className="bg-[#181818] p-4 border-t border-white/5 flex items-center justify-between shrink-0 select-none text-[10px]">
           <div className="text-left font-mono">
-            <span className="text-slate-500 block">确认选定此物理路径绑定 HWND 控制:</span>
+            <span className="text-slate-500 block">选定并同步本地硬盘物理路径:</span>
             <span className="text-[#4fcca3] font-bold text-[11px] block truncate max-w-lg leading-tight mt-0.5">{absoluteLocation}</span>
           </div>
 
@@ -1645,7 +1834,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               className="px-6 py-2 bg-indigo-650 hover:bg-indigo-550 text-white font-extrabold rounded text-[11px] cursor-pointer transition-all flex items-center gap-1 border-none shadow-md"
             >
               <Check size={11} />
-              <span>直接确认选择该路径</span>
+              <span>直接确认该物理路径</span>
             </button>
           </div>
         </div>
