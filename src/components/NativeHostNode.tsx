@@ -2341,12 +2341,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                         allowpopups={true}
                       />
                     ) : (
-                      <iframe 
-                        key={`${id}-${refreshKey}`}
-                        src={shouldProxyUrl(appUrl) ? `/api/proxy?url=${encodeURIComponent(appUrl)}` : appUrl} 
-                        className="w-full h-full border-0 bg-white shadow-2xl relative z-10" 
-                        referrerPolicy="no-referrer" 
-                      />
+                      renderEmbeddedAppWorkspace()
                     )}
                   </div>
                 ) : (
@@ -3139,7 +3134,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       )}
 
       {/* PORTLED NATIVE APP STREAM IFRAME LAYER FOR DIRECT SCALED OVERLAY PLACEMENT */}
-      {viewTab === 'native-app' && procStatus === 'running' && !isFolded && !isPinned && !isFullscreen && rect && createPortal(
+      {isElectron && viewTab === 'native-app' && procStatus === 'running' && !isFolded && !isPinned && !isFullscreen && rect && createPortal(
         <div 
           onMouseDown={e => e.stopPropagation()}
           onClick={e => e.stopPropagation()}
