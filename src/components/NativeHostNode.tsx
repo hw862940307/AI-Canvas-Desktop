@@ -976,6 +976,43 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       `[${now}] 正在向本地宿主内核请求注册 PID 连接通道...`
     ]);
 
+    // Send visual embedding launch IPC message across all tunnels (for real native hosts/Sovereign wrappers)
+    const launchPayload = {
+      type: 'launch-app',
+      app: selectedPreset,
+      appPath: finalPath,
+      args: finalArgs,
+      appUrl: appUrl,
+      rect: placeholderRef.current ? {
+        x: Math.round((window.screenX || 0) + placeholderRef.current.getBoundingClientRect().left),
+        y: Math.round((window.screenY || 0) + placeholderRef.current.getBoundingClientRect().top),
+        w: Math.round(placeholderRef.current.getBoundingClientRect().width),
+        h: Math.round(placeholderRef.current.getBoundingClientRect().height),
+        zoom: window.devicePixelRatio || 1
+      } : null
+    };
+
+    const win = window as any;
+    if (win.chrome?.webview?.postMessage) {
+      try {
+        win.chrome.webview.postMessage(launchPayload);
+      } catch (e) {}
+    }
+    if (win.electron?.ipcRenderer?.send) {
+      try {
+        win.electron.ipcRenderer.send('launch-app', launchPayload);
+      } catch (e) {}
+    } else if (win.ipcRenderer?.send) {
+      try {
+        win.ipcRenderer.send('launch-app', launchPayload);
+      } catch (e) {}
+    }
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage(launchPayload, '*');
+      } catch (e) {}
+    }
+
     try {
       const response = await axios.post('/api/native/launch-app', {
         appPath: finalPath,
@@ -1038,6 +1075,33 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       `[${now}] 进程兜底 -> TerminateProcess(PID_${Math.floor(Math.random()*3000+4000)}, exitCode=0)`,
       `[${now}] 🔴 注册通道注销。画布内 HWND Overlay 覆盖映射解除锁定并卸载。`
     ]);
+
+    // Send stop App command through IPC tunnels to notify the native client wrapper to drop overlay alignment
+    const stopPayload = {
+      type: 'stop-app',
+      app: selectedPreset
+    };
+
+    const win = window as any;
+    if (win.chrome?.webview?.postMessage) {
+      try {
+        win.chrome.webview.postMessage(stopPayload);
+      } catch (e) {}
+    }
+    if (win.electron?.ipcRenderer?.send) {
+      try {
+        win.electron.ipcRenderer.send('stop-app', stopPayload);
+      } catch (e) {}
+    } else if (win.ipcRenderer?.send) {
+      try {
+        win.ipcRenderer.send('stop-app', stopPayload);
+      } catch (e) {}
+    }
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage(stopPayload, '*');
+      } catch (e) {}
+    }
   };
 
   // Performance numbers simulator loop
@@ -1095,21 +1159,22 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
   }, [isPinned, isFullscreen, viewTab]);
 
   // Telemetry loop for printing coordinate sync and MoveWindow execution
+  // Includes 60FPS high-frequency Overlay Binding Engine IPC channel for Microsoft WebView2 and Electron native wrappers
   useEffect(() => {
-    if (procStatus !== 'running' || !rect) return;
+    if (procStatus !== 'running') return;
 
+    // 1. Low-frequency console log simulator
     const timer = setInterval(() => {
+      if (!rect) return;
       const now = new Date().toLocaleTimeString();
       const hwndSim = `0x00${Math.floor(Math.random() * 1000 + 4000).toString(16).toUpperCase()}`;
       
-      // Calculate screen layout boundaries with boundary clamping
       const canvasLeft = window.screenX || 0;
       const canvasTop = window.screenY || 0;
       
       const realX = Math.round(rect.left);
       const realY = Math.round(rect.top);
       
-      // Check Clamp boundaries (Prevent running out of the desktop canvas screen coordinates)
       const clampedX = Math.max(canvasLeft, Math.min(canvasLeft + window.innerWidth - Math.round(rect.width), realX));
       const clampedY = Math.max(canvasTop, Math.min(canvasTop + window.innerHeight - Math.round(rect.height), realY));
 
@@ -1119,8 +1184,68 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
       ].slice(-80));
     }, 1500);
 
-    return () => clearInterval(timer);
-  }, [procStatus, rect]);
+    // 2. High-frequency Overlay Binding Engine (60FPS Native Coordination Tunnel)
+    let animationFrameId: number;
+    const syncNativeOverlayCoordinates = () => {
+      const el = placeholderRef.current;
+      if (el) {
+        const bounds = el.getBoundingClientRect();
+        
+        // Calculate absolute hardware screen position offset
+        const screenLeft = (window.screenX || 0) + bounds.left;
+        const screenTop = (window.screenY || 0) + bounds.top;
+        const screenWidth = bounds.width;
+        const screenHeight = bounds.height;
+
+        const syncPayload = {
+          type: 'overlay-sync',
+          app: selectedPreset,
+          isElectron: isElectron,
+          rect: {
+            x: Math.round(screenLeft),
+            y: Math.round(screenTop),
+            w: Math.round(screenWidth),
+            h: Math.round(screenHeight),
+            zoom: window.devicePixelRatio || 1
+          }
+        };
+
+        // Channel A: Microsoft WebView2 (window.chrome.webview)
+        const win = window as any;
+        if (win.chrome?.webview?.postMessage) {
+          try {
+            win.chrome.webview.postMessage(syncPayload);
+          } catch (e) {}
+        }
+
+        // Channel B: Electron IPC Renderer Bridge
+        if (win.electron?.ipcRenderer?.send) {
+          try {
+            win.electron.ipcRenderer.send('overlay-sync', syncPayload);
+          } catch (e) {}
+        } else if (win.ipcRenderer?.send) {
+          try {
+            win.ipcRenderer.send('overlay-sync', syncPayload);
+          } catch (e) {}
+        }
+
+        // Channel C: Parent web wrapper message channel
+        if (window.parent && window.parent !== window) {
+          try {
+            window.parent.postMessage(syncPayload, '*');
+          } catch (e) {}
+        }
+      }
+      animationFrameId = requestAnimationFrame(syncNativeOverlayCoordinates);
+    };
+
+    animationFrameId = requestAnimationFrame(syncNativeOverlayCoordinates);
+
+    return () => {
+      clearInterval(timer);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [procStatus, rect, selectedPreset]);
 
   // Browser Navigation logic
   const navigateTo = useCallback((destUrl: string) => {
@@ -2333,16 +2458,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
 
                 {procStatus === 'running' ? (
                   <div ref={placeholderRef} className="relative flex-1 w-full min-h-0 bg-slate-950 overflow-hidden font-sans">
-                    {isElectron ? (
-                      <webview
-                        key={`${id}-${refreshKey}`}
-                        src={shouldProxyUrl(appUrl) ? `/api/proxy?url=${encodeURIComponent(appUrl)}` : appUrl}
-                        style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
-                        allowpopups={true}
-                      />
-                    ) : (
-                      renderEmbeddedAppWorkspace()
-                    )}
+                    {renderEmbeddedAppWorkspace()}
                   </div>
                 ) : (
                   // Offline Standby Screen - Workspace Settings Board matching Figure 4
@@ -3133,41 +3249,7 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
         document.body
       )}
 
-      {/* PORTLED NATIVE APP STREAM IFRAME LAYER FOR DIRECT SCALED OVERLAY PLACEMENT */}
-      {isElectron && viewTab === 'native-app' && procStatus === 'running' && !isFolded && !isPinned && !isFullscreen && rect && createPortal(
-        <div 
-          onMouseDown={e => e.stopPropagation()}
-          onClick={e => e.stopPropagation()}
-          className="fixed overflow-hidden bg-slate-950 shadow-xl flex flex-col border border-indigo-500/10 rounded-b-[28px]"
-          style={{
-            left: `${rect.left}px`,
-            top: `${rect.top}px`,
-            width: `${rect.width}px`,
-            height: `${rect.height}px`,
-            zIndex: 40,
-            pointerEvents: 'auto',
-            display: 'flex',
-            transition: 'none',
-          }}
-        >
-          {isElectron ? (
-            <webview
-              key={`${id}-${refreshKey}`}
-              src={appUrl}
-              style={{ width: '100%', height: '100%', border: 'none', background: 'white' }}
-              allowpopups={true}
-            />
-          ) : (
-            <iframe 
-              key={`${id}-${refreshKey}`}
-              src={appUrl} 
-              className="w-full h-full border-0 bg-white" 
-              referrerPolicy="no-referrer" 
-            />
-          )}
-        </div>,
-        document.body
-      )}
+      {/* PORTLED NATIVE APP STREAM IFRAME LAYER FOR DIRECT SCALED OVERLAY PLACEMENT DEPRECATED AND REMOVED TO PREVENT BLANK COVERING OVER CRYSTAL-CLEAR INNER SIMULATOR */}
 
       {/* IMMERSIVE FULLSCREEN SYSTEM OVERLAY COOPERATOR PORTAL */}
       {isFullscreen && createPortal(
