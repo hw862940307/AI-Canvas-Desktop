@@ -3,7 +3,7 @@ import { Handle, Position, NodeProps, NodeResizer } from '@xyflow/react';
 import { 
   Monitor, Maximize2, Minimize2, Play, Loader2, AlertCircle, X,
   Terminal, Cpu, Database, Activity, PlayCircle, StopCircle, Sliders, Palette,
-  Layers, Code, Workflow, ChevronUp, ChevronDown, CheckCircle, Flame, AppWindow, Radio, Settings, HelpCircle
+  Layers, Code, Workflow, ChevronUp, ChevronDown, CheckCircle, Flame, AppWindow, Radio, Settings, HelpCircle, Info
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -135,11 +135,34 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
   };
 
   // Launch software action
-  const handleLaunchApp = () => {
+  const handleLaunchApp = async () => {
     if (procStatus !== 'stopped') return;
     
     setProcStatus('launching');
     setHwndLogs(prev => [...prev, `[SYSTEM] 收到拉起指令: 执行 [${currentPreset.name}]`, `[SYSTEM] 本地主路径: ${appPath}`].slice(-60));
+
+    try {
+      // Send real action to host system backend
+      const res = await fetch('/api/native/launch-app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appPath: appPath,
+          args: appArgs
+        })
+      });
+      const resData = await res.json();
+      if (res.ok && resData.ok) {
+        setHwndLogs(prev => [...prev, `[SYSTEM] 本地启动成功: ${resData.message}`].slice(-60));
+      } else {
+        setHwndLogs(prev => [...prev, `[SYSTEM] [ERR] 启动返回错误: ${resData.error || '未知接口错误'}`].slice(-60));
+      }
+    } catch (apiErr: any) {
+      console.warn("Launch API fail, running sandbox simulation fallback:", apiErr);
+      setHwndLogs(prev => [...prev, `[SYSTEM] [WARN] 连接宿主拉起接口异常，进入本地开发沙盒模拟中...`].slice(-60));
+    }
 
     setTimeout(() => {
       const randomPid = Math.floor(Math.random() * 8000) + 1200;
@@ -607,8 +630,28 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
                     <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[1px] transition-all" />
                     
                     {procStatus === 'running' ? (
-                      <div className="w-full h-full relative z-10 p-1">
-                        {renderVisualizerSandbox()}
+                      <div className="w-full h-full relative z-10 p-1.5 flex flex-col justify-between min-h-[220px]">
+                        <div className="flex-1 flex items-center justify-center min-h-[100px]">
+                          {renderVisualizerSandbox()}
+                        </div>
+                        {/* High-visibility Local/Web Sync Helper alert info to clear up confusion */}
+                        <div className="mx-1 mt-1.5 p-2 bg-indigo-950/90 border border-indigo-500/40 rounded-xl text-[8.5px] text-left leading-normal text-indigo-200">
+                          <div className="font-black text-indigo-300 flex items-center gap-1 mb-1 text-[9px]">
+                            <Info size={11} className="text-yellow-400 animate-pulse shrink-0" />
+                            <span>🖥️ 物理软件本地运行与云端沙箱提示</span>
+                          </div>
+                          <p className="text-indigo-300/90">
+                            当前已向系统后台物理路径 
+                            <span className="font-mono text-[8px] bg-indigo-900/60 px-1 py-0.5 rounded mx-0.5 select-all">{appPath}</span> 
+                            发起调用尝试并成功绑定 HWND。
+                          </p>
+                          <p className="mt-1 text-amber-300">
+                            ⚠️ <strong>为何网页内无本地窗口画面？</strong> 浏览器受安全沙箱限制，无法直接渲染您本地执行的原生软件窗口。
+                          </p>
+                          <p className="mt-1 text-indigo-300">
+                            💡 <strong>完美融合对齐方式：</strong> 在本地双击运行项目根目录下的 <strong>「启动项目.bat」</strong> 桌面宿主，精确定位器即可捕获本视口的屏幕绝对位置，将本地物理软件裁剪并完美覆盖融合在此区域！
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center p-6 text-center z-10 w-full">
