@@ -1038,6 +1038,8 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
   const [comfyUrl, setComfyUrl] = useState(nodeData.comfyUrl || 'http://127.0.0.1:8188');
   const [workflowJson, setWorkflowJson] = useState<any>(nodeData.workflowJson || {});
   const [workflowText, setWorkflowText] = useState(JSON.stringify(nodeData.workflowJson || {}, null, 2));
+  const comfyFieldTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const workflowTextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [comfyStatus, setComfyStatus] = useState<'idle' | 'scanning' | 'ready' | 'uploading' | 'running' | 'success' | 'error'>(nodeData.outputs?.status || 'idle');
   const [scanResult, setScanResult] = useState<WorkflowScanResult>(nodeData.scanResult || { imageInputs: [], imageOutputs: [], exposedParams: [] });
   const [promptId, setPromptId] = useState<string>(nodeData.outputs?.promptId || '');
@@ -1140,10 +1142,17 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
         setWorkflowJson(parsed);
         const result = scanComfyWorkflow(parsed);
         setScanResult(result);
-        updateNodeData(id, { 
-          workflowJson: parsed,
-          scanResult: result
-        });
+        
+        if (workflowTextTimeoutRef.current) {
+          clearTimeout(workflowTextTimeoutRef.current);
+        }
+        workflowTextTimeoutRef.current = setTimeout(() => {
+          updateNodeData(id, { 
+            workflowJson: parsed,
+            scanResult: result
+          });
+        }, 300);
+
         if (comfyStatus === 'idle' || comfyStatus === 'error') {
           setComfyStatus('ready');
         }
@@ -1152,6 +1161,17 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
       // Ignore parsing errors during typing
     }
   }, [workflowText, id, updateNodeData]);
+
+  useEffect(() => {
+    return () => {
+      if (comfyFieldTimeoutRef.current) {
+        clearTimeout(comfyFieldTimeoutRef.current);
+      }
+      if (workflowTextTimeoutRef.current) {
+        clearTimeout(workflowTextTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const addLog = useCallback((msg: string) => {
     setLogs(prev => {
@@ -1315,6 +1335,8 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
   };
 
   const handleComfyFieldChange = (cNodeId: string, fieldName: string, value: any) => {
+    let nextWorkflowJson: any = null;
+
     // 1. Deep update workflowJson to ensure React picks up all internal changes
     setWorkflowJson((prev: any) => {
       const next = { ...prev };
@@ -1328,10 +1350,9 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
         };
       }
       
-      // Update text and sync to node data in a way that doesn't trigger loops
       const newText = JSON.stringify(next, null, 2);
       setWorkflowText(newText);
-      updateNodeData(id, { workflowJson: next });
+      nextWorkflowJson = next;
       
       return next;
     });
@@ -1346,6 +1367,16 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
       }
       return nextResult;
     });
+
+    // 3. Debounce the store / node data update to prevent typing lag
+    if (comfyFieldTimeoutRef.current) {
+      clearTimeout(comfyFieldTimeoutRef.current);
+    }
+    comfyFieldTimeoutRef.current = setTimeout(() => {
+      if (nextWorkflowJson) {
+        updateNodeData(id, { workflowJson: nextWorkflowJson });
+      }
+    }, 300);
 
     addLog(`Updated ${fieldName} to ${typeof value === 'string' ? `"${value.slice(0, 20)}${value.length > 20 ? '...' : ''}"` : value}`);
   };

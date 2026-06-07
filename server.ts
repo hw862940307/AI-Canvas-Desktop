@@ -2377,6 +2377,161 @@ async function startServer() {
     }
   });
 
+  // Discover Models from standard API platforms
+  app.post('/api/discover-models', async (req, res) => {
+    const { baseUrl, apiKey } = req.body;
+
+    if (!baseUrl) {
+      return res.status(400).json({ error: 'API endpoint base URL is required.' });
+    }
+
+    const rawUrl = baseUrl.trim();
+    const cleanUrl = rawUrl.replace(/\/$/, "");
+
+    // Deriving base candidate URLs by stripping trailing resource paths
+    const baseCandidates: string[] = [cleanUrl];
+    const suffixesToStrip = [
+      "/chat/completions",
+      "/images/generations",
+      "/embeddings",
+      "/completions",
+      "/messages",
+      "/chat",
+      "/images",
+      "/generations",
+      "/v1/chat/completions",
+      "/v1/images/generations",
+      "/v1/messages"
+    ];
+
+    let current = cleanUrl;
+    for (const suffix of suffixesToStrip) {
+      if (current.endsWith(suffix)) {
+        current = current.slice(0, -suffix.length).replace(/\/$/, "");
+        if (current && !baseCandidates.includes(current)) {
+          baseCandidates.push(current);
+        }
+      }
+    }
+
+    // Now, expand with /v1 variations
+    const expandedBases: string[] = [];
+    for (const base of baseCandidates) {
+      if (!expandedBases.includes(base)) {
+        expandedBases.push(base);
+      }
+      
+      if (!base.toLowerCase().endsWith('/v1') && !base.toLowerCase().endsWith('/v1/')) {
+        const withV1 = `${base}/v1`;
+        if (!expandedBases.includes(withV1)) {
+          expandedBases.push(withV1);
+        }
+      } else {
+        const withoutV1 = base.slice(0, -3).replace(/\/$/, "");
+        if (withoutV1 && !expandedBases.includes(withoutV1)) {
+          expandedBases.push(withoutV1);
+        }
+      }
+    }
+
+    // Construct final list of unique potential target URLs to inspect
+    const standardEndpoints = [
+      "/models",
+      "/v1/models",
+      "/api/models",
+      "/openai/v1/models",
+      ""
+    ];
+
+    const targetUrls: string[] = [];
+    for (const base of expandedBases) {
+      for (const ep of standardEndpoints) {
+        let combined = ep ? `${base}${ep}` : base;
+        combined = combined.replace(/\/$/, "");
+        
+        if (!combined.startsWith('http://') && !combined.startsWith('https://')) {
+          combined = `https://${combined}`;
+        }
+        
+        if (!targetUrls.includes(combined)) {
+          targetUrls.push(combined);
+        }
+      }
+    }
+
+    // Define the model fetcher job for a single URL
+    const probe = async (targetUrl: string): Promise<{ models: string[], url: string }> => {
+      const headers: any = {};
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+      
+      const response = await axios.get(targetUrl, {
+        headers,
+        timeout: 4000
+      });
+
+      if (response.status === 200 && response.data) {
+        const json = response.data;
+        let list: string[] = [];
+
+        if (json && Array.isArray(json.data)) {
+          list = json.data.map((m: any) => typeof m === 'string' ? m : (m.id || m.name || m.modelId)).filter(Boolean);
+        } else if (json && Array.isArray(json.models)) {
+          list = json.models.map((m: any) => typeof m === 'string' ? m : (m.id || m.name || m.modelId)).filter(Boolean);
+        } else if (json && Array.isArray(json)) {
+          list = json.map((m: any) => typeof m === 'string' ? m : (m.id || m.name || m.modelId)).filter(Boolean);
+        }
+
+        if (list && list.length > 0) {
+          return { models: list, url: targetUrl };
+        }
+      }
+      throw new Error('No models found in this endpoint');
+    };
+
+    appendLog(`[Model Discovery] Running parallel lookup on ${targetUrls.length} URL variations derived from input: "${baseUrl}"`);
+
+    // Probe all generated targets concurrently for highest speed
+    const promises = targetUrls.map(async (url) => {
+      try {
+        const res = await probe(url);
+        return { success: true, res, err: null };
+      } catch (err: any) {
+        const errMsg = err?.response?.data 
+          ? (typeof err.response.data === 'object' ? JSON.stringify(err.response.data) : String(err.response.data)) 
+          : err.message;
+        return { success: false, res: null, err: errMsg, url };
+      }
+    });
+
+    const results = await Promise.all(promises);
+    const successful = results.filter(r => r.success && r.res && r.res.models.length > 0);
+
+    if (successful.length > 0) {
+      // Pick the first successful promise
+      const winner = successful[0].res!;
+      appendLog(`[Model Discovery] SUCCESS! Found ${winner.models.length} models from endpoint: ${winner.url}`);
+      
+      const geminiModels = winner.models.filter((m: string) => m.toLowerCase().includes('gemini') || m.toLowerCase().includes('google'));
+      appendLog(`[Model Discovery] Gemini/Google models in response (${geminiModels.length}): ${JSON.stringify(geminiModels)}`);
+
+      return res.json({ 
+        ok: true, 
+        models: winner.models, 
+        endpoint: winner.url 
+      });
+    } else {
+      // Collect errors to return rich feedback to the user
+      const failedList = results.map(r => `- Probed: "${r.url}" => ${r.err || '无效响应数据类型'}`).join('\n');
+      appendLog(`[Model Discovery] Discovery failed across all ${targetUrls.length} variations.`);
+      return res.json({ 
+        ok: false, 
+        error: `未能在该 API 路由上游找到任何可拉取的可用模型接口。\n\n我们已为您深度检测了 ${targetUrls.length} 个可能的 API 接口变体路由，均未成功：\n${failedList}\n\n请核对您的：\n1. 「接口路由地址」是否拼接正确\n2. 「接口密钥 (API KEY)」是否已分配对应权限。`
+      });
+    }
+  });
+
   // API debug logs endpoint to view server-side logs during development
   app.get('/api/debug-logs', (req, res) => {
     try {

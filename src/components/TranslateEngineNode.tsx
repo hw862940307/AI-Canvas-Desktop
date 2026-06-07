@@ -21,11 +21,51 @@ export const TranslateEngineNode = ({ id, data, selected }: { id: string; data: 
   const settings = useStore((s) => s.settings);
   const [loading, setLoading] = useState(false);
 
+  const [localInput, setLocalInput] = useState(data.input || '');
+  const updateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const lastPushedTextRef = React.useRef(data.input || '');
+
+  React.useEffect(() => {
+    if (data.input !== localInput && data.input !== lastPushedTextRef.current) {
+      setLocalInput(data.input || '');
+      lastPushedTextRef.current = data.input || '';
+    }
+  }, [data.input]);
+
+  const handleInputChange = (val: string) => {
+    setLocalInput(val);
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    updateTimeoutRef.current = setTimeout(() => {
+      lastPushedTextRef.current = val;
+      updateNodeData(id, { input: val });
+    }, 250);
+  };
+
+  const handleBlur = () => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    if (localInput !== data.input) {
+      lastPushedTextRef.current = localInput;
+      updateNodeData(id, { input: localInput });
+    }
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleRun = async () => {
     const incoming = getIncomingData(id);
     const content = incoming.map(d => d.text || d.output || d.input || '').join('\n');
 
-    if (!content && !data.input) {
+    if (!content && !localInput) {
       updateNodeData(id, { output: '请提供输入内容' });
       return;
     }
@@ -34,7 +74,7 @@ export const TranslateEngineNode = ({ id, data, selected }: { id: string; data: 
     try {
       const targetLang = LANGUAGES.find(l => l.id === (data.targetLang || 'en'))?.name || 'English';
       
-      const text = await generateTextWithFallback(`Translate the following text into ${targetLang}. Preserve tokens for image generation if present.\n\nText:\n${content || data.input}`);
+      const text = await generateTextWithFallback(`Translate the following text into ${targetLang}. Preserve tokens for image generation if present.\n\nText:\n${content || localInput}`);
       updateNodeData(id, { output: text });
     } catch (error) {
       console.error('Translation failed:', error);
@@ -78,8 +118,9 @@ export const TranslateEngineNode = ({ id, data, selected }: { id: string; data: 
               <Globe2 size={10} /> 输入文本 (可选)
             </label>
             <textarea
-              value={data.input || ''}
-              onChange={(e) => updateNodeData(id, { input: e.target.value })}
+              value={localInput}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onBlur={handleBlur}
               placeholder="支持从上游节点传入，也可以在此手动输入..."
               className="w-full h-24 bg-black/40 border border-[var(--border)] rounded-xl p-3 text-[0.8em] text-gray-300 focus:outline-none focus:border-emerald-500/50 resize-none font-mono custom-scrollbar"
             />

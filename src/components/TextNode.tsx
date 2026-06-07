@@ -9,6 +9,46 @@ export const TextNode = ({ id, data, selected }: { id: string; data: any; select
   const removeNode = useStore((s) => s.removeNode);
   const settings = useStore((s) => s.settings);
 
+  const [localText, setLocalText] = React.useState(data.text || '');
+  const updateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const lastPushedTextRef = React.useRef(data.text || '');
+
+  React.useEffect(() => {
+    if (data.text !== localText && data.text !== lastPushedTextRef.current) {
+      setLocalText(data.text || '');
+      lastPushedTextRef.current = data.text || '';
+    }
+  }, [data.text]);
+
+  const handleTextChange = (val: string) => {
+    setLocalText(val);
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    updateTimeoutRef.current = setTimeout(() => {
+      lastPushedTextRef.current = val;
+      updateNodeData(id, { text: val });
+    }, 250);
+  };
+
+  const handleBlur = () => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    if (localText !== data.text) {
+      lastPushedTextRef.current = localText;
+      updateNodeData(id, { text: localText });
+    }
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const getFontSizeStyle = () => {
     return typeof settings.inputFontSize === 'number' 
       ? { fontSize: `${settings.inputFontSize}px` } 
@@ -54,12 +94,13 @@ export const TextNode = ({ id, data, selected }: { id: string; data: any; select
             style={getFontSizeStyle()}
             className={`w-full h-full min-h-[140px] bg-black/40 border border-[var(--border)] rounded-xl p-3 text-[var(--text-primary)] focus:outline-none focus:border-emerald-500/50 transition-all resize-none font-mono placeholder:text-[var(--text-secondary)]/50 ${getFontSizeClass()}`}
             placeholder="在此输入文本..."
-            value={data.text || ''}
-            onChange={(e) => updateNodeData(id, { text: e.target.value })}
+            value={localText}
+            onChange={(e) => handleTextChange(e.target.value)}
+            onBlur={handleBlur}
           />
           <div className="mt-2 flex justify-between items-center px-1">
             <span className="text-xs text-[var(--text-secondary)] uppercase font-bold tracking-widest">Type Input</span>
-            <span className="text-xs text-[var(--text-secondary)]">{(data.text || '').length} 字符</span>
+            <span className="text-xs text-[var(--text-secondary)]">{localText.length} 字符</span>
           </div>
         </div>
       </ScaleWrapper>

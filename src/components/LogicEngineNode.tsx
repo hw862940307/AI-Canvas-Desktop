@@ -19,6 +19,46 @@ export const LogicEngineNode = ({ id, data, selected }: { id: string; data: any;
   const settings = useStore((s) => s.settings);
   const [loading, setLoading] = useState(false);
 
+  const [localInput, setLocalInput] = useState(data.input || '');
+  const updateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const lastPushedTextRef = React.useRef(data.input || '');
+
+  React.useEffect(() => {
+    if (data.input !== localInput && data.input !== lastPushedTextRef.current) {
+      setLocalInput(data.input || '');
+      lastPushedTextRef.current = data.input || '';
+    }
+  }, [data.input]);
+
+  const handleInputChange = (val: string) => {
+    setLocalInput(val);
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    updateTimeoutRef.current = setTimeout(() => {
+      lastPushedTextRef.current = val;
+      updateNodeData(id, { input: val });
+    }, 250);
+  };
+
+  const handleBlur = () => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    if (localInput !== data.input) {
+      lastPushedTextRef.current = localInput;
+      updateNodeData(id, { input: localInput });
+    }
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleRun = async () => {
     const incoming = getIncomingData(id);
     const context = incoming.map(d => JSON.stringify(d)).join('\n');
@@ -29,7 +69,7 @@ export const LogicEngineNode = ({ id, data, selected }: { id: string; data: any;
       const systemPrompt = selectedPreset?.prompt || '';
       
       const resultText = await generateTextWithFallback(
-        `[LOGIC ENGINE MODE]\n\nInputs:\n${context || data.input || 'No input data.'}`, 
+        `[LOGIC ENGINE MODE]\n\nInputs:\n${context || localInput || 'No input data.'}`, 
         systemPrompt
       );
       updateNodeData(id, { output: resultText });
@@ -75,8 +115,9 @@ export const LogicEngineNode = ({ id, data, selected }: { id: string; data: any;
               <Terminal size={10} /> 输入内容 (可选)
             </label>
             <textarea
-              value={data.input || ''}
-              onChange={(e) => updateNodeData(id, { input: e.target.value })}
+              value={localInput}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onBlur={handleBlur}
               placeholder="支持从上游节点传入，也可以在此手动输入..."
               className="w-full h-24 bg-black/40 border border-[var(--border)] rounded-xl p-3 text-[0.8em] text-gray-300 focus:outline-none focus:border-accent/50 resize-none font-mono custom-scrollbar"
             />

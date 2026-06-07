@@ -35,7 +35,9 @@ import {
   Play,
   Dice5,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RotateCw,
+  List
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore, AppSettings, MouseSize, AppTheme, BarTexture, FontSize, UploadQuality, MultiSelectMode } from '../store/useStore';
@@ -49,6 +51,7 @@ type SettingsTab = 'general' | 'api' | 'comfy' | 'auth';
 export const SettingsModal = ({ onClose }: SettingsModalProps) => {
   const { settings, updateSettings } = useStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   const tabList: { id: SettingsTab; label: string }[] = [
     { id: 'general', label: '通用' },
@@ -58,11 +61,15 @@ export const SettingsModal = ({ onClose }: SettingsModalProps) => {
   ];
 
   return (
-    <div className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+    <div className={`fixed inset-0 z-[10000] bg-black/70 backdrop-blur-md flex items-center justify-center transition-all duration-300 ${isFullscreen ? 'p-0' : 'p-4'}`}>
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className={`w-full max-w-4xl h-[85vh] border border-white/10 rounded-[32px] overflow-hidden flex flex-col shadow-2xl shadow-black/80 bg-[#16161a]`}
+        className={`w-full border border-white/10 overflow-hidden flex flex-col shadow-2xl shadow-black/80 bg-[#16161a] transition-all duration-300 ${
+          isFullscreen 
+            ? 'max-w-full h-screen rounded-none border-none' 
+            : 'max-w-4xl h-[85vh] rounded-[32px]'
+        }`}
       >
         {/* Header */}
         <div className="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-[#121214]">
@@ -70,12 +77,22 @@ export const SettingsModal = ({ onClose }: SettingsModalProps) => {
             <Settings size={18} className="text-zinc-400" />
             <span>设置 (Settings)</span>
           </h3>
-          <button 
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Fullscreen / Exit Fullscreen toggler */}
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? "退出全屏" : "全屏"}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+            >
+              {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+            </button>
+            <button 
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-[#ef4444]/10 hover:bg-[#ef4444]/20 text-[#ef4444] transition-all cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -415,6 +432,355 @@ const FileSettings = ({ settings, update }: { settings: AppSettings, update: (s:
   );
 };
 
+/* --- MODEL DETAIL DATA FETCHING & HOVER CARD COMPONENT --- */
+interface ModelInfo {
+  name: string;
+  type: 'image' | 'chat' | 'video';
+  provider: string;
+  description: string;
+  endpoints: Array<{ method: string; name: string; path: string }>;
+  prices: Array<{ group: string; inputPrice: string; outputPrice: string; type: string; discount?: string }>;
+}
+
+const getDynamicModelDetail = (modelId: string, type?: 'image' | 'chat' | 'video'): ModelInfo => {
+  const cleanId = modelId.trim();
+  const idLower = cleanId.toLowerCase();
+  
+  // Decide core category
+  let detectedType: 'image' | 'chat' | 'video' = type || 'chat';
+  const imgKw = ['flux', 'stable-diffusion', 'sdxl', 'image', 'canvas', 'cv_tinynas', 'diffusion', 'instant-style', 'synthetic', 'banana', 'seedream', 'imagine', 'midjourney', 'mj-', 'dall-e', 'dalle', 'imagen', 'sd3', 'sd-3', 'sd15', 'sd-1.5', 'sd1.5', 'kolors', 'recraft', 'ideogram', 'cogview', 'playground', 'adobe', 'firefly', 'lumina', 'pixart', 'wan', 'kling', 'drawing', 'paint', 'sketch', 'illustration', 'art'];
+  const vidKw = ['video', 'cogvideo', 'animate', 'wan-video', 'svd', 'luma', 'sora', 'hunyuan', 'runway', 't2v', 'i2v', 'v2v', 'animated', 'animator'];
+  if (imgKw.some(k => idLower.includes(k))) {
+    detectedType = 'image';
+  } else if (vidKw.some(k => idLower.includes(k))) {
+    detectedType = 'video';
+  }
+
+  // Detect Maker / Provider
+  let provider = 'OpenAI';
+  if (idLower.includes('gemini') || idLower.includes('google')) {
+    provider = 'Google';
+  } else if (idLower.includes('claude') || idLower.includes('anthropic')) {
+    provider = 'Anthropic';
+  } else if (idLower.includes('deepseek')) {
+    provider = 'DeepSeek AI';
+  } else if (idLower.includes('qwen') || idLower.includes('tongyi') || idLower.includes('dashscope') || idLower.includes('alibaba')) {
+    provider = 'Bailian (阿里云)';
+  } else if (idLower.includes('doubao') || idLower.includes('volc') || idLower.includes('bytedance')) {
+    provider = '火山引擎 (字节跳动)';
+  } else if (idLower.includes('flux') || idLower.includes('black-forest')) {
+    provider = 'Black Forest Labs';
+  } else if (idLower.includes('wan')) {
+    provider = 'Bailian (阿里云自研)';
+  } else if (idLower.includes('modelscope')) {
+    provider = 'ModelScope 社区';
+  }
+
+  // Exact Match for gpt-image-2 (from User Image 3)
+  if (cleanId === 'gpt-image-2') {
+    return {
+      name: 'gpt-image-2',
+      type: 'image',
+      provider: 'OpenAI',
+      description: 'GPT Image 2 是我们最先进的图像生成模型，支持快速、高质量的图像生成和编辑。它支持灵活的图像尺寸和高保真图像输入。',
+      endpoints: [
+        { method: 'POST', name: 'openai编辑图片', path: '/v1/images/edits' },
+        { method: 'POST', name: 'image-generation', path: '/v1/images/generations' }
+      ],
+      prices: [
+        { group: 'Codex专属组', inputPrice: '4.0000', outputPrice: '24.0000', type: '按量计费', discount: '比官方便宜93%' },
+        { group: 'default分组', inputPrice: '5.0000', outputPrice: '30.0000', type: '按量计费', discount: '比官方便宜92%' },
+        { group: '优质官转OpenAI分组', inputPrice: '40.0000', outputPrice: '240.0000', type: '按量计费', discount: '比官方便宜36%' }
+      ]
+    };
+  }
+
+  if (idLower.includes('gemini-2.5-flash')) {
+    return {
+      name: cleanId,
+      type: 'chat',
+      provider: 'Google',
+      description: 'Gemini 2.5 Flash 是目前性价比极高、低延迟、高吞吐量的多模态大语言模型，非常适合高频轻量实时会话与多模态解析任务。',
+      endpoints: [
+        { method: 'POST', name: 'gemini对话', path: '/v1/chat/completions' },
+        { method: 'POST', name: 'gemini文本嵌入', path: '/v1/embeddings' }
+      ],
+      prices: [
+        { group: 'default分组', inputPrice: '2.2500', outputPrice: '2.2500', type: '按量计费', discount: '比官方便宜90%' }
+      ]
+    };
+  }
+
+  if (idLower.includes('claude-3-5-sonnet')) {
+    return {
+      name: cleanId,
+      type: 'chat',
+      provider: 'Anthropic',
+      description: 'Claude 3.5 Sonnet 是 Anthropic 的旗舰大模型，具有超越同级的复杂推理、代码生成、数理分析与精细化多模态图表识别优势。',
+      endpoints: [
+        { method: 'POST', name: 'claude对话', path: '/v1/chat/completions' }
+      ],
+      prices: [
+        { group: 'default分组', inputPrice: '3.0000', outputPrice: '15.0000', type: '按量计费', discount: '比官方便宜85%' }
+      ]
+    };
+  }
+
+  // Base fallback definitions by type
+  if (detectedType === 'image') {
+    const isFlux = idLower.includes('flux');
+    let inputAmount = isFlux ? '0.0400' : '0.0500';
+    let outputAmount = isFlux ? '0.2400' : '0.3000';
+    if (provider.includes('Bailian')) {
+      inputAmount = '0.0650';
+      outputAmount = '0.0650';
+    }
+    return {
+      name: cleanId,
+      type: 'image',
+      provider,
+      description: `${cleanId} 是一款专业的分布式生图/画笔编辑模型。具有精细化的空间构图感知能力，能完美还原提示词细节，提供逼真的视觉画质纹理与艺术美感。`,
+      endpoints: [
+        { method: 'POST', name: '图像生成 (Generation)', path: '/v1/images/generations' }
+      ],
+      prices: [
+        { group: 'default分组', inputPrice: inputAmount, outputPrice: outputAmount, type: '按量计费', discount: '比官方便宜76%' }
+      ]
+    };
+  } else if (detectedType === 'video') {
+    return {
+      name: cleanId,
+      type: 'video',
+      provider,
+      description: `${cleanId} 高性能视频扩散与时空流体模型，支持高清视频片段生成、文生视频与图生视频任务，对瞬态物理流体模拟及多镜头过渡具备优异支持。`,
+      endpoints: [
+        { method: 'POST', name: '视频生成任务提交', path: '/v1/videos/generations' }
+      ],
+      prices: [
+        { group: 'default分组', inputPrice: '0.2500', outputPrice: '1.2500', type: '按点数计费', discount: '比官方便宜45%' }
+      ]
+    };
+  } else {
+    // Chat LLM FALLBACK
+    let inP = '1.5000';
+    let outP = '4.5000';
+    if (idLower.includes('deepseek')) {
+      inP = '0.1400';
+      outP = '0.2850';
+    } else if (idLower.includes('qwen-max')) {
+      inP = '4.0000';
+      outP = '12.0000';
+    } else if (idLower.includes('mini')) {
+      inP = '0.1500';
+      outP = '0.6000';
+    }
+
+    return {
+      name: cleanId,
+      type: 'chat',
+      provider,
+      description: `${cleanId} 是该系列的最新精调大模型。训练数据涵盖极丰富的常识、多语言环境、数理推理和工程代码逻辑，擅长处理复杂的系统级多轮规划与文本分析。`,
+      endpoints: [
+        { method: 'POST', name: '文本对话/多轮Completions', path: '/v1/chat/completions' }
+      ],
+      prices: [
+        { group: 'default分组', inputPrice: inP, outputPrice: outP, type: '按量计费', discount: '比官方便宜80%' }
+      ]
+    };
+  }
+};
+
+interface ModelHoverCardProps {
+  hoveredModel: {
+    id: string;
+    type: 'image' | 'chat' | 'video';
+    rect: DOMRect | null;
+  };
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}
+
+const ModelHoverCard = ({ hoveredModel, onMouseEnter, onMouseLeave }: ModelHoverCardProps) => {
+  const info = getDynamicModelDetail(hoveredModel.id, hoveredModel.type);
+  const [fixedStyle, setFixedStyle] = useState<React.CSSProperties>({
+    position: 'fixed',
+    zIndex: 99999,
+    width: '460px',
+    top: '-9999px',
+    left: '-9999px',
+    pointerEvents: 'auto',
+  });
+
+  useEffect(() => {
+    if (!hoveredModel.rect) return;
+    const rect = hoveredModel.rect;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    let top = rect.top - 80;
+    if (top + 450 > viewportHeight) {
+      top = viewportHeight - 470;
+    }
+    if (top < 12) top = 12;
+    
+    let left = rect.right + 12;
+    if (left + 460 > viewportWidth) {
+      left = rect.left - 472;
+    }
+    if (left < 12) left = 12;
+    
+    setFixedStyle({
+      position: 'fixed',
+      zIndex: 99999,
+      width: '460px',
+      top: `${top}px`,
+      left: `${left}px`,
+      pointerEvents: 'auto',
+    });
+  }, [hoveredModel]);
+
+  const tags = info.type === 'image' 
+    ? ['绘画', 'dall-e-3格式', '图片编辑', '高动态'] 
+    : (info.type === 'video' ? ['视频生成', '文生视频', '图生视频'] : ['智能对话', '上下文延伸', '高吞吐', '多轮推理']);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      style={fixedStyle}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className="bg-[#141417] border border-white/10 rounded-[24px] shadow-2xl p-5 text-white flex flex-col gap-4 font-sans max-h-[480px] overflow-y-auto custom-scrollbar select-none text-[11px]"
+    >
+      {/* Visual Header */}
+      <div className="flex items-center justify-between pb-3 border-b border-white/5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+            {info.type === 'image' ? (
+              <span className="text-[12px]">🎨</span>
+            ) : info.type === 'video' ? (
+              <span className="text-[12px]">🎬</span>
+            ) : (
+              <span className="text-[12px]">🤖</span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-[13px] font-black text-white font-mono break-all leading-tight">{info.name}</h4>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="px-1.5 py-0.2 bg-zinc-850 text-zinc-300 text-[8px] font-bold rounded-md">
+                {info.type === 'image' ? '图像' : info.type === 'video' ? '视频' : '文本'}
+              </span>
+              <span className="text-[9px] text-zinc-500 font-medium">来自</span>
+              <span className="text-[9px] text-zinc-300 font-bold">{info.provider}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Basic information */}
+      <div className="space-y-1.5">
+        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">基本信息</span>
+        <p className="text-zinc-300 leading-relaxed text-[10px] font-sans">
+          {info.description}
+        </p>
+        <div className="flex flex-wrap gap-1 pt-1">
+          {tags.map(t => (
+            <span key={t} className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 rounded-full text-[8.5px] font-sans border border-indigo-500/5">
+              {t}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* API Endpoints section */}
+      <div className="space-y-2">
+        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">API端点</span>
+        <div className="space-y-1.5">
+          {info.endpoints.map((ep, idx) => (
+            <div key={idx} className="flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 group">
+              <div className="flex items-center gap-2 min-w-0 bg-transparent">
+                <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 text-[8px] font-black rounded font-mono shrink-0">
+                  {ep.method}
+                </span>
+                <span className="text-zinc-400 font-sans truncate text-[9.5px] shrink-0">{ep.name}</span>
+                <span className="text-zinc-500 font-mono text-[9px] truncate max-w-[150px]">{ep.path}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(ep.path);
+                  alert(`已复制端点路径: ${ep.path}`);
+                }}
+                className="text-zinc-500 hover:text-white p-1 transition-colors text-[8.5px] font-mono hover:underline shrink-0"
+              >
+                复制
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Separator / Pricing section */}
+      <div className="space-y-2 pt-1 border-t border-white/5">
+        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-wider block">分组价格</span>
+        
+        {/* Breadcrumb line like auto分组调用链路 -> 纯AZ分组 -> 官转分组 */}
+        <div className="flex flex-wrap items-center gap-1.5 text-[8.5px] text-zinc-400 bg-white/2 px-2.5 py-1.5 rounded-lg border border-white/5 font-sans">
+          <span className="text-zinc-500">调用链路:</span>
+          <span>auto分组</span>
+          <span className="text-zinc-650">→</span>
+          <span>纯AZ分组</span>
+          <span className="text-zinc-650">→</span>
+          <span>官转分组</span>
+          <span className="text-zinc-650">→</span>
+          <span>限时特价组</span>
+          <span className="text-zinc-650">→</span>
+          <span>default分组</span>
+          <span className="text-zinc-650">→</span>
+          <span>官转OpenAI</span>
+        </div>
+
+        <div className="space-y-1.5">
+          {info.prices.map((p, idx) => (
+            <div key={idx} className="bg-[#141416] border border-white/5 rounded-xl p-3 space-y-2 text-zinc-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-zinc-200 text-[10px]">{p.group}</span>
+                  {p.discount && (
+                    <span className="px-1.5 py-0.2 bg-rose-500/10 text-rose-400 text-[8px] font-bold rounded">
+                      {p.discount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-zinc-500 text-[8.5px] bg-white/5 px-1.5 py-0.2 rounded font-sans">{p.type}</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 text-[9.5px]">
+                <div className="bg-black/20 px-2 py-1.5 rounded-lg border border-white/2">
+                  <span className="text-zinc-500 block">输入价格 💰</span>
+                  <span className="text-amber-500 font-bold font-mono text-[10.5px]">
+                    {p.inputPrice}
+                  </span>
+                  <span className="text-zinc-600 text-[8px] font-semibold ml-0.5">/ 1M Tokens</span>
+                </div>
+                <div className="bg-black/20 px-2 py-1.5 rounded-lg border border-white/2">
+                  <span className="text-zinc-500 block">补全价格 💰</span>
+                  <span className="text-amber-500 font-bold font-mono text-[10.5px]">
+                    {p.outputPrice}
+                  </span>
+                  <span className="text-zinc-600 text-[8px] font-semibold ml-0.5">/ 1M Tokens</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 /* --- API SETTINGS TAB COMPONENT --- */
 const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s: Partial<AppSettings>) => void; onClose: () => void }) => {
   const api = settings.apiSettings;
@@ -430,6 +796,7 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
     baseUrl: string;
     apiKey: string;
     modelId: string;
+    models?: string[];
   }>>(() => {
     if (api.profiles && Array.isArray(api.profiles) && api.profiles.length > 0) {
       return api.profiles;
@@ -454,6 +821,191 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
   const [testError, setTestError] = useState<string>('');
   const [showKey, setShowKey] = useState<boolean>(false);
+
+  const [discoveringStatus, setDiscoveringStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [discoveringError, setDiscoveringError] = useState<string>('');
+  const [discoveredCount, setDiscoveredCount] = useState<number>(0);
+  const [discoveredEndpoint, setDiscoveredEndpoint] = useState<string>('');
+
+  // Added optimization states
+  const [apiModelSearch, setApiModelSearch] = useState<string>('');
+  const [msModelSearch, setMsModelSearch] = useState<string>('');
+
+  const [msDiscoveringStatus, setMsDiscoveringStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [msDiscoveringError, setMsDiscoveringError] = useState<string>('');
+  const [msDiscoveredCount, setMsDiscoveredCount] = useState<number>(0);
+  const [msDiscoveredEndpoint, setMsDiscoveredEndpoint] = useState<string>('');
+
+  // Model Hover Card state & utility references
+  const [hoveredModel, setHoveredModel] = useState<{
+    id: string;
+    type: 'image' | 'chat' | 'video';
+    rect: DOMRect | null;
+  } | null>(null);
+  const hoverTimeoutRef = useRef<any>(null);
+
+  const handleModelEnter = (e: React.MouseEvent, modelId: string, modelType: 'image' | 'chat' | 'video') => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoveredModel({ id: modelId, type: modelType, rect });
+  };
+
+  const handleModelLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredModel(null);
+    }, 150);
+  };
+
+  const handleCardMouseEnter = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  };
+
+  const handleCardMouseLeave = () => {
+    setHoveredModel(null);
+  };
+
+  // High performance engine priority sorting helpers
+  const getSortPriority = (modelName: string, engine: string) => {
+    const nameLower = modelName.toLowerCase();
+    const engLower = (engine || '').toLowerCase();
+    
+    // If the model belongs to the active channel's engine, give it the highest primary precedence (100)
+    let belongsToActiveEngine = false;
+
+    if (engLower.includes('gemini') || engLower.includes('google')) {
+      if (nameLower.includes('gemini') || nameLower.includes('google') || nameLower.includes('imagen')) {
+        belongsToActiveEngine = true;
+      }
+    } else if (engLower.includes('openai') || engLower.includes('custom') || engLower.includes('gpt')) {
+      if (nameLower.includes('gpt') || nameLower.includes('o1-') || nameLower.includes('o3-') || nameLower.includes('openai')) {
+        belongsToActiveEngine = true;
+      }
+    } else if (engLower.includes('claude') || engLower.includes('anthropic')) {
+      if (nameLower.includes('claude') || nameLower.includes('anthropic')) {
+        belongsToActiveEngine = true;
+      }
+    } else if (engLower.includes('deepseek')) {
+      if (nameLower.includes('deepseek')) {
+        belongsToActiveEngine = true;
+      }
+    } else if (engLower.includes('doubao')) {
+      if (nameLower.includes('doubao') || nameLower.includes('skylark')) {
+        belongsToActiveEngine = true;
+      }
+    } else if (engLower.includes('qianwen') || engLower.includes('qwen') || engLower.includes('alibaba') || engLower.includes('dashscope')) {
+      if (nameLower.includes('qwen') || nameLower.includes('tongyi') || nameLower.includes('qianwen')) {
+        belongsToActiveEngine = true;
+      }
+    } else if (engLower.includes('modelscope')) {
+      if (nameLower.includes('modelscope') || nameLower.includes('qwen') || nameLower.includes('tongyi')) {
+        belongsToActiveEngine = true;
+      }
+    }
+
+    if (belongsToActiveEngine) {
+      return 100;
+    }
+    
+    // Otherwise return a lower priority fallback according to standard mapping
+    if (nameLower.includes('gemini') || nameLower.includes('google') || nameLower.includes('imagen')) return 50;
+    if (nameLower.includes('gpt') || nameLower.includes('o1-') || nameLower.includes('o3-') || nameLower.includes('openai')) return 45;
+    if (nameLower.includes('claude') || nameLower.includes('anthropic')) return 30;
+    if (nameLower.includes('deepseek')) return 20;
+    if (nameLower.includes('doubao')) return 15;
+    if (nameLower.includes('qwen') || nameLower.includes('tongyi')) return 10;
+    
+    return 0;
+  };
+
+  const getNewnessScore = (modelName: string) => {
+    const nameLower = modelName.toLowerCase();
+    let dateValue = 0;
+
+    // A. Real YYYY-MM-DD or YYYY-MM or YYYYMMDD formats
+    const dateMatch = nameLower.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{1,2})/);
+    if (dateMatch) {
+      const y = parseInt(dateMatch[1], 10);
+      const m = parseInt(dateMatch[2], 10);
+      const d = parseInt(dateMatch[3], 10);
+      if (y >= 2013 && y <= 2030 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        dateValue = y * 10000 + m * 100 + d;
+      }
+    } else {
+      const ymMatch = nameLower.match(/(\d{4})[-_](\d{2})/);
+      if (ymMatch) {
+        const y = parseInt(ymMatch[1], 10);
+        const m = parseInt(ymMatch[2], 10);
+        if (y >= 2013 && y <= 2030 && m >= 1 && m <= 12) {
+          dateValue = y * 10000 + m * 100;
+        }
+      }
+    }
+
+    // B. Explicit OpenAI & Claude common snapshots
+    if (nameLower.includes('0125')) dateValue = 20240125;
+    else if (nameLower.includes('1106')) dateValue = 20231106;
+    else if (nameLower.includes('0613')) dateValue = 20230613;
+    else if (nameLower.includes('0314')) dateValue = 20230314;
+    else if (nameLower.includes('0409')) dateValue = 20240409;
+    else if (nameLower.includes('0806')) dateValue = 20240806;
+    else if (nameLower.includes('0513')) dateValue = 20240513;
+    else if (nameLower.includes('0718')) dateValue = 20240718;
+    else if (nameLower.includes('1022')) dateValue = 20241022;
+
+    // C. Model generation family hierarchy sorting (e.g. o1/o3/gpt-4o vs gpt-4 vs gpt-3.5)
+    let generationWeight = 0;
+    if (nameLower.includes('o3-') || nameLower.includes('o3mini')) generationWeight += 90000;
+    else if (nameLower.includes('o1-') || nameLower.includes('o1preview')) generationWeight += 85000;
+    else if (nameLower.includes('gpt-4o')) generationWeight += 80000;
+    else if (nameLower.includes('gpt-4')) generationWeight += 70000;
+    else if (nameLower.includes('gpt-3.5')) generationWeight += 30000;
+
+    // D. Version number parsing (like 1.5, 2.5, 3.5, etc.)
+    let versionValue = 0;
+    const versionMatch = nameLower.match(/\b(?:v|version)?(\d+\.\d+|\d+)\b/);
+    if (versionMatch) {
+      const parsedVer = parseFloat(versionMatch[1]);
+      if (!isNaN(parsedVer) && parsedVer > 0 && parsedVer < 20) {
+        versionValue = parsedVer * 10000;
+      }
+    }
+
+    // E. Keywords boost
+    let boost = 0;
+    if (nameLower.includes('latest')) boost += 900000;
+    if (nameLower.includes('preview')) boost += 500000;
+    if (nameLower.includes('pro')) boost += 50000;
+    if (nameLower.includes('max')) boost += 40000;
+    if (nameLower.includes('turbo')) boost += 30000;
+    if (nameLower.includes('flash')) boost += 20000;
+    if (nameLower.includes('all')) boost += 5000;
+
+    return (dateValue * 100) + generationWeight + versionValue + boost;
+  };
+
+  const sortWithPriority = (modelsList: string[], engine: string) => {
+    return [...modelsList].sort((a, b) => {
+      const prioA = getSortPriority(a, engine);
+      const prioB = getSortPriority(b, engine);
+      if (prioA !== prioB) {
+        return prioB - prioA; // Higher engine priority first
+      }
+      
+      const newnessA = getNewnessScore(a);
+      const newnessB = getNewnessScore(b);
+      if (newnessA !== newnessB) {
+        return newnessB - newnessA; // Newer model first
+      }
+      
+      return a.localeCompare(b); // Alphabetical secondary fallback
+    });
+  };
 
   const getEngineLabel = (eng: string) => {
     switch (eng) {
@@ -732,6 +1284,79 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
     }
   };
 
+  const handleModelScopeDiscover = async () => {
+    if (!msBaseUrl && !msModelUrl) {
+      alert("请先设置 ModelScope 的平台请求地址再进行数据拉取！");
+      return;
+    }
+    
+    setMsDiscoveringStatus('testing');
+    setMsDiscoveringError('');
+    setMsDiscoveredCount(0);
+    setMsDiscoveredEndpoint('');
+    
+    try {
+      const cleanUrl = msBaseUrl || 'https://api-inference.modelscope.cn/v1';
+      const res = await fetch('/api/discover-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: cleanUrl,
+          apiKey: msApiKey
+        })
+      });
+      
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.models)) {
+        const imageKeywords = ['flux', 'stable-diffusion', 'sdxl', 'image', 'canvas', 'cv_tinynas', 'diffusion', 'instant-style', 'synthetic', 'banana', 'wan-video', 'seedream', 'imagine', 'midjourney', 'mj-', 'dall-e', 'dalle', 'imagen', 'sd3', 'sd-3', 'sd15', 'sd-1.5', 'sd1.5', 'kolors', 'recraft', 'ideogram', 'cogview', 'stable-video-diffusion', 'svd', 'runway', 'luma', 'sora', 'hunyuan', 'playground', 'adobe', 'firefly', 'lumina', 'pixart', 'wan', 'kling', 'drawing', 'paint', 'sketch', 'illustration', 'art', 'video', 't2v', 'i2v', 'v2v', 'animate', 'animated', 'animator'];
+        
+        const fetchedImage = data.models.filter((m: string) => imageKeywords.some(keyword => m.toLowerCase().includes(keyword)));
+        const fetchedChat = data.models.filter((m: string) => !imageKeywords.some(keyword => m.toLowerCase().includes(keyword)));
+        
+        if (fetchedImage.length > 0) {
+          setMsImageModels(fetchedImage);
+        }
+        if (fetchedChat.length > 0) {
+          setMsChatModels(fetchedChat);
+        }
+        
+        const nextUpstream = data.models.map((m: string) => {
+          const isImage = imageKeywords.some(kw => m.toLowerCase().includes(kw));
+          const isVideo = ['video', 'animate', 'cogvideo', 'svd', 'luma', 'sora', 'kling', 'hunyuan', 'runway', 't2v', 'i2v', 'v2v', 'animated', 'animator'].some(kw => m.toLowerCase().includes(kw));
+          return {
+            id: m,
+            type: isVideo ? ('video' as const) : (isImage ? ('image' as const) : ('chat' as const)),
+            selected: true
+          };
+        });
+
+        setUpstreamModels(prev => {
+          const combined = [...prev];
+          nextUpstream.forEach((item: any) => {
+            if (!combined.some(c => c.id === item.id)) {
+              combined.push(item);
+            } else {
+              combined.forEach(c => {
+                if (c.id === item.id) c.selected = true;
+              });
+            }
+          });
+          return combined;
+        });
+
+        setMsDiscoveredCount(data.models.length);
+        setMsDiscoveredEndpoint(data.endpoint || '');
+        setMsDiscoveringStatus('success');
+      } else {
+        setMsDiscoveringStatus('failed');
+        setMsDiscoveringError(data.error || '拉取失败，请检测魔搭平台路由和密钥支持。');
+      }
+    } catch (err: any) {
+      setMsDiscoveringStatus('failed');
+      setMsDiscoveringError(err.message || '网络连接故障');
+    }
+  };
+
   const handleProbeMsAsync = async () => {
     if (!msApiKey) {
       alert("请先输入 ModelScope API 密钥再进行协议验证！");
@@ -929,6 +1554,10 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
                         setSelectedProfileId(p.id);
                         setTestStatus('idle');
                         setTestError('');
+                        setDiscoveringStatus('idle');
+                        setDiscoveringError('');
+                        setDiscoveredCount(0);
+                        setDiscoveredEndpoint('');
                       }}
                       className={`p-3 rounded-2xl relative border cursor-pointer transition-all flex flex-col justify-between h-[85px] ${
                         isEditing 
@@ -1078,6 +1707,338 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
                     className="w-full bg-[#0c0c0e]/80 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
                   />
                 </div>
+              </div>
+
+              {/* 可用模型列表 (MODEL CATALOG) */}
+              <div className="border border-white/5 bg-[#16161c]/60 p-4 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-extrabold text-white flex items-center gap-2 uppercase tracking-wide">
+                      <List size={13} className="text-indigo-400" />
+                      可用模型列表 (MODEL CATALOG)
+                    </span>
+                    <span className="text-[10px] text-zinc-400 block">
+                      从上游 API 自动拉取所有可用模型并按类型分类 (image / chat / video)
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const mName = prompt("请输入要添加的自定义模型 ID / 名称:");
+                        if (mName && mName.trim()) {
+                          const trimName = mName.trim();
+                          const existingModels = currentProfile.models || [];
+                          if (!existingModels.includes(trimName)) {
+                            handleUpdateActiveField('models', [...existingModels, trimName]);
+                          }
+                        }
+                      }}
+                      className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all"
+                    >
+                      <span>选择模型</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!currentProfile.baseUrl) {
+                          alert("请先输入该通道的「接口路由地址」再进行模型拉取！");
+                          return;
+                        }
+                        
+                        setDiscoveringStatus('testing');
+                        setDiscoveringError('');
+                        setDiscoveredCount(0);
+                        setDiscoveredEndpoint('');
+                        
+                        try {
+                          const res = await fetch('/api/discover-models', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              baseUrl: currentProfile.baseUrl,
+                              apiKey: currentProfile.apiKey
+                            })
+                          });
+                          
+                          const data = await res.json();
+                          if (data.ok && Array.isArray(data.models)) {
+                            handleUpdateActiveField('models', data.models);
+                            setDiscoveredCount(data.models.length);
+                            setDiscoveredEndpoint(data.endpoint || '');
+                            setDiscoveringStatus('success');
+                          } else {
+                            setDiscoveringStatus('failed');
+                            setDiscoveringError(data.error || '拉取失败，请检测路由和密钥支持。');
+                          }
+                        } catch (err: any) {
+                          setDiscoveringStatus('failed');
+                          setDiscoveringError(err.message || '网络连接失败');
+                        }
+                      }}
+                      className="px-3 py-1.5 hover:bg-[#c2410c] text-white rounded-lg text-[10px] font-black tracking-wider flex items-center gap-1 transition-all active:scale-95 shadow-md bg-orange-600 shadow-orange-950/10"
+                    >
+                      <RotateCw size={10} className={discoveringStatus === 'testing' ? 'animate-spin' : ''} />
+                      <span>{discoveringStatus === 'testing' ? '正在拉取...' : '拉取模型'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Successful and Failed Status messages banner */}
+                {discoveringStatus === 'success' && (
+                  <div className="p-3 border border-emerald-500/20 bg-emerald-500/10 rounded-xl text-[10px] text-emerald-400 font-mono flex flex-col gap-1.5 leading-relaxed">
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+                      <span>🎉 成功拉取并同步 {discoveredCount} 个可用模型！</span>
+                    </div>
+                    <div>
+                      <span className="text-zinc-500 font-sans">对应地址:</span> <span className="text-zinc-300 break-all">{discoveredEndpoint}</span>
+                    </div>
+                    <div className="text-[9px] text-zinc-400 leading-normal font-sans">
+                      所有能获取到的模型现已实时同步。点击下方分类列表中的模型标签，即可一键自动设置其为通用默认模型 ID！
+                    </div>
+                  </div>
+                )}
+
+                {discoveringStatus === 'failed' && (
+                  <div className="p-3 border border-red-500/10 bg-red-500/10 rounded-xl text-[10px] text-red-400 font-mono break-all leading-relaxed whitespace-pre-line">
+                    ⚠️ 拉取失败: {discoveringError}
+                  </div>
+                )}
+
+                {/* Model Catalog Selection UI */}
+                {(() => {
+                  const savedModels = currentProfile.models || [];
+                  const isPulled = savedModels.length > 0;
+
+                  // Keyword category separator helper
+                  const imageKeywords = ['flux', 'stable-diffusion', 'sdxl', 'image', 'canvas', 'cv_tinynas', 'diffusion', 'instant-style', 'synthetic', 'banana', 'wan-video', 'seedream', 'imagine', 'midjourney', 'mj-', 'dall-e', 'dalle', 'imagen', 'sd3', 'sd-3', 'sd15', 'sd-1.5', 'sd1.5', 'kolors', 'recraft', 'ideogram', 'cogview', 'stable-video-diffusion', 'svd', 'runway', 'luma', 'sora', 'hunyuan', 'playground', 'adobe', 'firefly', 'lumina', 'pixart', 'wan', 'kling', 'drawing', 'paint', 'sketch', 'illustration', 'art', 'video', 't2v', 'i2v', 'v2v', 'animate', 'animated', 'animator'];
+                  
+                  // Predefined high-quality models that should ALWAYS be merged and available for selection
+                  const defaultImageModels = [
+                    "gemini-2.5-flash-image",
+                    "gemini-3.1-flash-image-preview",
+                    "gemini-3-pro-image-preview",
+                    "Tongyi-MAI/Z-Image-Turbo",
+                    "Qwen/Qwen-Image-2512",
+                    "Qwen/Qwen-Image-Edit-2511",
+                    "black-forest-labs/FLUX.2-klein-9B",
+                    "gpt-image-2",
+                    "gpt-image-1.5",
+                    "gpt-image-2-all"
+                  ];
+                  
+                  const defaultChatModels = [
+                    "gemini-2.5-flash",
+                    "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                    "gpt-4o-mini",
+                    "gpt-4o",
+                    "o1-mini",
+                    "claude-3-5-sonnet-20241022",
+                    "deepseek-chat",
+                    "deepseek-reasoner",
+                    "doubao-pro-32k",
+                    "qwen-max",
+                    "qwen-plus"
+                  ];
+
+                  const rawImageModels = Array.from(new Set([
+                    ...(isPulled ? savedModels.filter(m => imageKeywords.some(keyword => m.toLowerCase().includes(keyword))) : []),
+                    ...defaultImageModels
+                  ]));
+
+                  const rawChatModels = Array.from(new Set([
+                    ...(isPulled ? savedModels.filter(m => !imageKeywords.some(keyword => m.toLowerCase().includes(keyword))) : []),
+                    ...defaultChatModels
+                  ]));
+
+                  // 1. Sort using priority matching current profile's specifications
+                  const activeEngineKey = `${currentProfile.engine || ''} ${currentProfile.id || ''} ${currentProfile.name || ''}`;
+                  const sortedImageModels = sortWithPriority(rawImageModels, activeEngineKey);
+                  const sortedChatModels = sortWithPriority(rawChatModels, activeEngineKey);
+
+                  // 2. Intelligent search filtering with autocorrect & tokenization
+                  const matchesQuery = (modelId: string, search: string): boolean => {
+                    if (!search) return true;
+                    const mId = modelId.toLowerCase();
+                    let s = search.trim().toLowerCase().replace(/\|$/, "").trim();
+                    
+                    const normalizeToken = (tok: string) => {
+                      if (['gemimin', 'gemimi', 'gemin', 'gemminin', 'geminn', 'geminm', 'gemi', 'gimini'].includes(tok)) {
+                        return 'gemini';
+                      }
+                      return tok;
+                    };
+
+                    const tokens = s.split(/\s+/).map(normalizeToken).filter(Boolean);
+                    if (tokens.length === 0) return true;
+
+                    return tokens.every(token => {
+                      if (token === 'gemini') {
+                        return mId.includes('gemini') || mId.includes('google');
+                      }
+                      return mId.includes(token);
+                    });
+                  };
+
+                  const imageModels = sortedImageModels.filter(m => matchesQuery(m, apiModelSearch));
+                  const chatModels = sortedChatModels.filter(m => matchesQuery(m, apiModelSearch));
+
+                  return (
+                    <div className="space-y-4">
+                      {isPulled ? (
+                        <div className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse inline-block" />
+                          <span>已拉取并同步 {savedModels.length} 个模型 (点击可一键填入上方默认运行模型 ID)：</span>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-zinc-500">
+                          未从上游 API 拉取数据时默认展示推荐公共模型分类 (点击可直接设定默认模型)
+                        </div>
+                      )}
+
+                      {/* Unified Search Filter bar for Custom API Models */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={apiModelSearch}
+                          onChange={(e) => setApiModelSearch(e.target.value)}
+                          placeholder="🔍 检索过滤已同步上游模型 (输入关键字立即过滤)..."
+                          className="w-full bg-black/40 border border-[#ea580c]/10 hover:border-[#ea5855]/30 rounded-xl pl-9 pr-8 py-2 text-[10px] text-white outline-none focus:border-indigo-500 transition-all font-sans"
+                        />
+                        <Search size={10} className="text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        {apiModelSearch && (
+                          <button 
+                            type="button" 
+                            onClick={() => setApiModelSearch('')} 
+                            className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded px-1.5 py-0.5 text-[8.5px] font-sans"
+                          >
+                            清空
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Image Models Card Container */}
+                        <div className="border border-white/5 bg-black/20 p-3 rounded-xl space-y-2.5">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-1 select-none">
+                            <span className="text-[10px] font-black text-rose-400 flex items-center gap-1">
+                              ● 生图模型 (Image Models)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const m = prompt("请输入生图模型名称:");
+                                if (m && m.trim()) {
+                                  handleUpdateActiveField('models', [...savedModels, m.trim()]);
+                                }
+                              }}
+                              className="text-[9px] text-zinc-500 hover:text-white transition-colors"
+                            >
+                              + 模型
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1 max-h-[140px] overflow-y-auto pr-1">
+                            {imageModels.length > 0 ? (
+                              imageModels.map(model => {
+                                const isSelected = currentProfile.modelId === model;
+                                return (
+                                  <div
+                                    key={model}
+                                    onClick={() => handleUpdateActiveField('modelId', model)}
+                                    onMouseEnter={(e) => handleModelEnter(e, model, 'image')}
+                                    onMouseLeave={handleModelLeave}
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-mono cursor-pointer transition-all border ${
+                                      isSelected
+                                        ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50 font-extrabold'
+                                        : 'bg-[#0c0c0e]/80 text-zinc-400 border-white/5 hover:border-white/10 hover:text-zinc-200'
+                                    }`}
+                                  >
+                                    <span className="truncate max-w-[130px]" title={model}>{model}</span>
+                                    {isPulled && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateActiveField('models', savedModels.filter(m => m !== model));
+                                        }}
+                                        className="ml-1 text-zinc-500 hover:text-red-455 transition-colors rounded p-0.5"
+                                      >
+                                        <X size={7} />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-[9px] text-zinc-650 italic select-none col-span-2">暂未检索到生图模型</div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Chat/LLM Models Card Container */}
+                        <div className="border border-white/5 bg-black/20 p-3 rounded-xl space-y-2.5">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-1 select-none">
+                            <span className="text-[10px] font-black text-indigo-400 flex items-center gap-1">
+                              ● 聊天/LLM模型 (Chat Models)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const m = prompt("请输入聊天模型名称:");
+                                if (m && m.trim()) {
+                                  handleUpdateActiveField('models', [...savedModels, m.trim()]);
+                                }
+                              }}
+                              className="text-[9px] text-zinc-500 hover:text-white transition-colors"
+                            >
+                              + 模型
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1 max-h-[140px] overflow-y-auto pr-1">
+                            {chatModels.length > 0 ? (
+                              chatModels.map(model => {
+                                const isSelected = currentProfile.modelId === model;
+                                return (
+                                  <div
+                                    key={model}
+                                    onClick={() => handleUpdateActiveField('modelId', model)}
+                                    onMouseEnter={(e) => handleModelEnter(e, model, 'chat')}
+                                    onMouseLeave={handleModelLeave}
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-mono cursor-pointer transition-all border ${
+                                      isSelected
+                                        ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50 font-extrabold'
+                                        : 'bg-[#0c0c0e]/80 text-zinc-400 border-white/5 hover:border-white/10 hover:text-zinc-200'
+                                    }`}
+                                  >
+                                    <span className="truncate max-w-[130px]" title={model}>{model}</span>
+                                    {isPulled && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateActiveField('models', savedModels.filter(m => m !== model));
+                                        }}
+                                        className="ml-1 text-zinc-500 hover:text-red-455 transition-colors rounded p-0.5"
+                                      >
+                                        <X size={7} />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-[9px] text-zinc-650 italic select-none col-span-2">暂未检索到对话模型</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="pt-2 grid grid-cols-2 gap-4">
@@ -1380,10 +2341,12 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowPullModal(true)}
-                    className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-[10px] font-bold transition-all shadow-md shrink-0 cursor-pointer"
+                    onClick={handleModelScopeDiscover}
+                    disabled={msDiscoveringStatus === 'testing'}
+                    className="px-3 py-1.5 hover:bg-[#c2410c] text-white rounded-lg text-[10px] font-black tracking-wider flex items-center gap-1 transition-all active:scale-95 shadow-md bg-orange-600 shadow-orange-950/10 cursor-pointer disabled:opacity-50"
                   >
-                    拉取模型
+                    <RotateCw size={10} className={msDiscoveringStatus === 'testing' ? 'animate-spin' : ''} />
+                    <span>{msDiscoveringStatus === 'testing' ? '正在拉取...' : '拉取模型'}</span>
                   </button>
                   <button
                     type="button"
@@ -1395,92 +2358,139 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
                 </div>
               </div>
 
-              {/* Grid with categorised models */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Image Models block */}
-                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                    <span className="text-[10px] font-bold text-red-400">● 生图模型 (Image Models)</span>
-                    <button
-                      type="button"
-                      onClick={() => { setAddingModelType('image'); setManualModelName(''); }}
-                      className="px-1.5 py-0.5 bg-white/5 hover:bg-white/10 rounded hover:text-white text-[9px] text-zinc-400 font-bold"
-                    >
-                      + 模型
-                    </button>
+              {/* ModelScope successful/failed notification banners */}
+              {msDiscoveringStatus === 'success' && (
+                <div className="p-3 border border-emerald-500/20 bg-emerald-500/10 rounded-xl text-[10px] text-emerald-400 font-mono flex flex-col gap-1.5 leading-relaxed">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+                    <span>🎉 魔搭拉取成功！已自动智能归类并同步 {msDiscoveredCount} 个可用运行节点！</span>
                   </div>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                    {msImageModels.map(m => (
-                      <div key={m} className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group">
-                        <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
-                        <button
-                          type="button"
-                          onClick={() => setMsImageModels(prev => prev.filter(x => x !== m))}
-                          className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Chat Models block */}
-                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                    <span className="text-[10px] font-bold text-red-400">● 聊天/LLM模型 (Chat Models)</span>
-                    <button
-                      type="button"
-                      onClick={() => { setAddingModelType('chat'); setManualModelName(''); }}
-                      className="px-1.5 py-0.5 bg-white/5 hover:bg-white/10 rounded hover:text-white text-[9px] text-zinc-400 font-bold"
-                    >
-                      + 模型
-                    </button>
-                  </div>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                    {msChatModels.map(m => (
-                      <div key={m} className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group">
-                        <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
-                        <button
-                          type="button"
-                          onClick={() => setMsChatModels(prev => prev.filter(x => x !== m))}
-                          className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Popover popup details for manually adding model ID */}
-              {addingModelType && (
-                <div className="bg-black/80 p-3.5 rounded-xl border border-red-500/20 space-y-3.5 mt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-red-400 uppercase tracking-wide">添加新拼装模型 ({addingModelType === 'image' ? '生图' : '聊天'})</span>
-                    <button type="button" onClick={() => setAddingModelType(null)} className="text-zinc-500 hover:text-white text-[11px] font-sans">✕</button>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={manualModelName}
-                      onChange={(e) => setManualModelName(e.target.value)}
-                      placeholder="例如: brand/model-id-or-name"
-                      className="flex-1 bg-zinc-900 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none font-mono focus:border-red-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddManualModel}
-                      className="px-3 bg-red-600 hover:bg-red-500 font-bold text-xs text-white rounded-lg cursor-pointer"
-                    >
-                      确认添加
-                    </button>
+                  <div>
+                    <span className="text-zinc-500 font-sans">对应接口:</span> <span className="text-zinc-300 break-all">{msDiscoveredEndpoint}</span>
                   </div>
                 </div>
               )}
+
+              {msDiscoveringStatus === 'failed' && (
+                <div className="p-3 border border-red-500/10 bg-red-500/10 rounded-xl text-[10px] text-red-400 font-mono break-all leading-relaxed whitespace-pre-line">
+                  ⚠️ 拉取失败: {msDiscoveringError}
+                </div>
+              )}
+
+              {/* Dynamic search/filter input for ModelScope lists */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={msModelSearch}
+                  onChange={(e) => setMsModelSearch(e.target.value)}
+                  placeholder="🔍 检索过滤已拉取的魔搭平台模型 (输入关键字立即过滤)..."
+                  className="w-full bg-black/40 border border-[#ea580c]/10 hover:border-[#ea580c]/30 rounded-xl pl-9 pr-8 py-2 text-[10px] text-white outline-none focus:border-orange-500 transition-all font-sans"
+                />
+                <Search size={10} className="text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                {msModelSearch && (
+                  <button 
+                    type="button" 
+                    onClick={() => setMsModelSearch('')} 
+                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded px-1.5 py-0.5 text-[8.5px] font-sans"
+                  >
+                    清空
+                  </button>
+                )}
+              </div>
+
+              {/* Grid with categorised models with sorted and filtered items */}
+              {(() => {
+                const sortedMsImage = sortWithPriority(msImageModels, 'modelscope');
+                const sortedMsChat = sortWithPriority(msChatModels, 'modelscope');
+                
+                const filteredMsImage = msModelSearch
+                  ? sortedMsImage.filter(m => m.toLowerCase().includes(msModelSearch.toLowerCase()))
+                  : sortedMsImage;
+                
+                const filteredMsChat = msModelSearch
+                  ? sortedMsChat.filter(m => m.toLowerCase().includes(msModelSearch.toLowerCase()))
+                  : sortedMsChat;
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* Image Models block */}
+                    <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                        <span className="text-[10px] font-bold text-red-400">● 生图模型 (Image Models)</span>
+                        <button
+                          type="button"
+                          onClick={() => { setAddingModelType('image'); setManualModelName(''); }}
+                          className="px-1.5 py-0.5 bg-white/5 hover:bg-white/10 rounded hover:text-white text-[9px] text-zinc-400 font-bold"
+                        >
+                          + 模型
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                        {filteredMsImage.length > 0 ? (
+                          filteredMsImage.map(m => (
+                            <div 
+                              key={m} 
+                              onMouseEnter={(e) => handleModelEnter(e, m, 'image')}
+                              onMouseLeave={handleModelLeave}
+                              className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group"
+                            >
+                              <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
+                              <button
+                                type="button"
+                                onClick={() => setMsImageModels(prev => prev.filter(x => x !== m))}
+                                className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-[9px] text-zinc-650 italic py-2">无匹配的生图模型</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Chat Models block */}
+                    <div className="bg-black/20 p-4 rounded-2xl border border-white/5 space-y-3">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                        <span className="text-[10px] font-bold text-red-400">● 聊天/LLM模型 (Chat Models)</span>
+                        <button
+                          type="button"
+                          onClick={() => { setAddingModelType('chat'); setManualModelName(''); }}
+                          className="px-1.5 py-0.5 bg-white/5 hover:bg-white/10 rounded hover:text-white text-[9px] text-zinc-400 font-bold"
+                        >
+                          + 模型
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                        {filteredMsChat.length > 0 ? (
+                          filteredMsChat.map(m => (
+                            <div 
+                              key={m} 
+                              onMouseEnter={(e) => handleModelEnter(e, m, 'chat')}
+                              onMouseLeave={handleModelLeave}
+                              className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group"
+                            >
+                              <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
+                              <button
+                                type="button"
+                                onClick={() => setMsChatModels(prev => prev.filter(x => x !== m))}
+                                className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-[9px] text-zinc-650 italic py-2">无匹配的聊天模型</div>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Fig 4: LoRA Loading settings (lora加载设置) */}
@@ -1862,12 +2872,15 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
 
             {/* Models checkboxes listing */}
             <div className="flex-1 overflow-y-auto custom-scrollbar my-2 border border-white/5 bg-black/40 rounded-2xl divide-y divide-white/5">
-              {upstreamModels
-                .filter(m => {
+              {(() => {
+                const filtered = upstreamModels.filter(m => {
                   const queryMatch = m.id.toLowerCase().includes(searchPullModel.toLowerCase());
                   const filterMatch = pullFilter === 'all' || m.type === pullFilter;
                   return queryMatch && filterMatch;
-                })
+                });
+                const sortedIds = sortWithPriority(filtered.map(x => x.id), 'modelscope');
+                return sortedIds.map(id => filtered.find(x => x.id === id)!).filter(Boolean);
+              })()
                 .map(m => {
                   return (
                     <label

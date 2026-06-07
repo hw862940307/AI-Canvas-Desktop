@@ -253,7 +253,31 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   // General States mapped to Node Data to ensure persistence
   const [activeTab, setActiveTab] = useState<string>(data.activeTab || 'gpt');
   const [prompt, setPrompt] = useState<string>(data.prompt || '');
+  const [isComposing, setIsComposing] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<string[]>(data.images || (data.imageUrl ? [data.imageUrl] : []));
+
+  const promptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const comfyParamsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const debouncedUpdatePrompt = (val: string) => {
+    if (promptTimeoutRef.current) {
+      clearTimeout(promptTimeoutRef.current);
+    }
+    promptTimeoutRef.current = setTimeout(() => {
+      handleUpdateField('prompt', val);
+    }, 250);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (promptTimeoutRef.current) {
+        clearTimeout(promptTimeoutRef.current);
+      }
+      if (comfyParamsTimeoutRef.current) {
+        clearTimeout(comfyParamsTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Dynamic Real-time Generation Timer state and effect
   const [generationTime, setGenerationTime] = useState<number | null>(null);
@@ -331,7 +355,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   const handleUpdateComfyParam = (key: string, value: any) => {
     const updated = { ...comfyParams, [key]: value };
     setComfyParams(updated);
-    handleUpdateField('comfyParams', updated);
+    
+    if (comfyParamsTimeoutRef.current) {
+      clearTimeout(comfyParamsTimeoutRef.current);
+    }
+    comfyParamsTimeoutRef.current = setTimeout(() => {
+      handleUpdateField('comfyParams', updated);
+    }, 250);
   };
 
   const handleToggleComfyParams = (e: React.MouseEvent) => {
@@ -521,7 +551,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
   // --- Mention/Reference Image Dropdown States & Logics with caret/cursor alignment ---
   const [showRefDropdown, setShowRefDropdown] = useState(false);
-  const [cursorIdx, setCursorIdx] = useState<number>(0);
+  const [dropdownActiveIdx, setDropdownActiveIdx] = useState<number>(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -587,7 +617,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   const updateCursorIndex = () => {
     if (textareaRef.current) {
       const start = textareaRef.current.selectionStart;
-      setCursorIdx(start);
       selectionStartRef.current = start;
     }
   };
@@ -595,7 +624,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setPrompt(val);
-    handleUpdateField('prompt', val);
+    debouncedUpdatePrompt(val);
     
     // Check if the typed character just before cursor is '@'
     const selStart = e.target.selectionStart;
@@ -603,6 +632,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     if (typedUpToCursor.endsWith('@')) {
       setShowRefDropdown(true);
       setActiveClickedTag(null);
+      setDropdownActiveIdx(0);
     }
     
     // Sync backdrop scroll on next frame
@@ -612,6 +642,15 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       }
       updateCursorIndex();
     }, 0);
+  };
+
+  const handleTextareaBlur = () => {
+    if (promptTimeoutRef.current) {
+      clearTimeout(promptTimeoutRef.current);
+    }
+    if (prompt !== data.prompt) {
+      handleUpdateField('prompt', prompt);
+    }
   };
 
   const handleTextareaClick = (e: React.MouseEvent<HTMLTextAreaElement>) => {
@@ -642,11 +681,11 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
           setActiveClickedTag(clickedTag);
           setShowRefDropdown(true);
+          setDropdownActiveIdx(clickedTag.imageIndex);
 
           // Select the entire tag text so it supports instant overwrite & visual highlight
           textarea.setSelectionRange(matchStart, matchEnd);
           
-          setCursorIdx(matchStart);
           selectionStartRef.current = matchStart;
           return;
         }
@@ -707,7 +746,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       textarea.setSelectionRange(start, end);
     }
 
-    setCursorIdx(start);
     selectionStartRef.current = start;
   };
 
@@ -759,7 +797,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       if (textareaRef.current) {
         textareaRef.current.focus();
         textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-        setCursorIdx(newCursorPos);
         selectionStartRef.current = newCursorPos;
       }
     }, 50);
@@ -794,7 +831,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         if (textareaRef.current) {
           textareaRef.current.focus();
           textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-          setCursorIdx(newCursorPos);
           selectionStartRef.current = newCursorPos;
         }
       }, 50);
@@ -807,6 +843,52 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
+
+    // 1. Arrow key navigation & Enter confirm for reference image dropdown helper
+    if (showRefDropdown && incomingImages.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setDropdownActiveIdx(prev => (prev + 1) % incomingImages.length);
+        return;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setDropdownActiveIdx(prev => (prev - 1 + incomingImages.length) % incomingImages.length);
+        return;
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSelectRefImage(dropdownActiveIdx);
+        return;
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowRefDropdown(false);
+        setActiveClickedTag(null);
+        return;
+      }
+    }
+
+    // 2. Prevent caret selection from typing INSIDE any tag block
+    const tagBlockRegex = /(@(?:图片|参考图)\s*\d+)/g;
+    let tagBlockMatch;
+    while ((tagBlockMatch = tagBlockRegex.exec(prompt)) !== null) {
+      const matchStart = tagBlockMatch.index;
+      const matchEnd = matchStart + tagBlockMatch[0].length;
+      if (start === end && start > matchStart && start < matchEnd) {
+        const isControlOrMovementKey = [
+          'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+          'Home', 'End', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock'
+        ].includes(e.key);
+        
+        if (!isControlOrMovementKey) {
+          e.preventDefault();
+          const toStart = start - matchStart;
+          const toEnd = matchEnd - start;
+          const snapPos = toStart < toEnd ? matchStart : matchEnd;
+          textarea.setSelectionRange(snapPos, snapPos);
+          selectionStartRef.current = snapPos;
+          return;
+        }
+      }
+    }
 
     // Active clicked tag overrides inside handleKeyDown
     if (activeClickedTag) {
@@ -826,7 +908,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
           if (textareaRef.current) {
             textareaRef.current.focus();
             textareaRef.current.setSelectionRange(newPos, newPos);
-            setCursorIdx(newPos);
             selectionStartRef.current = newPos;
           }
         }, 0);
@@ -854,7 +935,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
           if (textareaRef.current) {
             textareaRef.current.focus();
             textareaRef.current.setSelectionRange(newPos, newPos);
-            setCursorIdx(newPos);
             selectionStartRef.current = newPos;
           }
         }, 0);
@@ -882,7 +962,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
             if (textareaRef.current) {
               textareaRef.current.focus();
               textareaRef.current.setSelectionRange(matchStart, matchStart);
-              setCursorIdx(matchStart);
               selectionStartRef.current = matchStart;
             }
           }, 0);
@@ -911,7 +990,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
             if (textareaRef.current) {
               textareaRef.current.focus();
               textareaRef.current.setSelectionRange(matchStart, matchStart);
-              setCursorIdx(matchStart);
               selectionStartRef.current = matchStart;
             }
           }, 0);
@@ -961,17 +1039,17 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
               
               setActiveClickedTag(clickedTag);
               setShowRefDropdown(true);
+              setDropdownActiveIdx(imageIndex);
               
               if (textareaRef.current) {
                 textareaRef.current.focus();
                 textareaRef.current.setSelectionRange(startIdx, endIdx);
-                setCursorIdx(startIdx);
                 selectionStartRef.current = startIdx;
               }
             }}
-            className={`inline-block font-mono font-bold text-[11px] px-1.5 py-0.5 rounded-md border tracking-wider select-none transition-all cursor-pointer pointer-events-auto hover:scale-[1.03] active:scale-95 ${
+            className={`inline font-sans font-bold px-1 py-0.5 rounded border tracking-normal select-none transition-all cursor-pointer pointer-events-auto hover:bg-indigo-500/25 ${
               isActive 
-                ? 'bg-indigo-600/30 border-indigo-400 text-indigo-300 ring-2 ring-indigo-500/50 shadow-[0_0_8px_rgba(99,102,241,0.4)]' 
+                ? 'bg-indigo-650/40 border-indigo-400 text-indigo-300 ring-2 ring-indigo-500/50 shadow-[0_0_8px_rgba(99,102,241,0.4)]' 
                 : 'bg-indigo-600/20 border-indigo-500/20 text-indigo-400 hover:border-indigo-400 hover:text-indigo-300'
             }`}
           >
@@ -2761,6 +2839,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
             {showRefDropdown && incomingImages.length > 0 && (
               <div className="absolute bottom-full left-0 mb-2 w-full bg-[#16161a] border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-2xl z-50 max-h-[220px] overflow-y-auto custom-scrollbar">
                 {incomingImages.map((url, idx) => {
+                  const isHighlighted = idx === dropdownActiveIdx;
                   const isSelected = activeClickedTag 
                     ? activeClickedTag.imageIndex === idx 
                     : prompt.includes(`@图片${idx + 1}`) || prompt.includes(`@参考图${idx + 1}`);
@@ -2769,18 +2848,21 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                       key={idx}
                       type="button"
                       onClick={() => handleSelectRefImage(idx)}
+                      onMouseEnter={() => setDropdownActiveIdx(idx)}
                       className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all cursor-pointer text-left border-none w-full ${
-                        isSelected 
-                          ? 'bg-indigo-650/20 text-indigo-400 font-extrabold' 
-                          : 'bg-transparent text-zinc-350 hover:text-white hover:bg-white/5'
+                        isHighlighted 
+                          ? 'bg-indigo-650/40 text-indigo-400 font-extrabold ring-1 ring-indigo-500/30' 
+                          : isSelected 
+                            ? 'bg-indigo-650/15 text-indigo-400 font-extrabold' 
+                            : 'bg-transparent text-zinc-350 hover:text-white hover:bg-white/5'
                       }`}
                     >
                       <ImageGenRefThumbnail 
                         url={url} 
                         alt={`Pic ${idx + 1}`} 
-                        className={`w-7 h-7 rounded-lg object-cover bg-black/20 border ${isSelected ? 'border-accent/40' : 'border-white/5'}`} 
+                        className={`w-7 h-7 rounded-lg object-cover bg-black/20 border ${isHighlighted || isSelected ? 'border-accent/40' : 'border-white/5'}`} 
                       />
-                      <span className={`text-xs font-bold ${isSelected ? 'text-indigo-400' : ''}`}>
+                      <span className={`text-xs font-bold ${isHighlighted || isSelected ? 'text-indigo-400' : ''}`}>
                         图片{idx + 1} {isSelected && '(已选)'}
                       </span>
                     </button>
@@ -2791,10 +2873,10 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
             {/* The beautifully synchronized rich mention field */}
             <div className="relative w-full min-h-[110px] bg-[#121214]/60 border border-white/5 rounded-2xl focus-within:border-indigo-500/50 transition-all overflow-hidden cursor-text">
-              {/* Backdrop rendering layered on top (z-20) with pointer-events-none but tags override with pointer-events-auto */}
+              {/* Backdrop rendering layered at bottom (z-10) with pointer-events-none and select-none */}
               <div 
                 ref={backdropRef}
-                className={`absolute inset-0 p-4 font-sans text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words text-transparent pointer-events-none select-none overflow-y-auto custom-scrollbar z-20 ${getFontSizeClass()}`}
+                className={`absolute inset-0 p-4 font-sans text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words text-transparent pointer-events-none select-none overflow-y-auto custom-scrollbar z-10 ${getFontSizeClass()}`}
                 style={{
                   ...getFontSizeStyle(),
                   maxHeight: '100%'
@@ -2803,23 +2885,30 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                 {renderHighlightedPrompt()}
               </div>
               
-              {/* Actual interactive `<textarea>` below backdrop (z-10) with synchronized caret */}
+              {/* Actual interactive `<textarea>` on top (z-20) with synchronized caret and IME composition support */}
               <textarea
                 ref={textareaRef}
                 style={{
                   ...getFontSizeStyle(),
                   caretColor: '#818cf8', // Indigo focus blinking caret
-                  color: prompt ? 'transparent' : 'var(--text-primary)',
+                  color: (isComposing || !prompt) ? 'var(--text-primary)' : 'transparent',
+                  WebkitTextFillColor: (isComposing || !prompt) ? 'var(--text-primary)' : 'transparent',
                   background: 'transparent',
                 }}
                 value={prompt}
                 onChange={handleTextareaChange}
+                onBlur={handleTextareaBlur}
                 onClick={handleTextareaClick}
                 onSelect={handleTextareaSelect}
                 onKeyUp={handleTextareaSelect}
                 onScroll={handleTextareaScroll}
                 onKeyDown={handleKeyDown}
-                className={`absolute inset-0 w-full h-full p-4 bg-transparent border-transparent resize-none focus:outline-none focus:ring-0 ${activeClickedTag ? 'selection:bg-transparent' : 'selection:bg-indigo-500/20'} ${getFontSizeClass()} custom-scrollbar z-10`}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={(e: any) => {
+                  setIsComposing(false);
+                  handleTextareaChange(e);
+                }}
+                className={`absolute inset-0 w-full h-full p-4 font-sans text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words bg-transparent border-none outline-none ring-0 resize-none focus:outline-none focus:ring-0 focus:border-none z-20 custom-scrollbar ${activeClickedTag ? 'selection:bg-transparent' : 'selection:bg-indigo-500/20'} ${getFontSizeClass()}`}
                 placeholder="描述你想要生成的内容，输入 @ 可引用已连接的参考图..."
               />
             </div>

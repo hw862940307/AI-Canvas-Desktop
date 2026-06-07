@@ -128,6 +128,7 @@ export interface ApiSettings {
     baseUrl: string;
     apiKey: string;
     modelId: string;
+    models?: string[];
   }>;
   activeProfileId?: string;
   // ModelScope specific fields

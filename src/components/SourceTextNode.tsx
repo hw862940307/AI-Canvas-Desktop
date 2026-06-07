@@ -23,20 +23,47 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
   const settings = useStore((s) => s.settings);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [localText, setLocalText] = useState(data.text || '');
+  const updateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const lastPushedTextRef = React.useRef(data.text || '');
 
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Sync local state with store updates (e.g. clear, fullscreen edit)
   useEffect(() => {
-    if (data.text !== localText) {
+    if (data.text !== localText && data.text !== lastPushedTextRef.current) {
       setLocalText(data.text || '');
+      lastPushedTextRef.current = data.text || '';
     }
   }, [data.text]);
 
   const handleTextChange = (val: string) => {
     setLocalText(val);
-    updateNodeData(id, { text: val });
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    updateTimeoutRef.current = setTimeout(() => {
+      lastPushedTextRef.current = val;
+      updateNodeData(id, { text: val });
+    }, 250);
   };
+
+  const handleBlur = () => {
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    if (localText !== data.text) {
+      lastPushedTextRef.current = localText;
+      updateNodeData(id, { text: localText });
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -123,6 +150,8 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
   };
 
   const clearText = () => {
+    setLocalText('');
+    lastPushedTextRef.current = '';
     updateNodeData(id, { text: '' });
   };
 
@@ -232,6 +261,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
           style={getFontSizeStyle()}
           value={localText}
           onChange={(e) => handleTextChange(e.target.value)}
+          onBlur={handleBlur}
           className={`nodrag nowheel w-full flex-1 bg-transparent text-[var(--text-primary)] outline-none resize-none placeholder:text-[var(--text-secondary)]/30 font-sans transition-all ${getFontSizeClass()} ${
             data.alignment === 'center' ? 'text-center' : data.alignment === 'right' ? 'text-right' : 'text-left'
           }`}
@@ -240,7 +270,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
         
         <div className="mt-4 pt-4 border-t border-[var(--border)] flex justify-end shrink-0">
            <div className="text-sm text-[var(--text-secondary)]/50 font-mono">
-              {data.text?.length || 0} 字
+              {localText.length} 字
            </div>
         </div>
       </div>
@@ -254,6 +284,8 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
               initialAlignment={data.alignment || 'left'}
               onClose={() => setIsFullScreen(false)}
               onSave={(newText, newAlignment) => {
+                setLocalText(newText);
+                lastPushedTextRef.current = newText;
                 updateNodeData(id, { text: newText, alignment: newAlignment });
                 setIsFullScreen(false);
               }}
