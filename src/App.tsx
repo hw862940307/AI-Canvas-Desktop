@@ -19,6 +19,7 @@ import {
   Node,
 } from "@xyflow/react";
 import { useStore, getFreshWf4Content } from "./store/useStore";
+import { get, set as idbSet } from "idb-keyval";
 import { TextNode } from "./components/TextNode";
 import { ImageGenNode } from "./components/ImageGenNode";
 import { TextGenNode } from "./components/TextGenNode";
@@ -82,6 +83,10 @@ import {
   Check,
   LogOut,
   Pin,
+  ChevronLeft,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -196,6 +201,21 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [isBottomPinned, setIsBottomPinned] = useState(true);
   const [isAssistantHovered, setIsAssistantHovered] = useState(false);
 
+  // Z Zoom Mode States
+  const [isZMode, setIsZMode] = useState(false);
+  const [isZDragging, setIsZDragging] = useState(false);
+  const [activeZButton, setActiveZButton] = useState<number | null>(null);
+  const [currentSlideDirection, setCurrentSlideDirection] = useState<'none' | 'horizontal' | 'vertical'>('none');
+  const [mouseCoords, setMouseCoords] = useState({ x: 0, y: 0 });
+
+  const zDragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const zLastMousePosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const zDragStartViewerScaleRef = useRef<number>(1);
+  const zDragStartCanvasZoomRef = useRef<number>(1);
+  const zKeyPressTimeRef = useRef<number>(0);
+  const isZModeBeforeDownRef = useRef<boolean>(false);
+  const zDragButtonRef = useRef<number>(-1);
+
   const {
     nodes,
     setNodes,
@@ -273,7 +293,101 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
   }, []);
 
   const mainContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Custom High-Fidelity Fullscreen Image Viewer States
+  const [viewerNodeId, setViewerNodeId] = useState<string | null>(null);
+  const [viewerZoomScale, setViewerZoomScale] = useState(1);
+  const [viewerZoomOffset, setViewerZoomOffset] = useState({ x: 0, y: 0 });
+  const [viewerRotation, setViewerRotation] = useState(0);
+  const [viewerShowMinimap, setViewerShowMinimap] = useState(true);
+  const [viewerShowFilmstrip, setViewerShowFilmstrip] = useState(true);
+
+  useEffect(() => {
+    const handleOpenViewer = (e: any) => {
+      const { nodeId } = e.detail;
+      if (nodeId) {
+        setViewerNodeId(nodeId);
+        setViewerZoomScale(1);
+        setViewerZoomOffset({ x: 0, y: 0 });
+        setViewerRotation(0);
+      }
+    };
+    window.addEventListener('open-image-viewer', handleOpenViewer as any);
+    return () => {
+      window.removeEventListener('open-image-viewer', handleOpenViewer as any);
+    };
+  }, []);
+
   const [cuttingPoints, setCuttingPoints] = useState<Array<{ x: number; y: number }>>([]);
+
+  // All image-source nodes in the canvas
+  const canvasImageNodes = useMemo(() => {
+    return nodes.filter((n: any) => n.type === 'image-source' && n.data?.url);
+  }, [nodes]);
+
+  const activeViewerIndex = useMemo(() => {
+    if (!viewerNodeId) return -1;
+    return canvasImageNodes.findIndex((n: any) => n.id === viewerNodeId);
+  }, [canvasImageNodes, viewerNodeId]);
+
+  const activeViewerNode = useMemo<any>(() => {
+    if (activeViewerIndex === -1) return null;
+    return canvasImageNodes[activeViewerIndex];
+  }, [canvasImageNodes, activeViewerIndex]);
+
+  const goViewerPrev = useCallback(() => {
+    if (canvasImageNodes.length <= 1) return;
+    const prevIndex = (activeViewerIndex - 1 + canvasImageNodes.length) % canvasImageNodes.length;
+    setViewerNodeId(canvasImageNodes[prevIndex].id);
+    setViewerZoomScale(1);
+    setViewerZoomOffset({ x: 0, y: 0 });
+    setViewerRotation(0);
+  }, [canvasImageNodes, activeViewerIndex]);
+
+  const goViewerNext = useCallback(() => {
+    if (canvasImageNodes.length <= 1) return;
+    const nextIndex = (activeViewerIndex + 1) % canvasImageNodes.length;
+    setViewerNodeId(canvasImageNodes[nextIndex].id);
+    setViewerZoomScale(1);
+    setViewerZoomOffset({ x: 0, y: 0 });
+    setViewerRotation(0);
+  }, [canvasImageNodes, activeViewerIndex]);
+
+  const deleteViewerNode = useCallback(() => {
+    if (!activeViewerNode) return;
+    const nodeIdToDelete = activeViewerNode.id;
+    
+    // Select the next available image node first to keep lightbox persistent
+    if (canvasImageNodes.length > 1) {
+      const nextIndex = (activeViewerIndex + 1) % canvasImageNodes.length;
+      setViewerNodeId(canvasImageNodes[nextIndex].id);
+    } else {
+      setViewerNodeId(null);
+    }
+    
+    // Trigger delete in store
+    setNodes(nodes.filter((n: any) => n.id !== nodeIdToDelete));
+  }, [activeViewerNode, canvasImageNodes, activeViewerIndex, nodes, setNodes]);
+
+  // Support key bindings inside viewer
+  useEffect(() => {
+    if (!viewerNodeId) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        goViewerPrev();
+      } else if (e.key === 'ArrowRight') {
+        goViewerNext();
+      } else if (e.key === 'Escape') {
+        setViewerNodeId(null);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [viewerNodeId, goViewerPrev, goViewerNext]);
   const [isCutting, setIsCutting] = useState(false);
 
   const onEdgesChangeRef = useRef(onEdgesChange);
@@ -1236,6 +1350,204 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     }, 2500);
   };
 
+  // Tracking state and refs for Ctrl + Right Click arrangement drag gesture
+  const latestNodesRef = useRef(nodes);
+  const latestSettingsRef = useRef(settings);
+  const latestSetNodesRef = useRef(setNodes);
+  const latestTakeSnapshotRef = useRef(takeSnapshot);
+  const latestShowChatNotificationRef = useRef(showChatNotification);
+
+  useEffect(() => {
+    latestNodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
+    latestSettingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    latestSetNodesRef.current = setNodes;
+  }, [setNodes]);
+
+  useEffect(() => {
+    latestTakeSnapshotRef.current = takeSnapshot;
+  }, [takeSnapshot]);
+
+  useEffect(() => {
+    latestShowChatNotificationRef.current = showChatNotification;
+  }, [showChatNotification]);
+
+  useEffect(() => {
+    const mainEl = mainContainerRef.current;
+    if (!mainEl) return;
+
+    let isArranging = false;
+    let startX = 0;
+    let startY = 0;
+    let hasTriggered = false;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // e.button === 2 is Right-Click
+      if (e.button === 2 && e.ctrlKey) {
+        const selected = latestNodesRef.current.filter((n: any) => n.selected);
+        if (selected.length >= 2) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          isArranging = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          hasTriggered = false;
+        }
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isArranging || hasTriggered) return;
+
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const threshold = 25; // threshold of movement pixels
+
+      if (distance > threshold) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const selectedNodes = latestNodesRef.current.filter((n: any) => n.selected);
+        if (selectedNodes.length >= 2) {
+          const type = Math.abs(dy) > Math.abs(dx) ? 'vertical' : 'horizontal';
+          
+          if (latestTakeSnapshotRef.current) {
+            latestTakeSnapshotRef.current();
+          }
+
+          // Sort nodes
+          const sorted = [...selectedNodes].sort((a, b) => 
+            type === 'horizontal' ? a.position.x - b.position.x : a.position.y - b.position.y
+          );
+
+          const spacing = latestSettingsRef.current.alignmentSpacing || 40;
+          const currentNodesState = latestNodesRef.current;
+
+          // First node determines starting coordinates
+          const firstNodeId = sorted[0].id;
+          const startNodeInNds = currentNodesState.find(node => node.id === firstNodeId);
+          const startXPos = startNodeInNds ? startNodeInNds.position.x : sorted[0].position.x;
+          const startYPos = startNodeInNds ? startNodeInNds.position.y : sorted[0].position.y;
+
+          let currentPos = type === 'horizontal' ? startXPos : startYPos;
+          const targetFixed = type === 'horizontal' ? startYPos : startXPos;
+
+          // Precompute starting positions and target final positions
+          const startPositions: { [id: string]: { x: number; y: number } } = {};
+          const targetPositions: { [id: string]: { x: number; y: number } } = {};
+
+          sorted.forEach((n, idx) => {
+            const actualNode = currentNodesState.find(node => node.id === n.id);
+            if (!actualNode) return;
+
+            startPositions[n.id] = {
+              x: actualNode.position.x,
+              y: actualNode.position.y
+            };
+
+            if (idx === 0) {
+              targetPositions[n.id] = {
+                x: type === 'horizontal' ? actualNode.position.x : targetFixed,
+                y: type === 'vertical' ? actualNode.position.y : targetFixed
+              };
+              currentPos += type === 'horizontal' ? (actualNode.measured?.width || actualNode.width || 200) + spacing : (actualNode.measured?.height || actualNode.height || 200) + spacing;
+            } else {
+              const newPos = currentPos;
+              targetPositions[n.id] = {
+                x: type === 'horizontal' ? newPos : targetFixed,
+                y: type === 'vertical' ? newPos : targetFixed
+              };
+              currentPos += type === 'horizontal' ? (actualNode.measured?.width || actualNode.width || 200) + spacing : (actualNode.measured?.height || actualNode.height || 200) + spacing;
+            }
+          });
+
+          // Animation control loop
+          const startTime = performance.now();
+          const duration = 350; // Smooth 350ms transition
+
+          const animateTransition = (now: number) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Cubic easeInOut easing function
+            const ease = progress < 0.5 
+              ? 4 * progress * progress * progress 
+              : (progress - 1) * (2 * progress - 2) * (2 * progress - 2) + 1;
+
+            const currentNodes = useStore.getState().nodes;
+            const updatedNodes = currentNodes.map(n => {
+              const start = startPositions[n.id];
+              const target = targetPositions[n.id];
+              if (start && target) {
+                return {
+                  ...n,
+                  position: {
+                    x: start.x + (target.x - start.x) * ease,
+                    y: start.y + (target.y - start.y) * ease
+                  }
+                };
+              }
+              return n;
+            });
+            latestSetNodesRef.current(updatedNodes);
+
+            if (progress < 1) {
+              requestAnimationFrame(animateTransition);
+            }
+          };
+
+          requestAnimationFrame(animateTransition);
+
+          if (latestShowChatNotificationRef.current) {
+            latestShowChatNotificationRef.current(`已调整：框选节点已${type === 'horizontal' ? '横向' : '垂直'}渐变排列`);
+          }
+        }
+
+        hasTriggered = true;
+        isArranging = false;
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isArranging) {
+        if (e.button === 2) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        isArranging = false;
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      if (e.ctrlKey) {
+        const selected = latestNodesRef.current.filter((n: any) => n.selected);
+        if (selected.length >= 2) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    mainEl.addEventListener("mousedown", handleMouseDown, { capture: true });
+    window.addEventListener("mousemove", handleMouseMove, { capture: true });
+    window.addEventListener("mouseup", handleMouseUp, { capture: true });
+    mainEl.addEventListener("contextmenu", handleContextMenu, { capture: true });
+
+    return () => {
+      mainEl.removeEventListener("mousedown", handleMouseDown, { capture: true });
+      window.removeEventListener("mousemove", handleMouseMove, { capture: true });
+      window.removeEventListener("mouseup", handleMouseUp, { capture: true });
+      mainEl.removeEventListener("contextmenu", handleContextMenu, { capture: true });
+    };
+  }, []);
+
   const handleRateMessage = (index: number, rateType: "like" | "dislike") => {
     const nextHistory = [...chatHistory];
     const currentMsg = nextHistory[index];
@@ -1417,6 +1729,175 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     }
   };
 
+  // Dedicated useEffect to track active hold of Z/z
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'z') {
+        if (e.repeat) return;
+        setIsZMode(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'z') {
+        setIsZMode(false);
+      }
+    };
+
+    const handleBlur = () => {
+      setIsZMode(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  // Capture drag-zooming on the canvas or fullscreen viewer when inside Z mode
+  useEffect(() => {
+    if (!isZMode) {
+      setIsZDragging(false);
+      setActiveZButton(null);
+      zDragButtonRef.current = -1;
+      return;
+    }
+
+    const handleMouseMoveGlobal = (e: MouseEvent) => {
+      setMouseCoords({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener('mousemove', handleMouseMoveGlobal);
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).closest('button') ||
+        (e.target as HTMLElement).closest('input') ||
+        (e.target as HTMLElement).closest('select') ||
+        (e.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.button !== 0 && e.button !== 2) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      setIsZDragging(true);
+      setActiveZButton(e.button);
+      zDragButtonRef.current = e.button;
+      zDragStartPosRef.current = { x: e.clientX, y: e.clientY };
+      zLastMousePosRef.current = { x: e.clientX, y: e.clientY };
+      zDragStartViewerScaleRef.current = viewerZoomScale;
+      
+      try {
+        const flowZoom = getZoom();
+        zDragStartCanvasZoomRef.current = flowZoom;
+      } catch (err) {
+        zDragStartCanvasZoomRef.current = 1;
+      }
+
+      setCurrentSlideDirection('none');
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!zDragStartPosRef.current) return;
+
+      const dx = e.clientX - zLastMousePosRef.current.x;
+      const dy = e.clientY - zLastMousePosRef.current.y;
+      zLastMousePosRef.current = { x: e.clientX, y: e.clientY };
+
+      if (dx === 0) return;
+
+      // Silkiness factor (Photoshop match)
+      const speedFactor = 0.003;
+
+      if (viewerNodeId) {
+        setViewerZoomScale(prev => {
+          let nextZoom = prev;
+          if (zDragButtonRef.current === 0) {
+            // 左滑(dx < 0) = 放大, 右滑(dx > 0) = 缩小
+            nextZoom = prev * (1 - dx * speedFactor);
+          }
+          return Math.min(Math.max(nextZoom, 0.1), 20);
+        });
+      } else {
+        try {
+          const viewport = getViewport();
+          const rect = mainContainerRef.current?.getBoundingClientRect();
+          const cx = e.clientX;
+          const cy = e.clientY;
+
+          const flowX = (cx - (rect ? rect.left : 0) - viewport.x) / viewport.zoom;
+          const flowY = (cy - (rect ? rect.top : 0) - viewport.y) / viewport.zoom;
+
+          let nextZoom = viewport.zoom;
+          if (zDragButtonRef.current === 0) {
+            // 左滑(dx < 0) = 放大, 右滑(dx > 0) = 缩小
+            nextZoom = viewport.zoom * (1 - dx * speedFactor);
+          }
+          nextZoom = Math.min(Math.max(nextZoom, 0.05), 4);
+
+          const nextX = cx - (rect ? rect.left : 0) - flowX * nextZoom;
+          const nextY = cy - (rect ? rect.top : 0) - flowY * nextZoom;
+
+          setViewport({ x: nextX, y: nextY, zoom: nextZoom });
+        } catch (err) {
+          console.error("Canvas Zoom adjustment error:", err);
+        }
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      setIsZDragging(false);
+      setActiveZButton(null);
+      zDragButtonRef.current = -1;
+      zDragStartPosRef.current = null;
+      setCurrentSlideDirection('none');
+    };
+
+    // Suppress active system right-click context menu while Z key is held
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    window.addEventListener('mousedown', handleMouseDown, true);
+    window.addEventListener('mousemove', handleMouseMove, true);
+    window.addEventListener('mouseup', handleMouseUp, true);
+    window.addEventListener('contextmenu', handleContextMenu, true);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMoveGlobal);
+      window.removeEventListener('mousedown', handleMouseDown, true);
+      window.removeEventListener('mousemove', handleMouseMove, true);
+      window.removeEventListener('mouseup', handleMouseUp, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
+    };
+  }, [isZMode, viewerNodeId, getViewport, setViewport, getZoom, viewerZoomScale]);
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -1508,30 +1989,158 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
       // 3. Handle external file drop
       const files = event.dataTransfer.files;
       if (files && files.length > 0) {
-        Array.from(files).forEach((file: File) => {
-          if (file.type.startsWith("image/")) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const imageUrl = e.target?.result as string;
-              // Load image dimensions first
-              const img = new Image();
-              img.onload = () => {
-                addNode("image-source", position.x - 150, position.y - 120, {
-                  url: imageUrl,
-                  name: file.name,
-                  originalWidth: img.width,
-                  originalHeight: img.height,
-                });
-              };
-              img.src = imageUrl;
+        const imageFiles = Array.from(files).filter((file: File) => file.type.startsWith("image/"));
+        if (imageFiles.length > 0) {
+          const colSpacing = 440;
+          const rowSpacing = 640;
+          const maxCols = 10;
+          
+          imageFiles.forEach((file: File, index: number) => {
+            const col = index % maxCols;
+            const row = Math.floor(index / maxCols);
+            
+            const x = position.x + col * colSpacing;
+            const y = position.y + row * rowSpacing;
+
+            const nodeId = "node_" + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+            const dbCacheKey = `db_blob:${nodeId}`;
+            
+            // Asynchronously persist the original Blob in IndexedDB without lagging the rendering thread
+            idbSet(dbCacheKey, file).catch(err => {
+              console.error("Failed to store drop file into IDB", err);
+            });
+
+            // Fast, synchronous, allocation-free object URL to inspect image dimensions
+            const tempUrl = URL.createObjectURL(file);
+            const img = new Image();
+            
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2) + "M";
+            const ext = file.name.split('.').pop()?.toUpperCase() || "JPEG";
+
+            img.onload = () => {
+              const ratio = img.width / img.height;
+              const displayWidth = Math.min(img.width, 320);
+              const displayHeight = Math.round(displayWidth / ratio);
+
+              addNode("image-source", x, y, {
+                url: dbCacheKey,
+                name: file.name,
+                originalWidth: img.width,
+                originalHeight: img.height,
+                aspectRatio: ratio,
+                width: displayWidth,
+                height: displayHeight,
+                fileSize: sizeMB,
+                fileType: ext,
+                style: {
+                  width: displayWidth,
+                  height: displayHeight
+                }
+              }, nodeId);
+              
+              URL.revokeObjectURL(tempUrl);
             };
-            reader.readAsDataURL(file);
-          }
+            img.onerror = () => {
+              // Graceful fallback of standard sizes if dimensions fail to read
+              addNode("image-source", x, y, {
+                url: dbCacheKey,
+                name: file.name,
+                originalWidth: 400,
+                originalHeight: 300,
+                aspectRatio: 1.33,
+                width: 320,
+                height: 240,
+                fileSize: sizeMB,
+                fileType: ext,
+                style: {
+                  width: 320,
+                  height: 240
+                }
+              }, nodeId);
+              URL.revokeObjectURL(tempUrl);
+            };
+            img.src = tempUrl;
+          });
+        }
+        const isTextFile = (file: File) => {
+          const type = file.type;
+          const name = file.name.toLowerCase();
+          return type.startsWith("text/") || 
+                 type === "application/json" ||
+                 name.endsWith(".txt") || 
+                 name.endsWith(".md") ||
+                 name.endsWith(".json") ||
+                 name.endsWith(".csv") ||
+                 name.endsWith(".xml") ||
+                 name.endsWith(".log") ||
+                 name.endsWith(".yaml") ||
+                 name.endsWith(".yml") ||
+                 name.endsWith(".html") ||
+                 name.endsWith(".js") ||
+                 name.endsWith(".ts") ||
+                 name.endsWith(".jsx") ||
+                 name.endsWith(".tsx") ||
+                 name.endsWith(".css");
+        };
+
+        const textFiles = Array.from(files).filter(isTextFile);
+        if (textFiles.length > 0) {
+          const processTextFiles = async () => {
+            for (let index = 0; index < textFiles.length; index++) {
+              try {
+                const file = textFiles[index];
+                const textContent = await file.text();
+                if (textContent) {
+                  const rowSpacing = 200;
+                  const yOffset = index * rowSpacing;
+                  addNode("text-source", position.x - 150, position.y - 120 + yOffset, {
+                    text: textContent,
+                    name: file.name
+                  });
+                  // Add a small delay to avoid freezing UI and allow React to batch render
+                  await new Promise(res => setTimeout(res, 50));
+                }
+              } catch (err) {
+                console.error("Failed to read text file", err);
+              }
+            }
+          };
+          processTextFiles();
+        }
+      } else if (plainText && !isImgUrl(plainText.trim())) {
+        addNode("text-source", position.x - 150, position.y - 120, {
+          text: plainText,
+          name: "源文本"
         });
       }
     },
     [screenToFlowPosition, addNode],
   );
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      // Ignore paste if user is typing in an input field
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement ||
+        (document.activeElement as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      const text = e.clipboardData?.getData('text/plain');
+      if (text) {
+        const position = screenToFlowPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+        addNode("text-source", position.x - 150, position.y - 120, { text, name: "源文本" });
+      }
+    };
+    
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [screenToFlowPosition, addNode]);
 
   const [isCanvasDragging, setIsCanvasDragging] = useState(false);
   const dragCounter = useRef(0);
@@ -1566,6 +2175,8 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   return (
     <>
+
+
       {/* Main Workspace */}
       <div className="flex-1 flex flex-col relative h-full">
         {/* Top Hover Sensor */}
@@ -1641,9 +2252,6 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
               ? "border-accent/50 bg-accent/5"
               : "border-transparent"
           }`}
-          style={{
-            paddingLeft: showFileManager ? fileManagerWidth : 0,
-          }}
         >
           <ReactFlow
             nodes={highlightedNodes}
@@ -1655,7 +2263,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
             onConnectEnd={onConnectEndExtended}
             onNodeDragStart={() => takeSnapshot()}
             onSelectionDragStart={() => takeSnapshot()}
-            nodesDraggable={!isConnecting && activeOp === null}
+            nodesDraggable={isZMode ? false : (!isConnecting && activeOp === null)}
             nodeTypes={nodeTypes}
             onPaneContextMenu={onPaneContextMenu}
             onPaneClick={onPaneClick}
@@ -1667,14 +2275,20 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
             fitView
             snapToGrid={settings.snapToGrid}
             snapGrid={[24, 24]}
-            className="bg-[var(--bg-primary)]"
+            className={`bg-[var(--bg-primary)] ${
+              isZMode 
+                ? activeZButton === 0 
+                  ? '!cursor-zoom-out' 
+                  : '!cursor-zoom-in' 
+                : ''
+            }`}
             minZoom={0.05}
             maxZoom={4}
-            panOnDrag={activeOp === null ? [1] : false}
-            zoomOnScroll={activeOp === null}
-            zoomOnPinch={activeOp === null}
-            zoomOnDoubleClick={activeOp === null}
-            selectionOnDrag={true}
+            panOnDrag={isZMode ? false : (activeOp === null ? [1] : false)}
+            zoomOnScroll={isZMode ? false : (activeOp === null)}
+            zoomOnPinch={isZMode ? false : (activeOp === null)}
+            zoomOnDoubleClick={isZMode ? false : (activeOp === null)}
+            selectionOnDrag={isZMode ? false : true}
             selectionMode={SelectionMode.Partial}
             connectionRadius={60}
             connectOnClick={true}
@@ -2636,6 +3250,364 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
         {showFileManager && <FileManagerSidebar />}
       </AnimatePresence>
 
+      {/* Global High-Fidelity Fullscreen Image Viewer Modal */}
+      <AnimatePresence>
+        {viewerNodeId && activeViewerNode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onWheel={(e) => {
+              const delta = e.deltaY > 0 ? -0.15 : 0.15;
+              setViewerZoomScale(Math.min(Math.max(viewerZoomScale + delta, 0.45), 6));
+            }}
+            className="fixed inset-0 z-[10000] bg-[#09090b]/98 flex flex-col justify-between overflow-hidden text-zinc-300 font-sans select-none"
+          >
+            {/* Top Bar */}
+            <div className="w-full h-16 flex items-center justify-between px-6 bg-[#0c0c0e]/90 border-b border-zinc-900/80 backdrop-blur-md">
+              <div className="flex items-center gap-2">
+                <ImageIcon size={18} className="text-sky-500" />
+                <span className="text-sm font-semibold text-zinc-100 truncate max-w-[300px]">
+                  {activeViewerNode.data?.name || "画布图像"}
+                </span>
+              </div>
+              
+              <button 
+                onClick={() => setViewerNodeId(null)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-red-500/90 hover:border-red-500 shadow-lg cursor-pointer transition-all duration-150"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Main Interactive Viewing Stage */}
+            <div 
+              className={`w-full flex-1 relative flex items-center justify-center overflow-hidden bg-[#09090b] ${
+                isZMode 
+                  ? activeZButton === 0 
+                    ? 'cursor-zoom-out' 
+                    : 'cursor-zoom-in' 
+                  : 'cursor-grab active:cursor-grabbing'
+              }`}
+              onMouseDown={(e) => {
+                if (isZMode) return;
+                if ((e.target as HTMLElement).closest('button')) return;
+                
+                const startX = e.clientX - viewerZoomOffset.x;
+                const startY = e.clientY - viewerZoomOffset.y;
+                const downX = e.clientX;
+                const downY = e.clientY;
+                const downTime = Date.now();
+                
+                const handleMouseMove = (mmE: MouseEvent) => {
+                  setViewerZoomOffset({
+                    x: mmE.clientX - startX,
+                    y: mmE.clientY - startY
+                  });
+                };
+                
+                const handleMouseUp = (muE: MouseEvent) => {
+                  window.removeEventListener('mousemove', handleMouseMove);
+                  window.removeEventListener('mouseup', handleMouseUp);
+                  
+                  const dist = Math.sqrt(Math.pow(muE.clientX - downX, 2) + Math.pow(muE.clientY - downY, 2));
+                  const duration = Date.now() - downTime;
+                  
+                  if (dist < 5 && duration < 250) {
+                    setViewerZoomScale(prev => Math.min(prev + 0.5, 6));
+                  }
+                };
+                
+                window.addEventListener('mousemove', handleMouseMove);
+                window.addEventListener('mouseup', handleMouseUp);
+              }}
+            >
+              <ViewerImageLoader 
+                url={activeViewerNode.data?.url} 
+                nodeId={activeViewerNode.id} 
+                rotation={viewerRotation} 
+                zoomScale={viewerZoomScale} 
+                zoomOffset={viewerZoomOffset}
+              />
+
+              {/* Big Float Left Chevron Button */}
+              {canvasImageNodes.length > 1 && (
+                <button 
+                  onClick={goViewerPrev}
+                  className="absolute left-6 w-12 h-12 flex items-center justify-center rounded-full bg-zinc-900/60 border border-zinc-800 text-zinc-400 hover:text-white hover:scale-105 active:scale-95 transition-all cursor-pointer z-50 group shadow-lg"
+                >
+                  <ChevronLeft size={24} />
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-3.5 hidden group-hover:block bg-zinc-950 px-2.5 py-1 text-xs font-medium text-zinc-200 rounded border border-zinc-850 whitespace-nowrap shadow-xl">
+                    上一张(←)
+                  </div>
+                </button>
+              )}
+
+              {/* Big Float Right Chevron Button */}
+              {canvasImageNodes.length > 1 && (
+                <button 
+                  onClick={goViewerNext}
+                  className="absolute right-6 w-12 h-12 flex items-center justify-center rounded-full bg-zinc-900/60 border border-zinc-800 text-zinc-400 hover:text-white hover:scale-105 active:scale-95 transition-all cursor-pointer z-50 group shadow-lg"
+                >
+                  <ChevronRight size={24} />
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-3.5 hidden group-hover:block bg-zinc-950 px-2.5 py-1 text-xs font-medium text-zinc-200 rounded border border-zinc-850 whitespace-nowrap shadow-xl">
+                    下一张(→)
+                  </div>
+                </button>
+              )}
+            </div>
+
+            {/* Minimap (鸟瞰图) overlay */}
+            <AnimatePresence>
+              {viewerShowMinimap && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                  className="absolute bottom-28 right-6 w-48 bg-[#0e0e11]/95 border border-zinc-800 rounded-xl p-3 flex flex-col shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-[10005]"
+                >
+                  <div className="flex items-center justify-between pb-1.5 border-b border-zinc-900 mb-2">
+                    <span className="text-[11px] font-bold text-zinc-400 tracking-wider">鸟瞰图</span>
+                    <button 
+                      onClick={() => setViewerShowMinimap(false)}
+                      className="text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded p-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                  <div 
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const centerX = rect.left + rect.width / 2;
+                      const centerY = rect.top + rect.height / 2;
+                      
+                      const initialRelX = e.clientX - centerX;
+                      const initialRelY = e.clientY - centerY;
+                      
+                      const scaleMultiplier = 18;
+                      const startOffset = {
+                        x: initialRelX * scaleMultiplier,
+                        y: initialRelY * scaleMultiplier
+                      };
+                      setViewerZoomOffset(startOffset);
+                      
+                      const clickX = e.clientX;
+                      const clickY = e.clientY;
+                      
+                      const handleMouseMove = (mmE: MouseEvent) => {
+                        const dX = mmE.clientX - clickX;
+                        const dY = mmE.clientY - clickY;
+                        
+                        setViewerZoomOffset({
+                          x: startOffset.x + dX * scaleMultiplier,
+                          y: startOffset.y + dY * scaleMultiplier
+                        });
+                      };
+                      
+                      const handleMouseUp = () => {
+                        window.removeEventListener('mousemove', handleMouseMove);
+                        window.removeEventListener('mouseup', handleMouseUp);
+                      };
+                      
+                      window.addEventListener('mousemove', handleMouseMove);
+                      window.addEventListener('mouseup', handleMouseUp);
+                    }}
+                    className="w-full h-24 relative rounded bg-zinc-950 flex items-center justify-center overflow-hidden border border-zinc-900 cursor-crosshair select-none"
+                  >
+                    <ViewerMinimapPreview url={activeViewerNode.data?.url || ""} />
+                    {/* Highlight viewport area rectangle */}
+                    <div 
+                      style={{
+                        width: `${Math.max(15, Math.min(100, 100 / viewerZoomScale))}%`,
+                        height: `${Math.max(15, Math.min(100, 100 / viewerZoomScale))}%`,
+                        transform: `translate(${viewerZoomOffset.x / 18}px, ${viewerZoomOffset.y / 18}px)`
+                      }}
+                      className="absolute border border-sky-500 bg-sky-500/10 pointer-events-none shadow-md"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Bottom Panel */}
+            <div className="w-full flex flex-col items-center gap-3 pb-6 bg-[#0c0c0e]/95 border-t border-zinc-900 backdrop-blur-md pt-3 z-50">
+              
+              {/* Filmstrip Bar */}
+              {viewerShowFilmstrip && (
+                <div className="w-full max-w-5xl px-8 flex items-center gap-2 overflow-x-auto py-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                  {canvasImageNodes.map((node: any) => (
+                    <ViewerThumbnail 
+                      key={node.id} 
+                      url={node.data?.url} 
+                      isSelected={node.id === viewerNodeId} 
+                      onClick={() => {
+                        setViewerNodeId(node.id);
+                        setViewerZoomScale(1);
+                        setViewerZoomOffset({ x: 0, y: 0 });
+                        setViewerRotation(0);
+                      }}
+                    />
+                  ))}
+                  {canvasImageNodes.length > 20 && (
+                    <div className="shrink-0 text-xs text-zinc-500 font-medium px-4 select-none">
+                      查看更多
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Bottom Control Toolbar */}
+              <div className="w-full max-w-5xl px-8 flex items-center justify-between mt-1 select-none">
+                {/* File size & metrics */}
+                <div className="flex items-center gap-4 text-xs font-mono text-zinc-500">
+                  <span>{activeViewerNode.data?.fileSize || "1.42M"}</span>
+                  <span>
+                    {activeViewerNode.data?.originalWidth 
+                      ? `${activeViewerNode.data.originalWidth}*${activeViewerNode.data.originalHeight}像素` 
+                      : "1920*1080像素"}
+                  </span>
+                  <span className="bg-zinc-900 border border-zinc-800 rounded px-1.5 text-[10px] text-zinc-400 font-bold uppercase font-sans">
+                    {activeViewerNode.data?.fileType || "JPEG"}
+                  </span>
+                </div>
+
+                {/* Toolbar buttons */}
+                <div className="bg-[#151518]/95 backdrop-blur-md border border-zinc-800/85 rounded-full py-1.5 px-6 flex items-center gap-3 shadow-2xl">
+                  {/* Prev */}
+                  <button 
+                    onClick={goViewerPrev}
+                    disabled={canvasImageNodes.length <= 1}
+                    className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent group relative transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft size={16} />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3.5 hidden group-hover:block bg-zinc-950 px-2.5 py-1 text-xs font-semibold text-zinc-150 rounded border border-zinc-800 shadow-xl whitespace-nowrap">
+                      上一张(←)
+                    </div>
+                  </button>
+
+                  {/* Navigator Indicator */}
+                  <span className="text-zinc-300 font-mono text-[13px] tracking-wider px-1">
+                    {activeViewerIndex + 1}/{canvasImageNodes.length}
+                  </span>
+
+                  {/* Next */}
+                  <button 
+                    onClick={goViewerNext}
+                    disabled={canvasImageNodes.length <= 1}
+                    className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent group relative transition-colors cursor-pointer"
+                  >
+                    <ChevronRight size={16} />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3.5 hidden group-hover:block bg-zinc-950 px-2.5 py-1 text-xs font-semibold text-zinc-150 rounded border border-zinc-800 shadow-xl whitespace-nowrap">
+                      下一张(→)
+                    </div>
+                  </button>
+
+                  <div className="w-px h-4 bg-zinc-800 mx-0.5" />
+
+                  {/* Reset view: 1:1 text button to match Fig 3/4 precisely */}
+                  <button 
+                    onClick={() => { setViewerZoomScale(1); setViewerZoomOffset({ x: 0, y: 0 }); }}
+                    className="px-2 py-0.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white text-xs font-extrabold font-mono transition-colors border border-zinc-850 cursor-pointer"
+                    title="重置视图 (1:1)"
+                  >
+                    1:1
+                  </button>
+
+                  {/* Zoom Percent */}
+                  <button 
+                    onClick={() => { setViewerZoomScale(1); setViewerZoomOffset({ x: 0, y: 0 }); }}
+                    className="text-zinc-400 hover:text-sky-400 font-mono text-xs font-bold px-1 min-w-[42px] text-center"
+                    title="还原比例"
+                  >
+                    {Math.round(viewerZoomScale * 100)}%
+                  </button>
+
+                  {/* Zoom In */}
+                  <button 
+                    onClick={() => setViewerZoomScale(Math.min(viewerZoomScale + 0.15, 6))}
+                    className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    title="放大"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+
+                  {/* Zoom Out */}
+                  <button 
+                    onClick={() => setViewerZoomScale(Math.max(viewerZoomScale - 0.15, 0.45))}
+                    className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    title="缩小"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+
+                  <div className="w-px h-4 bg-zinc-800 mx-0.5" />
+
+                  {/* Rotate Left */}
+                  <button 
+                    onClick={() => setViewerRotation((prev) => (prev - 90) % 360)}
+                    className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    title="逆时针旋转"
+                  >
+                    <RotateCcw size={14} className="-scale-x-100" />
+                  </button>
+
+                  {/* Rotate Right */}
+                  <button 
+                    onClick={() => setViewerRotation((prev) => (prev + 90) % 360)}
+                    className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    title="顺时针旋转"
+                  >
+                    <RotateCw size={14} />
+                  </button>
+
+                  {/* Delete Item from canvas */}
+                  <button 
+                    onClick={deleteViewerNode}
+                    className="p-1.5 hover:bg-red-950 hover:text-red-400 rounded-lg text-zinc-400 transition-all cursor-pointer"
+                    title="删除并在画布移出"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                {/* Right side controls switcher */}
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setViewerShowFilmstrip(!viewerShowFilmstrip)}
+                    className={`p-2 rounded-xl transition-all border flex items-center justify-center cursor-pointer shadow-md ${
+                      viewerShowFilmstrip 
+                        ? 'bg-sky-600 border-sky-550 text-white' 
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                    }`}
+                    title={viewerShowFilmstrip ? "隐藏缩略图栏" : "显示缩略图栏"}
+                  >
+                    <Grid size={16} />
+                  </button>
+
+                  <button 
+                    onClick={() => setViewerShowMinimap(!viewerShowMinimap)}
+                    className={`p-2 rounded-xl transition-all border flex items-center justify-center cursor-pointer shadow-md ${
+                      viewerShowMinimap 
+                        ? 'bg-sky-600 border-sky-550 text-white' 
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                    }`}
+                    title="鸟瞰图切换"
+                  >
+                    <ScanSearch size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Selective Copy Modal */}
       <AnimatePresence>
         {selectiveCopyMsg && (
@@ -3479,3 +4451,166 @@ function SuggestionCard({
     </button>
   );
 }
+
+const ViewerThumbnail = ({ url, isSelected, onClick }: { url: string; isSelected: boolean; onClick: () => void }) => {
+  const [resolvedUrl, setResolvedUrl] = useState('');
+  
+  useEffect(() => {
+    let active = true;
+    let localBlobUrl = '';
+    
+    const resolve = async () => {
+      if (!url) return;
+      if (url.startsWith('db_blob:')) {
+        try {
+          const stored = await get(url);
+          if (!active) return;
+          if (stored instanceof Blob) {
+            localBlobUrl = URL.createObjectURL(stored);
+            setResolvedUrl(localBlobUrl);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      } else {
+        if (active) setResolvedUrl(url);
+      }
+    };
+    resolve();
+    
+    return () => {
+      active = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [url]);
+  
+  return (
+    <button 
+      onClick={onClick}
+      className={`relative shrink-0 w-16 h-12 rounded-lg bg-zinc-900 border-2 overflow-hidden transition-all duration-150 ${
+        isSelected ? "border-sky-500 ring-2 ring-sky-500/20 scale-105" : "border-zinc-700 hover:border-zinc-500"
+      }`}
+    >
+      {resolvedUrl ? (
+        <img src={resolvedUrl} alt="Thumb" className="w-full h-full object-cover pointer-events-none select-none" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-zinc-650 bg-zinc-950">
+          <ImageIcon size={14} />
+        </div>
+      )}
+    </button>
+  );
+};
+
+const ViewerImageLoader = ({ url, nodeId, rotation, zoomScale, zoomOffset, onMouseDown }: { url: string; nodeId: string; rotation: number; zoomScale: number; zoomOffset: { x: number; y: number }; onMouseDown?: (e: React.MouseEvent) => void }) => {
+  const [resolvedUrl, setResolvedUrl] = useState('');
+  
+  useEffect(() => {
+    let active = true;
+    let localBlobUrl = '';
+    
+    const resolve = async () => {
+      if (!url) {
+        setResolvedUrl('');
+        return;
+      }
+      if (url.startsWith('db_blob:')) {
+        try {
+          const stored = await get(url);
+          if (!active) return;
+          if (stored instanceof Blob) {
+            localBlobUrl = URL.createObjectURL(stored);
+            setResolvedUrl(localBlobUrl);
+          } else {
+            setResolvedUrl('');
+          }
+        } catch (e) {
+          console.error("Failed to load db_blob in viewer", e);
+          if (active) setResolvedUrl('');
+        }
+      } else {
+        if (active) setResolvedUrl(url);
+      }
+    };
+    resolve();
+    
+    return () => {
+      active = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [url, nodeId]);
+  
+  return (
+    <motion.div
+      animate={{ 
+        scale: zoomScale,
+        x: zoomOffset.x,
+        y: zoomOffset.y,
+        rotate: rotation
+      }}
+      transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+      className="relative max-w-full max-h-full flex items-center justify-center"
+      onMouseDown={onMouseDown}
+    >
+      <img 
+        draggable={false}
+        src={resolvedUrl || url} 
+        alt="Active zoomed canvas media target"
+        className="max-w-[85vw] max-h-[72vh] object-contain shadow-[0_0_80px_rgba(0,0,0,0.85)] rounded-2xl border border-white/5 select-none pointer-events-none transition-shadow"
+      />
+    </motion.div>
+  );
+};
+
+const ViewerMinimapPreview = ({ url }: { url: string }) => {
+  const [resolvedUrl, setResolvedUrl] = useState('');
+  
+  useEffect(() => {
+    let active = true;
+    let localBlobUrl = '';
+    
+    const resolve = async () => {
+      if (!url) {
+        setResolvedUrl('');
+        return;
+      }
+      if (url.startsWith('db_blob:')) {
+        try {
+          const stored = await get(url);
+          if (!active) return;
+          if (stored instanceof Blob) {
+            localBlobUrl = URL.createObjectURL(stored);
+            setResolvedUrl(localBlobUrl);
+          } else {
+            setResolvedUrl('');
+          }
+        } catch (e) {
+          console.error("Failed to load db_blob in minimap preview", e);
+          if (active) setResolvedUrl('');
+        }
+      } else {
+        if (active) setResolvedUrl(url);
+      }
+    };
+    resolve();
+    
+    return () => {
+      active = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [url]);
+
+  return (
+    <img 
+      src={resolvedUrl || url} 
+      alt="mini preview"
+      className="max-w-full max-h-full object-contain filter brightness-90"
+    />
+  );
+};

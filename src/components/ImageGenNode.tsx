@@ -1,4 +1,54 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { get } from 'idb-keyval';
+
+const ImageGenRefThumbnail = ({ url, className, alt }: { url: string; className?: string; alt?: string }) => {
+  const [resolvedUrl, setResolvedUrl] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    let localBlobUrl = '';
+
+    const resolve = async () => {
+      if (!url) {
+        setResolvedUrl('');
+        return;
+      }
+      if (url.startsWith('db_blob:')) {
+        try {
+          const stored = await get(url);
+          if (!active) return;
+          if (stored instanceof Blob) {
+            localBlobUrl = URL.createObjectURL(stored);
+            setResolvedUrl(localBlobUrl);
+          } else {
+            setResolvedUrl('');
+          }
+        } catch (e) {
+          console.error("Failed to load db_blob in image gen thumbnail", e);
+          if (active) setResolvedUrl('');
+        }
+      } else {
+        if (active) setResolvedUrl(url);
+      }
+    };
+    resolve();
+
+    return () => {
+      active = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [url]);
+
+  return (
+    <img 
+      src={resolvedUrl || url} 
+      alt={alt} 
+      className={className} 
+    />
+  );
+};
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Handle, Position, NodeResizer } from '@xyflow/react';
@@ -19,12 +69,14 @@ import {
   Play,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
+  Pencil
 } from 'lucide-react';
 import { useStore, useNodeIncomingData } from '../store/useStore';
 import { downloadImage } from '../lib/download';
 import { ScaleWrapper } from './ScaleWrapper';
 import { getOrExtractWorkflowFields, normalizeWorkflowToPrompt } from './SettingsModal';
+import { AnnotationModal } from './AnnotationModal';
 
 const SIZE_OPTIONS = {
   square: [
@@ -157,6 +209,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [annotatingUrl, setAnnotatingUrl] = useState<{ url: string, idx: number } | null>(null);
 
   const handleImageDoubleClick = (url: string) => {
     setFullscreenUrl(url);
@@ -2557,8 +2610,16 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                 >
                   <img draggable={false} src={url} alt={`Generated ${idx}`} className="w-full h-full object-contain select-none p-1 bg-black/10" />
                   
-                  {/* Deletion & Redo Floating Hover Buttons */}
+                  {/* Deletion, Redo, Annotation Floating Hover Buttons */}
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/prev:opacity-100 transition-all duration-150 flex items-center justify-center gap-3">
+                    <button 
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setAnnotatingUrl({ url, idx }); }}
+                      className="p-2 bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-white rounded-xl shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer pointer-events-auto flex items-center justify-center"
+                      title="标注与编辑"
+                    >
+                      <Pencil size={14} className="text-zinc-100" />
+                    </button>
                     <button 
                       type="button"
                       onClick={(e) => handleRedoPreview(idx, e)}
@@ -2675,7 +2736,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                           ? 'border-red-550 ring-2 ring-red-500/35 scale-105 bg-red-500/5' 
                           : 'border-white/10 bg-[#121214] hover:border-white/20'
                       }`}>
-                        <img src={url} alt={`Ref ${index + 1}`} className="w-full h-full object-cover" />
+                        <ImageGenRefThumbnail url={url} alt={`Ref ${index + 1}`} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/ref:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                           <span className="text-[10px] font-black uppercase bg-red-500 text-white px-1.5 py-0.5 rounded-md shadow-lg">
                             @ {index + 1}
@@ -2714,8 +2775,8 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                           : 'bg-transparent text-zinc-350 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      <img 
-                        src={url} 
+                      <ImageGenRefThumbnail 
+                        url={url} 
                         alt={`Pic ${idx + 1}`} 
                         className={`w-7 h-7 rounded-lg object-cover bg-black/20 border ${isSelected ? 'border-accent/40' : 'border-white/5'}`} 
                       />
@@ -2808,12 +2869,12 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       <Handle 
         type="source" 
         position={Position.Right} 
-        className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:scale-110 hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white before:content-['+'] before:text-lg before:leading-none"  
+        className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  
       />
       <Handle 
         type="target" 
         position={Position.Left} 
-        className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:scale-110 hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white before:content-['+'] before:text-lg before:leading-none"  
+        className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  
       />
     </div>
 
@@ -2900,6 +2961,19 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         </motion.div>
       </AnimatePresence>,
       document.body
+    )}
+
+    {annotatingUrl && (
+      <AnnotationModal
+        imageUrl={annotatingUrl.url}
+        onClose={() => setAnnotatingUrl(null)}
+        onSave={(newUrl) => {
+          const newUrls = [...previewUrls];
+          newUrls[annotatingUrl.idx] = newUrl;
+          updateNodeData(id, { images: newUrls });
+          setAnnotatingUrl(null);
+        }}
+      />
     )}
   </>
   );

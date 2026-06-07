@@ -1,5 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { get, set as idbSet } from 'idb-keyval';
 import { Handle, Position, NodeResizer } from '@xyflow/react';
 import { useStore } from '../store/useStore';
 import { 
@@ -67,6 +68,80 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
   const dragCounter = useRef(0);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string>('');
+
+  useEffect(() => {
+    let active = true;
+    let localBlobUrl = '';
+
+    const loadRealUrl = async () => {
+      if (!data.url) {
+        setImageUrl('');
+        return;
+      }
+      
+      if (data.url.startsWith('db_blob:')) {
+        try {
+          const stored = await get(data.url);
+          if (!active) return;
+          if (stored) {
+            let resUrl = '';
+            if (stored instanceof Blob) {
+              resUrl = URL.createObjectURL(stored);
+            } else if (typeof stored === 'string') {
+              if (stored.startsWith('data:')) {
+                const fetchRes = await fetch(stored);
+                const b = await fetchRes.blob();
+                resUrl = URL.createObjectURL(b);
+              } else {
+                resUrl = stored;
+              }
+            }
+            if (active && resUrl) {
+              localBlobUrl = resUrl;
+              setImageUrl(resUrl);
+            }
+          } else {
+            setImageUrl('');
+          }
+        } catch (e) {
+          console.error("Failed to load db_blob", e);
+          if (active) setImageUrl('');
+        }
+      } else if (data.url.startsWith('data:image/')) {
+        // Self-heal: optimize any existing legacy inline Base64 data from state
+        const cacheKey = `db_blob:${id}`;
+        try {
+          const fetchRes = await fetch(data.url);
+          const b = await fetchRes.blob();
+          await idbSet(cacheKey, b);
+          
+          const freshBlobUrl = URL.createObjectURL(b);
+          if (active) {
+            localBlobUrl = freshBlobUrl;
+            setImageUrl(freshBlobUrl);
+          }
+          // Downstream update - removes the massive base64 string from ever being serialized again!
+          updateNodeData(id, { url: cacheKey });
+        } catch (e) {
+          console.error("Failed to optimize inline base64", e);
+          if (active) setImageUrl(data.url);
+        }
+      } else {
+        // Standard online/local URL
+        if (active) setImageUrl(data.url);
+      }
+    };
+
+    loadRealUrl();
+
+    return () => {
+      active = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [data.url, id, updateNodeData]);
 
 
 
@@ -174,89 +249,103 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
       return;
     }
     
-    const reader = new FileReader();
-    reader.onerror = () => {
-      setErrorText("上传失败：读取图像文件时出错！");
+    // Instantly load the image using a temporary local Object URL
+    const tempUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => {
+      setErrorText("上传失败：图像文件损坏或无法被系统解析加载！");
+      URL.revokeObjectURL(tempUrl);
     };
-    reader.onload = (ev) => {
-      const imageUrl = ev.target?.result as string;
-      if (!imageUrl) {
-        setErrorText("上传失败：读取到的媒体文件内容为空！");
-        return;
-      }
-      const img = new Image();
-      img.onerror = () => {
-        setErrorText("上传失败：图像文件损坏或无法被系统解析加载！");
-      };
-      img.onload = () => {
-        try {
-          // Calculate scale based on quality setting
-          let qualityScale = 1.0;
-          let webpQuality = 0.9;
-          
-          if (settings.uploadQuality === 'standard') {
-            qualityScale = 0.5;
-            webpQuality = 0.7;
-          } else if (settings.uploadQuality === 'high') {
-            qualityScale = 0.75;
-            webpQuality = 0.85;
-          } else {
-            qualityScale = 1.0;
-            webpQuality = 1.0;
-          }
-          
-          const targetWidth = img.width * qualityScale;
-          const targetHeight = img.height * qualityScale;
-          
-          const canvas = document.createElement('canvas');
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-          const ctx = canvas.getContext('2d');
-          
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-            const finalUrl = canvas.toDataURL('image/webp', webpQuality);
-            
-            const maxWidth = 400;
-            const ratio = targetWidth / targetHeight;
-            const displayWidth = Math.min(targetWidth, maxWidth);
-            
-            const targetH = Math.round(displayWidth / ratio);
-            
-            // Atomically update both data and style parameters using the fresh node state to prevent state overwrites
-            const freshNodes = useStore.getState().nodes;
-            const updatedNodes = freshNodes.map(n => {
-              if (n.id === id) {
-                return {
-                  ...n,
-                  style: {
-                    ...(n.style || {}),
-                    width: displayWidth,
-                    height: targetH
-                  },
-                  data: {
-                    ...n.data,
-                    url: finalUrl,
-                    name: file.name,
-                    aspectRatio: ratio,
-                    width: displayWidth,
-                    height: targetH
-                  }
-                };
-              }
-              return n;
-            });
-            useStore.getState().setNodes(updatedNodes);
-          } else {
-            setErrorText("上传失败：无法创建 Canvas 2D 绘图上下文环境！");
-          }
-        } catch (error: any) {
-          setErrorText(`上传失败：处理图像时发生错误: ${error?.message || "未知异常"}`);
+    img.onload = () => {
+      try {
+        // Calculate scale based on quality setting
+        let qualityScale = 1.0;
+        let webpQuality = 0.9;
+        
+        if (settings.uploadQuality === 'standard') {
+          qualityScale = 0.5;
+          webpQuality = 0.7;
+        } else if (settings.uploadQuality === 'high') {
+          qualityScale = 0.75;
+          webpQuality = 0.85;
+        } else {
+          qualityScale = 1.0;
+          webpQuality = 1.0;
         }
-      };
-      img.src = imageUrl;
+        
+        const targetWidth = img.width * qualityScale;
+        const targetHeight = img.height * qualityScale;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          
+          canvas.toBlob(async (blob) => {
+            if (!blob) {
+              setErrorText("上传失败：无法生成二进制图像文件！");
+              URL.revokeObjectURL(tempUrl);
+              return;
+            }
+            
+            const dbCacheKey = `db_blob:${id}`;
+            try {
+              // Asynchronously write to IndexedDB
+              await idbSet(dbCacheKey, blob);
+              
+              // Create local Blobs for immediate rendering
+              const localBlobUrl = URL.createObjectURL(blob);
+              setImageUrl(localBlobUrl);
+              
+              const maxWidth = 400;
+              const ratio = targetWidth / targetHeight;
+              const displayWidth = Math.min(targetWidth, maxWidth);
+              
+              const targetH = Math.round(displayWidth / ratio);
+              
+              // Atomically update both data and style parameters in store
+              const freshNodes = useStore.getState().nodes;
+              const updatedNodes = freshNodes.map(n => {
+                if (n.id === id) {
+                  return {
+                    ...n,
+                    style: {
+                      ...(n.style || {}),
+                      width: displayWidth,
+                      height: targetH
+                    },
+                    data: {
+                      ...n.data,
+                      url: dbCacheKey, // Reference pointing to IndexedDB (completely bypasses laggy base64 serialization!)
+                      name: file.name,
+                      aspectRatio: ratio,
+                      width: displayWidth,
+                      height: targetH
+                    }
+                  };
+                }
+                return n;
+              });
+              useStore.getState().setNodes(updatedNodes);
+            } catch (err: any) {
+              setErrorText(`上传失败：写入浏览器缓存时发生异常: ${err?.message || "未知错误"}`);
+            } finally {
+              URL.revokeObjectURL(tempUrl);
+            }
+          }, 'image/webp', webpQuality);
+        } else {
+          setErrorText("上传失败：无法创建 Canvas 2D 绘图上下文环境！");
+          URL.revokeObjectURL(tempUrl);
+        }
+      } catch (error: any) {
+        setErrorText(`上传失败：处理图像时发生错误: ${error?.message || "未知异常"}`);
+        URL.revokeObjectURL(tempUrl);
+      }
     };
-    reader.readAsDataURL(file);
+    img.src = tempUrl;
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -538,7 +627,10 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
               <div className="w-px h-5 bg-[var(--border)] mx-1" />
               <button 
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setIsFullScreen(true); }}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  window.dispatchEvent(new CustomEvent('open-image-viewer', { detail: { nodeId: id } }));
+                }}
                 className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer pointer-events-auto"
                 title="全屏显示"
               >
@@ -546,7 +638,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
               </button>
               <button 
                 type="button"
-                onClick={(e) => { e.stopPropagation(); data.url && downloadImage(data.url, `${data.name || 'image'}.png`); }}
+                onClick={(e) => { e.stopPropagation(); data.url && downloadImage(imageUrl || data.url, `${data.name || 'image'}.png`); }}
                 className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer pointer-events-auto"
                 title="下载"
               >
@@ -620,11 +712,15 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
           >
             {data.url ? (
               <div 
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent('open-image-viewer', { detail: { nodeId: id } }));
+                }}
                 className="w-full h-full relative group/img-container flex items-center justify-center overflow-hidden rounded-3xl cursor-grab active:cursor-grabbing select-none react-flow__node-draghandle"
               >
                 <img 
                   draggable={false} 
-                  src={data.url} 
+                  src={imageUrl || data.url} 
                   alt={data.name || "Source Asset"} 
                   onLoad={onImageLoad} 
                   ref={imgRef} 
@@ -744,7 +840,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                       >
                         <img 
                           ref={imgRef}
-                          src={data.url} 
+                          src={imageUrl || data.url} 
                           alt="Crop target" 
                           style={{ display: 'block', maxWidth: '90vw', maxHeight: '70vh', width: 'auto', height: 'auto' }}
                           crossOrigin="anonymous"
@@ -755,7 +851,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                     <div className="relative inline-block max-h-full max-w-full rounded-2xl overflow-hidden shadow-2xl">
                       <img 
                         ref={imgRef}
-                        src={data.url} 
+                        src={imageUrl || data.url} 
                         alt="Grid Crop target" 
                         style={{ display: 'block', maxWidth: '90vw', maxHeight: '70vh', width: 'auto', height: 'auto' }}
                       />
@@ -871,18 +967,17 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
           </AnimatePresence>
 
           {/* Annotation Mode Portal */}
-          <AnimatePresence>
-            {isAnnotating && data.url && (
-              <AnnotationModal 
-                imageUrl={data.url}
-                onClose={() => setIsAnnotating(false)}
-                onSave={(newUrl) => {
-                  updateNodeData(id, { url: newUrl });
-                  setIsAnnotating(false);
-                }}
-              />
-            )}
-          </AnimatePresence>
+          {isAnnotating && (imageUrl || data.url) && (
+            <AnnotationModal
+              key="annotation-modal"
+              imageUrl={imageUrl || data.url}
+              onClose={() => setIsAnnotating(false)}
+              onSave={(newUrl) => {
+                updateNodeData(id, { url: newUrl });
+                setIsAnnotating(false);
+              }}
+            />
+          )}
 
           {/* Full Screen View */}
           <AnimatePresence>
@@ -949,7 +1044,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                     onClick={(e) => e.stopPropagation()}
                   >
                     <img draggable={false} 
-                      src={data.url} 
+                      src={imageUrl || data.url} 
                       alt="Fullscreen" 
                       className="max-w-[90vw] max-h-[85vh] object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-3xl border border-[var(--border)] select-none pointer-events-none" 
                     />
@@ -976,7 +1071,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
       <Handle 
         type="source" 
         position={Position.Right} 
-        className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:scale-110 hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white before:content-['+'] before:text-lg before:leading-none"  
+        className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  
       />
     </div>
   );

@@ -24,6 +24,8 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [localText, setLocalText] = useState(data.text || '');
 
+  const [isDragOver, setIsDragOver] = useState(false);
+
   // Sync local state with store updates (e.g. clear, fullscreen edit)
   useEffect(() => {
     if (data.text !== localText) {
@@ -34,6 +36,78 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
   const handleTextChange = (val: string) => {
     setLocalText(val);
     updateNodeData(id, { text: val });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    
+    // First try extracting text from internal react flow
+    const type = e.dataTransfer.getData("application/reactflow/type");
+    let droppedText = '';
+    
+    if (type === 'text-source') {
+      try {
+        const dataStr = e.dataTransfer.getData("application/reactflow/data");
+        const parsed = JSON.parse(dataStr);
+        droppedText = parsed.text || '';
+      } catch {}
+    }
+    
+    // If no internal text, try getting text from dropped text files
+    const files = e.dataTransfer.files;
+    const isTextFile = (file: File) => {
+      const type = file.type;
+      const name = file.name.toLowerCase();
+      return type.startsWith("text/") || 
+             type === "application/json" ||
+             name.endsWith(".txt") || 
+             name.endsWith(".md") ||
+             name.endsWith(".json") ||
+             name.endsWith(".csv") ||
+             name.endsWith(".xml") ||
+             name.endsWith(".log") ||
+             name.endsWith(".yaml") ||
+             name.endsWith(".yml") ||
+             name.endsWith(".html") ||
+             name.endsWith(".js") ||
+             name.endsWith(".ts") ||
+             name.endsWith(".jsx") ||
+             name.endsWith(".tsx") ||
+             name.endsWith(".css");
+    };
+    const textFiles = Array.from(files).filter(isTextFile);
+    
+    if (textFiles.length > 0) {
+      textFiles[0].text().then(fileContent => {
+        if (fileContent) {
+           const newText = localText ? localText + '\n\n' + fileContent : fileContent;
+           handleTextChange(newText);
+        }
+      }).catch(err => console.error("Failed to read text file", err));
+      return;
+    }
+    
+    // Fall back to external selected text
+    if (!droppedText) {
+      droppedText = e.dataTransfer.getData('text/plain');
+    }
+    
+    if (droppedText) {
+      const newText = localText ? localText + '\n\n' + droppedText : droppedText;
+      handleTextChange(newText);
+    }
   };
 
   const getFontSizeStyle = () => {
@@ -64,30 +138,33 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
 
   return (
     <div 
-      className={`relative border w-full h-full ${selected ? 'border-[var(--accent)] shadow-[0_0_20px_var(--accent)]/30' : 'border-[var(--border)]'} rounded-3xl shadow-2xl overflow-visible group/node transition-all flex flex-col ${
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`relative border w-full h-full border-[var(--border)] rounded-3xl shadow-2xl overflow-visible group/node transition-all duration-200 flex flex-col ${
         settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-secondary)]'
-      }`}
+      } ${isDragOver ? 'ring-2 ring-blue-500/80 scale-[1.02] bg-blue-500/5' : ''}`}
     >
       <NodeResizer 
-        color="var(--accent)" 
+        color="transparent" 
         isVisible={selected} 
         minWidth={200}
         minHeight={150}
         keepAspectRatio={true}
-        handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'white', border: '2px solid var(--accent)' }}
+        handleStyle={{ width: 12, height: 12, borderRadius: 3, background: 'transparent', border: 'none' }}
       />
       <ScaleWrapper id={id} type="text-source">
-        {/* Floating Toolbar */}
+        {/* Toolbar (Now integrated inside when selected) */}
         <AnimatePresence>
         {selected && (
           <motion.div 
-            initial={{ opacity: 1, y: -60, scale: 1 }}
-            animate={{ opacity: 1, y: -60, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0 }}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
             onPointerDown={(e) => e.stopPropagation()}
-            className={`absolute left-1/2 -translate-x-1/2 top-0 flex items-center gap-1 p-1 border border-[var(--border)] rounded-2xl shadow-2xl z-[100] whitespace-nowrap transition-all ${
-              settings.barTexture === 'frosted' ? 'frosted-glass' : 'bg-[var(--bg-tertiary)]'
+            className={`flex items-center gap-1 p-2 border-b border-[var(--border)] rounded-t-3xl shrink-0 overflow-hidden ${
+              settings.barTexture === 'frosted' ? 'frosted-glass border-b-white/5' : 'bg-[var(--bg-tertiary)]'
             }`}
           >
             <ToolbarIconButton icon={<Copy size={16} />} onClick={copyText} title="复制" />
@@ -123,7 +200,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
       </AnimatePresence>
 
       {/* Header */}
-      <div className={`p-4 border-b border-[var(--border)] flex items-center justify-between transition-all rounded-t-3xl shrink-0 react-flow__node-draghandle ${
+      <div className={`p-4 border-b border-[var(--border)] flex items-center justify-between transition-all ${selected ? '' : 'rounded-t-3xl'} shrink-0 react-flow__node-draghandle ${
         settings.barTexture === 'frosted' ? 'frosted-glass border-b-white/5' : 'bg-gradient-to-r from-[var(--bg-tertiary)] to-[var(--bg-secondary)]'
       }`}>
         <div className="flex items-center gap-2.5">
@@ -187,7 +264,7 @@ export const SourceTextNode = ({ id, data, selected }: { id: string; data: any; 
       )}
       </ScaleWrapper>
 
-      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  />
     </div>
   );
 };

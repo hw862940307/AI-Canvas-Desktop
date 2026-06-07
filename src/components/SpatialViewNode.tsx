@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { createPortal } from 'react-dom';
+import { get } from 'idb-keyval';
 import { Handle, Position, useEdges, useNodes, NodeResizer, useReactFlow } from '@xyflow/react';
 import { 
   Camera, 
@@ -377,8 +378,8 @@ const NodeUI = ({
       
       {!isInPortal && (
         <>
-          <Handle type="target" position={Position.Left} className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
-          <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+          <Handle type="target" position={Position.Left} className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  />
+          <Handle type="source" position={Position.Right} className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  />
         </>
       )}
 
@@ -751,12 +752,62 @@ export const SpatialViewNode = React.memo(({ id, data, selected }: { id: string;
   const edges = useEdges();
   const nodes = useNodes();
   
-  const connectedImageUrl = useMemo(() => {
+  const connectedImageUrl = useMemo<string | undefined>(() => {
     const incomingEdge = edges.find(e => e.target === id);
     if (!incomingEdge) return undefined;
     const sourceNode = nodes.find(n => n.id === incomingEdge.source);
-    return sourceNode?.data?.imageUrl || sourceNode?.data?.url;
+    return (sourceNode?.data?.imageUrl || sourceNode?.data?.url) as string | undefined;
   }, [edges, nodes, id]);
+
+  const [resolvedImageUrl, setResolvedImageUrl] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    let localBlobUrl = '';
+
+    const resolve = async () => {
+      if (!connectedImageUrl) {
+        if (active) setResolvedImageUrl(undefined);
+        return;
+      }
+
+      if (connectedImageUrl.startsWith('db_blob:')) {
+        try {
+          const stored = await get(connectedImageUrl);
+          if (!active) return;
+          if (stored instanceof Blob) {
+            localBlobUrl = URL.createObjectURL(stored);
+            setResolvedImageUrl(localBlobUrl);
+          } else if (typeof stored === 'string') {
+            if (stored.startsWith('data:')) {
+              const fetchRes = await fetch(stored);
+              const b = await fetchRes.blob();
+              localBlobUrl = URL.createObjectURL(b);
+              setResolvedImageUrl(localBlobUrl);
+            } else {
+              setResolvedImageUrl(stored);
+            }
+          } else {
+            setResolvedImageUrl(undefined);
+          }
+        } catch (e) {
+          console.error("Failed to load db_blob in SpatialViewNode:", e);
+          if (active) setResolvedImageUrl(undefined);
+        }
+      } else {
+        if (active) setResolvedImageUrl(connectedImageUrl);
+      }
+    };
+
+    resolve();
+
+    return () => {
+      active = false;
+      if (localBlobUrl) {
+        URL.revokeObjectURL(localBlobUrl);
+      }
+    };
+  }, [connectedImageUrl]);
   
   const defaultParams = {
     subjectType: 'product',
@@ -922,7 +973,7 @@ ${NEGATIVE_SPATIAL_CONSTRAINTS.join('，')}。`;
   const nodeProps = {
     params, setParams, isFullscreen, setIsFullscreen, handleReset,
     hData, vData, dData, fData, aData, generatedPrompts,
-    connectedImageUrl, data, handleCopy, copied, applyPreset,
+    connectedImageUrl: resolvedImageUrl, data, handleCopy, copied, applyPreset,
     showPresets, setShowPresets, showGrid, setShowGrid,
     onDelete: handleDelete, selected
   };

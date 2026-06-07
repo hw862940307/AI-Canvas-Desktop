@@ -477,8 +477,8 @@ export default function NativeHostNode({ id, selected, data }: NodeProps) {
         }}
       >
         {/* ReactFlow Connections */}
-        <Handle type="target" position={Position.Left} className="!bg-indigo-500 !w-6 !h-6 !-left-3 !rounded-lg !border-[3px] !border-slate-950 shadow z-50 hover:scale-115 transition-transform" />
-        <Handle type="source" position={Position.Right} className="!bg-indigo-500 !w-6 !h-6 !-right-3 !rounded-lg !border-[3px] !border-slate-950 shadow z-50 hover:scale-115 transition-transform" />
+        <Handle type="target" position={Position.Left} className="!bg-indigo-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out" />
+        <Handle type="source" position={Position.Right} className="!bg-indigo-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out" />
 
         {/* Head Bar */}
         <div className="px-5 py-3.5 flex items-center justify-between border-b border-indigo-500/15 bg-slate-900/45 shrink-0 react-flow__node-draghandle select-none">

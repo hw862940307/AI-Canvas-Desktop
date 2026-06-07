@@ -259,8 +259,8 @@ export function ReverseNode({ id, data, selected }: NodeProps) {
     <>
       <NodeResizer minWidth={320} minHeight={450} isVisible={selected} lineClassName="border-cyan-500/50" handleClassName="h-3 w-3 bg-white border-2 border-cyan-500 rounded-sm" keepAspectRatio={true} />
       <div className={`flex flex-col w-full h-full bg-[var(--bg-secondary)] rounded-2xl border-2 border-[var(--border)] shadow-2xl transition-all ${selected ? 'border-[#33c9cc] ring-4 ring-cyan-500/10' : ''}`}>
-        <Handle type="target" position={Position.Left} className="!bg-green-500 !w-8 !h-8 !-left-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
-        <Handle type="source" position={Position.Right} className="!bg-green-500 !w-8 !h-8 !-right-4 !rounded-xl !border-[4px] !border-[var(--border)] shadow-xl hover:!auto hover:!border-white transition-all duration-200 z-50 flex items-center justify-center font-bold text-white content-['+'] before:content-['+'] before:text-lg before:leading-none"  />
+        <Handle type="target" position={Position.Left} className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  />
+        <Handle type="source" position={Position.Right} className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  />
 
         <ScaleWrapper id={id} type="reverse">
           {ReverseContent(false)}
