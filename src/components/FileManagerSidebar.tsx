@@ -969,6 +969,25 @@ const MaterialsView = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [tempPath, setTempPath] = useState("");
   const [colorMenuIndex, setColorMenuIndex] = useState<number | null>(null);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [imageStatuses, setImageStatuses] = useState<Record<string, "loading" | "loaded" | "error">>({});
+  
+  const [sortOption, setSortOption] = useState<"createdAt" | "updatedAt" | "name" | "size">("createdAt");
+  const [sortDesc, setSortDesc] = useState(true);
+
+  // Helper for auto-categorizing files
+  const autoCategorize = (filename: string) => {
+    const lower = filename.toLowerCase();
+    for (const f of folders) {
+      const fName = f.name.toLowerCase();
+      if (lower.includes(fName)) return f.id;
+      if ((lower.includes("char") || lower.includes("hero")) && fName.includes("character")) return f.id;
+      if ((lower.includes("scene") || lower.includes("bg") || lower.includes("env")) && fName.includes("scene")) return f.id;
+      if ((lower.includes("item") || lower.includes("weapon") || lower.includes("prop")) && fName.includes("prop")) return f.id;
+      if ((lower.includes("icon") || lower.includes("ui")) && fName.includes("ui")) return f.id;
+    }
+    return selectedFolderId;
+  };
 
   // Custom states for drag-box selection
   const [selectionBox, setSelectionBox] = useState<{
@@ -1004,9 +1023,19 @@ const MaterialsView = ({
   const localSyncInputRef = useRef<HTMLInputElement>(null);
 
   const selectedFolder = folders.find((f: any) => f.id === selectedFolderId);
-  const filteredMaterials = materials.filter(
-    (m: any) => !selectedFolderId || m.folderId === selectedFolderId,
-  );
+  const filteredMaterials = materials.filter((m: any) => {
+    const matchesFolder = !selectedFolderId || m.folderId === selectedFolderId;
+    const matchesSearch = !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.type.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFolder && matchesSearch;
+  }).sort((a: any, b: any) => {
+    let cmp = 0;
+    if (sortOption === "createdAt") cmp = (a.createdAt || 0) - (b.createdAt || 0);
+    else if (sortOption === "updatedAt") cmp = (a.updatedAt || a.createdAt || 0) - (b.updatedAt || b.createdAt || 0);
+    else if (sortOption === "size") cmp = (a.size || 0) - (b.size || 0);
+    else if (sortOption === "name") cmp = a.name.localeCompare(b.name);
+    
+    return sortDesc ? -cmp : cmp;
+  });
   const selectedMaterial = materials.find(
     (m: any) => m.id === selectedMaterialId,
   );
@@ -1222,14 +1251,13 @@ const MaterialsView = ({
   };
 
   const handleDeleteSelected = () => {
-    if (
-      confirm(
-        `确定要彻底删除已选择的 ${selectedIds.size} 个素材吗？此操作不可逆。`,
-      )
-    ) {
-      selectedIds.forEach((id) => onDelete(id));
-      setSelectedIds(new Set());
-    }
+    setShowDeleteConfirmModal(true);
+  };
+
+  const confirmDelete = () => {
+    selectedIds.forEach((id) => onDelete(id));
+    setSelectedIds(new Set());
+    setShowDeleteConfirmModal(false);
   };
 
   return (
@@ -1356,6 +1384,34 @@ const MaterialsView = ({
             </span>
           </div>
           <div className="flex items-center gap-4 flex-1 justify-end">
+            <div className="flex items-center gap-2">
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as any)}
+                className="bg-black/30 border border-[var(--border)] rounded-full py-1 pl-3 pr-8 text-sm text-gray-300 focus:border-accent/50 focus:outline-none transition-colors appearance-none cursor-pointer"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 8px center",
+                  backgroundSize: "14px"
+                }}
+              >
+                <option value="createdAt" className="bg-zinc-900 text-white">创建时间</option>
+                <option value="updatedAt" className="bg-zinc-900 text-white">修改时间</option>
+                <option value="name" className="bg-zinc-900 text-white">文件名称</option>
+                <option value="size" className="bg-zinc-900 text-white">文件大小</option>
+              </select>
+              <button
+                onClick={() => setSortDesc(!sortDesc)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 transition-colors"
+                title={sortDesc ? "降序" : "升序"}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sortDesc ? 'scaleY(-1)' : 'none' }}>
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <polyline points="19 12 12 19 5 12"></polyline>
+                </svg>
+              </button>
+            </div>
             <div className="relative w-48 shrink-0">
               <Search
                 size={14}
@@ -1594,11 +1650,11 @@ const MaterialsView = ({
                         url: file.url,
                         type: "image",
                         size: file.size,
-                        folderId: selectedFolderId,
+                        folderId: autoCategorize(file.name),
                       });
                     });
                     alert(
-                      `刷新成功！检测到新增加的资源图片，已自动同步加载 ${newFiles.length} 个新文件至素材库。`,
+                      `刷新成功！检测到新增加的资源图片，已自动同步加载 ${newFiles.length} 个新文件至素材库，并自动进行了归类。`,
                     );
                   } else {
                     const randomNum = Math.floor(Math.random() * 1000);
@@ -1610,11 +1666,11 @@ const MaterialsView = ({
                       url: newRandomUrl,
                       type: "image",
                       size: 102400 + Math.floor(Math.random() * 500000),
-                      folderId: selectedFolderId,
+                      folderId: autoCategorize(newRandomName),
                     });
 
                     alert(
-                      `刷新成功！未发现固定资产变更，测试用：在本地地址中识别到刚新建的图片 "${newRandomName}" ，已自动同步刷新到文件列表中。`,
+                      `刷新成功！未发现固定资产变更，测试用：在本地地址中识别到刚新建的图片 "${newRandomName}" ，已自动同步归类到对应标签中。`,
                     );
                   }
                   setIsSyncing(false);
@@ -1708,6 +1764,17 @@ const MaterialsView = ({
                         : "border-[var(--border)] hover:border-white/20"
                   }`}
                 >
+                  {/* Image Status Indicators */}
+                  {imageStatuses[file.id] === "error" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-800 text-zinc-500 z-0">
+                      <ImageIcon size={24} className="mb-2 opacity-30" />
+                      <span className="text-[10px] uppercase tracking-wider">Failed</span>
+                    </div>
+                  )}
+                  {(!imageStatuses[file.id] || imageStatuses[file.id] === "loading") && (
+                    <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-900 animate-pulse z-0" />
+                  )}
+
                   {/* Checkbox for Multi-Select */}
                   <div
                     onClick={(e) => {
@@ -1744,6 +1811,7 @@ const MaterialsView = ({
                     src={file.url}
                     alt={file.name}
                     onLoad={(e) => {
+                      setImageStatuses((prev) => ({ ...prev, [file.id]: "loaded" }));
                       const { naturalWidth, naturalHeight } = e.currentTarget;
                       if (naturalWidth && naturalHeight) {
                         setLoadedAspects((prev) => ({
@@ -1752,7 +1820,12 @@ const MaterialsView = ({
                         }));
                       }
                     }}
-                    className="w-full h-auto block select-none"
+                    onError={() => {
+                      setImageStatuses((prev) => ({ ...prev, [file.id]: "error" }));
+                    }}
+                    className={`w-full h-auto block select-none z-10 relative transition-opacity duration-300 ${
+                      imageStatuses[file.id] === "loaded" ? "opacity-100" : "opacity-0"
+                    }`}
                   />
 
                   {/* Hover Action Overlay */}
@@ -1994,6 +2067,46 @@ const MaterialsView = ({
           </div>,
           document.body,
         )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in-95">
+            <h3 className="text-lg font-bold text-white mb-2">确认删除素材</h3>
+            <p className="text-gray-400 text-sm mb-4">
+              您确定要删除选中的 {selectedIds.size} 个素材吗？此操作不可逆。
+            </p>
+            <div className="flex flex-wrap gap-2 mb-6 max-h-48 overflow-y-auto custom-scrollbar p-2 bg-black/30 rounded-lg">
+              {Array.from(selectedIds).map((id) => {
+                const material = materials.find((m: any) => m.id === id);
+                if (!material) return null;
+                return (
+                  <img
+                    key={id}
+                    src={material.url}
+                    alt={material.name}
+                    className="w-12 h-12 object-cover rounded-md border border-zinc-700"
+                  />
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirmModal(false)}
+                className="px-4 py-2 rounded-lg bg-zinc-800 text-white hover:bg-zinc-700 transition"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500 transition shadow"
+              >
+                彻底删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Fullscreen Viewer Component */}
       {fullscreenIndex !== null && (
