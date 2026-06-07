@@ -3530,9 +3530,8 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showFileManager && <FileManagerSidebar />}
-      </AnimatePresence>
+      {/* File Manager Sidebar */}
+      {showFileManager && <FileManagerSidebar />}
 
       {/* Global High-Fidelity Fullscreen Image Viewer Modal */}
       <AnimatePresence>

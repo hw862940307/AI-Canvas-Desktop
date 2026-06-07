@@ -724,7 +724,7 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
                   alt={data.name || "Source Asset"} 
                   onLoad={onImageLoad} 
                   ref={imgRef} 
-                  className="w-full h-full object-fill select-none pointer-events-none rounded-3xl" 
+                  className="w-full h-full object-contain select-none pointer-events-none rounded-3xl" 
                 />
                 <button 
                   type="button"
