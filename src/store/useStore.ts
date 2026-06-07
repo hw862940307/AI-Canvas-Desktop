@@ -71,6 +71,7 @@ export interface ApiSettings {
     | "doubao"
     | "qianwen"
     | "deepseek"
+    | "modelscope"
     | "custom";
   baseUrl: string;
   apiKey: string;
@@ -124,7 +125,7 @@ export interface ApiSettings {
   profiles?: Array<{
     id: string;
     name: string;
-    engine: "gemini" | "openai" | "claude" | "doubao" | "qianwen" | "deepseek" | "custom";
+    engine: "gemini" | "openai" | "claude" | "doubao" | "qianwen" | "deepseek" | "modelscope" | "custom";
     baseUrl: string;
     apiKey: string;
     modelId: string;

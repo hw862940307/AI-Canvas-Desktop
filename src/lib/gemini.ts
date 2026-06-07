@@ -21,7 +21,11 @@ export const generateTextWithFallback = async (
   let baseUrl = api.baseUrl;
   let modelId = api.modelId;
 
-  if (api.profiles && api.activeProfileId) {
+  if (api.activeProfileId === 'modelscope') {
+    apiKey = api.modelscopeApiKey || apiKey;
+    baseUrl = api.modelscopeBaseUrl || baseUrl;
+    modelId = api.modelscopeSelectedChatModel || modelId;
+  } else if (api.profiles && api.activeProfileId) {
     const activeProf = (api.profiles as any[]).find((p: any) => p.id === api.activeProfileId);
     if (activeProf) {
       apiKey = activeProf.apiKey || apiKey;
@@ -36,7 +40,7 @@ export const generateTextWithFallback = async (
   }
 
   if (!apiKey) {
-    throw new Error(`API Key for ${api.engine} is not configured. Please set it in Settings > API.`);
+    throw new Error(`API Key for ${api.activeProfileId === 'modelscope' ? 'modelscope' : api.engine} is not configured. Please set it in Settings > API.`);
   }
 
   const messages: any[] = [];
@@ -59,7 +63,7 @@ export const generateTextWithFallback = async (
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      engine: api.engine,
+      engine: api.activeProfileId === 'modelscope' ? 'modelscope' : api.engine,
       baseUrl: baseUrl,
       apiKey: apiKey,
       modelId: modelId,

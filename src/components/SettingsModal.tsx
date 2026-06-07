@@ -792,7 +792,7 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
   const [profiles, setProfiles] = useState<Array<{
     id: string;
     name: string;
-    engine: "gemini" | "openai" | "claude" | "doubao" | "qianwen" | "deepseek" | "custom";
+    engine: "gemini" | "openai" | "claude" | "doubao" | "qianwen" | "deepseek" | "modelscope" | "custom";
     baseUrl: string;
     apiKey: string;
     modelId: string;

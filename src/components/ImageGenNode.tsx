@@ -444,6 +444,90 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     }
   }, [matchingLoras]);
 
+  // Memoized GPT/OpenAI model list synchronized with global API profile
+  const gptModelOptions = useMemo(() => {
+    const apiSettings = (settings?.apiSettings as any) || {};
+    const profiles = apiSettings.profiles || [];
+    const openaiProf = profiles.find((p: any) => p.id === 'openai' || p.engine === 'openai');
+    const pulledModels = openaiProf?.models || [];
+    
+    const defaultOpenAIModels = [
+      "gpt-image-2",
+      "gpt-image-2-all",
+      "gpt-image-1.5",
+      "gpt-image-2:stable",
+      "gpt-image-2:nitro",
+      "gpt-image-2:floor",
+      "dall-e-3",
+      "dall-e-2"
+    ];
+
+    const imageKeywords = ['flux', 'stable-diffusion', 'sdxl', 'image', 'canvas', 'cv_tinynas', 'diffusion', 'instant-style', 'synthetic', 'banana', 'wan-video', 'seedream', 'imagine', 'midjourney', 'mj-', 'dall-e', 'dalle', 'imagen', 'sd3', 'sd-3', 'sd15', 'sd-1.5', 'sd1.5', 'kolors', 'recraft', 'ideogram', 'cogview', 'stable-video-diffusion', 'svd', 'runway', 'luma', 'sora', 'hunyuan', 'playground', 'adobe', 'firefly', 'lumina', 'pixart', 'wan', 'kling', 'drawing', 'paint', 'sketch', 'illustration', 'art', 'video', 't2v', 'i2v', 'v2v', 'animate', 'animated', 'animator'];
+    
+    const filteredPulled = pulledModels.filter((m: string) => 
+      imageKeywords.some(kw => m.toLowerCase().includes(kw))
+    );
+
+    return Array.from(new Set([
+      ...(gptModel ? [gptModel] : []),
+      ...filteredPulled,
+      ...defaultOpenAIModels
+    ]));
+  }, [settings?.apiSettings?.profiles, gptModel]);
+
+  // Memoized Google AI/Gemini/Banana model list synchronized with global API profile
+  const bananaModelOptions = useMemo(() => {
+    const apiSettings = (settings?.apiSettings as any) || {};
+    const profiles = apiSettings.profiles || [];
+    const geminiProf = profiles.find((p: any) => p.id === 'gemini' || p.engine === 'gemini');
+    const pulledModels = geminiProf?.models || [];
+    
+    const defaultGeminiModels = [
+      "gemini-2.0-flash-preview-image-generation",
+      "gemini-2.5-flash-image",
+      "gemini-3.1-flash-image-preview",
+      "gemini-3-pro-image-preview",
+      "imagen-3.0-generate-001"
+    ];
+
+    const imageKeywords = ['flux', 'stable-diffusion', 'sdxl', 'image', 'canvas', 'cv_tinynas', 'diffusion', 'instant-style', 'synthetic', 'banana', 'wan-video', 'seedream', 'imagine', 'midjourney', 'mj-', 'dall-e', 'dalle', 'imagen', 'sd3', 'sd-3', 'sd15', 'sd-1.5', 'sd1.5', 'kolors', 'recraft', 'ideogram', 'cogview', 'stable-video-diffusion', 'svd', 'runway', 'luma', 'sora', 'hunyuan', 'playground', 'adobe', 'firefly', 'lumina', 'pixart', 'wan', 'kling', 'drawing', 'paint', 'sketch', 'illustration', 'art', 'video', 't2v', 'i2v', 'v2v', 'animate', 'animated', 'animator'];
+    
+    const filteredPulled = pulledModels.filter((m: string) => 
+      imageKeywords.some(kw => m.toLowerCase().includes(kw))
+    );
+
+    return Array.from(new Set([
+      ...(bananaModel ? [bananaModel] : []),
+      ...filteredPulled,
+      ...defaultGeminiModels
+    ]));
+  }, [settings?.apiSettings?.profiles, bananaModel]);
+
+  // Memoized Doubao/Jimeng model list synchronized with global API profile
+  const jimengModelOptions = useMemo(() => {
+    const apiSettings = (settings?.apiSettings as any) || {};
+    const profiles = apiSettings.profiles || [];
+    const doubaoProf = profiles.find((p: any) => p.id === 'doubao' || p.engine === 'doubao');
+    const pulledModels = doubaoProf?.models || [];
+    
+    const defaultJimengModels = [
+      "doubao-seedream-5-0-260128",
+      "doubao-image-v2"
+    ];
+
+    const imageKeywords = ['flux', 'stable-diffusion', 'sdxl', 'image', 'canvas', 'cv_tinynas', 'diffusion', 'instant-style', 'synthetic', 'banana', 'wan-video', 'seedream', 'imagine', 'midjourney', 'mj-', 'dall-e', 'dalle', 'imagen', 'sd3', 'sd-3', 'sd15', 'sd-1.5', 'sd1.5', 'kolors', 'recraft', 'ideogram', 'cogview', 'stable-video-diffusion', 'svd', 'runway', 'luma', 'sora', 'hunyuan', 'playground', 'adobe', 'firefly', 'lumina', 'pixart', 'wan', 'kling', 'drawing', 'paint', 'sketch', 'illustration', 'art', 'video', 't2v', 'i2v', 'v2v', 'animate', 'animated', 'animator'];
+    
+    const filteredPulled = pulledModels.filter((m: string) => 
+      imageKeywords.some(kw => m.toLowerCase().includes(kw))
+    );
+
+    return Array.from(new Set([
+      ...(jmModel ? [jmModel] : []),
+      ...filteredPulled,
+      ...defaultJimengModels
+    ]));
+  }, [settings?.apiSettings?.profiles, jmModel]);
+
   // Sync state with store save
   const handleUpdateField = (key: string, val: any) => {
     updateNodeData(id, { [key]: val });
@@ -570,9 +654,18 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     return incomingImagesDetailed.map(item => item.url).filter(Boolean);
   }, [incomingImagesDetailed]);
 
+  // Local state for buttery smooth reordering and drag alignment
+  const [localImagesList, setLocalImagesList] = useState<typeof incomingImagesDetailed>([]);
+  const startingSequenceUrlsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    setLocalImagesList(incomingImagesDetailed);
+  }, [incomingImagesDetailed]);
+
   // Drag and Drop ordering states
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [draggedItemUrl, setDraggedItemUrl] = useState<string | null>(null);
   const [longPressActiveIdx, setLongPressActiveIdx] = useState<number | null>(null);
   const longPressTimeoutRef = useRef<any>(null);
 
@@ -591,30 +684,35 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   };
 
   const handleImageSortDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    const item = localImagesList[index];
+    if (!item) return;
     setDraggedIdx(index);
+    setDraggedItemUrl(item.url || null);
+    // Record current order of images before moving
+    startingSequenceUrlsRef.current = localImagesList.map(item => item.url);
     e.dataTransfer.setData('text/plain', String(index));
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const adjustPromptMentionsOnMove = (sourceIdx: number, targetIdx: number) => {
-    const N = incomingImages.length;
+  const adjustPromptMentionsOnReorder = (startingUrls: string[], finalList: typeof incomingImagesDetailed) => {
     const mapping: Record<number, number> = {};
-    const list = Array.from({ length: N }, (_, i) => i);
-    const [moved] = list.splice(sourceIdx, 1);
-    list.splice(targetIdx, 0, moved);
-
-    list.forEach((origIdx, newIdx) => {
-      mapping[origIdx] = newIdx;
+    startingUrls.forEach((url, origIdx) => {
+      const finalIdx = finalList.findIndex(item => item.url === url);
+      if (finalIdx !== -1) {
+        mapping[origIdx] = finalIdx;
+      }
     });
 
     const tagRegex = /(@(?:图片|参考图))(\s*)(\d+)/g;
     const newPrompt = prompt.replace(tagRegex, (match, prefix, space, numStr) => {
       const origNum = parseInt(numStr, 10);
       const origIdx = origNum - 1;
-      if (origIdx >= 0 && origIdx < N) {
+      if (origIdx >= 0 && origIdx < startingUrls.length) {
         const newIdx = mapping[origIdx];
-        const newNum = newIdx + 1;
-        return `${prefix}${space}${newNum}`;
+        if (newIdx !== undefined) {
+          const newNum = newIdx + 1;
+          return `${prefix}${space}${newNum}`;
+        }
       }
       return match;
     });
@@ -625,8 +723,18 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
   const handleImageSortDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.preventDefault();
-    if (draggedIdx !== null && draggedIdx !== index) {
+    if (!draggedItemUrl) return;
+
+    // Find current index of dragged element in local list dynamically
+    const currentDraggedIdx = localImagesList.findIndex(item => item.url === draggedItemUrl);
+    if (currentDraggedIdx !== -1 && currentDraggedIdx !== index) {
       setDragOverIdx(index);
+
+      const items = [...localImagesList];
+      const [movedElement] = items.splice(currentDraggedIdx, 1);
+      items.splice(index, 0, movedElement);
+
+      setLocalImagesList(items);
     }
   };
 
@@ -638,26 +746,25 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
   const handleImageSortDrop = (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
     e.preventDefault();
-    const sourceIndex = draggedIdx;
-    if (sourceIndex === null || sourceIndex === targetIndex) {
-      cleanupDragStates();
-      return;
-    }
+  };
 
-    const items = [...incomingImagesDetailed];
-    const [movedElement] = items.splice(sourceIndex, 1);
-    items.splice(targetIndex, 0, movedElement);
-
-    const newOrder = items.map(item => item.sourceNodeId || item.url);
+  const handleImageSortDragEnd = () => {
+    // Save final order of local list to global store on gesture completion
+    const newOrder = localImagesList.map(item => item.sourceNodeId || item.url);
     handleUpdateField('imageOrder', newOrder);
 
-    adjustPromptMentionsOnMove(sourceIndex, targetIndex);
+    // Re-index all prompt references at once!
+    if (startingSequenceUrlsRef.current.length > 0) {
+      adjustPromptMentionsOnReorder(startingSequenceUrlsRef.current, localImagesList);
+    }
+
     cleanupDragStates();
   };
 
   const cleanupDragStates = () => {
     setDraggedIdx(null);
     setDragOverIdx(null);
+    setDraggedItemUrl(null);
     setLongPressActiveIdx(null);
     cancelLongPress();
   };
@@ -737,6 +844,32 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     text: string;
   } | null>(null);
 
+  // Dynamic Regex builder that matches ONLY connected active reference images. 
+  // It guarantees that '@图片11' doesn't match as a tag when you only have 2 connected images.
+  const getValidTagRegex = useCallback(() => {
+    const listLength = localImagesList.length > 0 ? localImagesList.length : incomingImagesDetailed.length;
+    if (listLength === 0) {
+      return /$^/; // Never matches
+    }
+    const nums = Array.from({ length: listLength }, (_, i) => String(i + 1))
+      .sort((a, b) => b.length - a.length);
+    // Outer group 1 matches the full tag, Group 2 matches the digit itself for direct sub-match compatibility
+    const pattern = `(@(?:图片|参考图)\\s*(${nums.join('|')}))`;
+    return new RegExp(pattern, 'g');
+  }, [localImagesList.length, incomingImagesDetailed.length]);
+
+  // Clean single-capturing group regex for the split method (avoids group duplication)
+  const getValidTagRegexForSplit = useCallback(() => {
+    const listLength = localImagesList.length > 0 ? localImagesList.length : incomingImagesDetailed.length;
+    if (listLength === 0) {
+      return /$^/; // Never matches
+    }
+    const nums = Array.from({ length: listLength }, (_, i) => String(i + 1))
+      .sort((a, b) => b.length - a.length);
+    const pattern = `(@(?:图片|参考图)\\s*(?:${nums.join('|')}))`;
+    return new RegExp(pattern, 'g');
+  }, [localImagesList.length, incomingImagesDetailed.length]);
+
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -752,7 +885,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     if (!prompt) return { imageIndexes: [], text: '' };
     
     const imageIndexes: number[] = [];
-    const regex = /(@(?:图片|参考图)\s*(\d+))/g;
+    const regex = getValidTagRegex();
     let match;
     while ((match = regex.exec(prompt)) !== null) {
       const idx = parseInt(match[2]) - 1;
@@ -765,11 +898,11 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       imageIndexes,
       text: prompt
     };
-  }, [prompt]);
+  }, [prompt, getValidTagRegex]);
 
   const getActiveMentionRange = useCallback((promptStr: string, index: number) => {
     if (!promptStr) return null;
-    const regex = /(@(?:图片|参考图)\s*(\d+))/g;
+    const regex = getValidTagRegex();
     let match;
     while ((match = regex.exec(promptStr)) !== null) {
       const start = match.index;
@@ -784,7 +917,94 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       }
     }
     return null;
-  }, []);
+  }, [getValidTagRegex]);
+
+  const enforceCaretLimits = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const value = textarea.value;
+    let start = textarea.selectionStart;
+    let end = textarea.selectionEnd;
+    let changed = false;
+
+    const regex = getValidTagRegex();
+    regex.lastIndex = 0;
+
+    const tags: { start: number; end: number; num: number; text: string }[] = [];
+    let match;
+    while ((match = regex.exec(value)) !== null) {
+      tags.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        num: parseInt(match[2], 10) - 1,
+        text: match[0]
+      });
+    }
+
+    let snappedTag: typeof tags[0] | null = null;
+
+    for (const tag of tags) {
+      const isStartInside = (start > tag.start && start < tag.end);
+      const isEndInside = (end > tag.start && end < tag.end);
+
+      if (isStartInside || isEndInside) {
+        if (start === end) {
+          // Caret is inside: snap to nearest outer edge
+          const distToStart = start - tag.start;
+          const distToEnd = tag.end - start;
+          const snap = distToStart < distToEnd ? tag.start : tag.end;
+          start = snap;
+          end = snap;
+          changed = true;
+          snappedTag = tag;
+        } else {
+          // Range selection overlaps: expand choice to cover entire tag
+          if (isStartInside) {
+            start = tag.start;
+            changed = true;
+          }
+          if (isEndInside) {
+            end = tag.end;
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (snappedTag) {
+      setActiveClickedTag({
+        start: snappedTag.start,
+        end: snappedTag.end,
+        imageIndex: snappedTag.num,
+        text: snappedTag.text
+      });
+      setShowRefDropdown(true);
+      setDropdownActiveIdx(snappedTag.num);
+    } else {
+      let nearTag = false;
+      for (const tag of tags) {
+        const atBoundary = (start === end) && (start === tag.start || start === tag.end);
+        const isSelectingExactlyTag = (start === tag.start && end === tag.end);
+        if (atBoundary || isSelectingExactlyTag) {
+          nearTag = true;
+          break;
+        }
+      }
+      if (!nearTag) {
+        setActiveClickedTag(null);
+        if (!value.slice(0, start).endsWith('@')) {
+          setShowRefDropdown(false);
+        }
+      }
+    }
+
+    if (changed) {
+      textarea.setSelectionRange(start, end);
+    }
+
+    selectionStartRef.current = start;
+  }, [getValidTagRegex]);
 
   const updateCursorIndex = () => {
     if (textareaRef.current) {
@@ -797,7 +1017,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     const val = e.target.value;
     setPrompt(val);
     debouncedUpdatePrompt(val);
-    
+
     // Check if the typed character just before cursor is '@'
     const selStart = e.target.selectionStart;
     const typedUpToCursor = val.slice(0, selStart);
@@ -806,13 +1026,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       setActiveClickedTag(null);
       setDropdownActiveIdx(0);
     }
-    
-    // Sync backdrop scroll on next frame
+
+    // Sync backdrop scroll on next frame and enforce caret limits instantly
     setTimeout(() => {
       if (backdropRef.current && textareaRef.current) {
         backdropRef.current.scrollTop = textareaRef.current.scrollTop;
       }
-      updateCursorIndex();
+      enforceCaretLimits();
     }, 0);
   };
 
@@ -827,145 +1047,11 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
   const handleTextareaClick = (e: React.MouseEvent<HTMLTextAreaElement>) => {
     isMouseInteractingRef.current = false;
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    let start = textarea.selectionStart;
-    let end = textarea.selectionEnd;
-    let changed = false;
-
-    // Direct caret safety check on click to snap cursor immediately
-    const regex = /(@(?:图片|参考图)\s*(\d+))/g;
-    let match;
-    while ((match = regex.exec(prompt)) !== null) {
-      const matchStart = match.index;
-      const matchEnd = matchStart + match[0].length;
-
-      const isStartInside = (start > matchStart && start < matchEnd);
-      const isEndInside = (end > matchStart && end < matchEnd);
-
-      if (isStartInside || isEndInside) {
-        if (start === end) {
-          const toStart = start - matchStart;
-          const toEnd = matchEnd - start;
-          const snapPos = toStart < toEnd ? matchStart : matchEnd;
-          
-          start = snapPos;
-          end = snapPos;
-          changed = true;
-
-          const clickedTag = {
-            start: matchStart,
-            end: matchEnd,
-            imageIndex: parseInt(match[2]) - 1,
-            text: match[0]
-          };
-          
-          setActiveClickedTag(clickedTag);
-          setShowRefDropdown(true);
-          setDropdownActiveIdx(clickedTag.imageIndex);
-        } else {
-          if (isStartInside) {
-            start = matchStart;
-            changed = true;
-          }
-          if (isEndInside) {
-            end = matchEnd;
-            changed = true;
-          }
-        }
-      }
-    }
-
-    if (changed) {
-      textarea.setSelectionRange(start, end);
-    }
-
-    // If active clicked tag exists and cursor is at its boundary or fully selecting it, preserve state
-    if (activeClickedTag) {
-      const atBoundary = (start === end) && (start === activeClickedTag.start || start === activeClickedTag.end);
-      const isSelectingExactlyTag = (start === activeClickedTag.start && end === activeClickedTag.end);
-      if (atBoundary || isSelectingExactlyTag) {
-        return;
-      }
-    }
-
-    // Clicking elsewhere in the plain text clears the active tag focus and dropdown
-    if (!changed) {
-      setActiveClickedTag(null);
-      setShowRefDropdown(false);
-    }
+    enforceCaretLimits();
   };
 
   const handleTextareaSelect = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    let start = textarea.selectionStart;
-    let end = textarea.selectionEnd;
-    let changed = false;
-
-    // Clear active clicked tag if selection moved completely away from its boundaries
-    if (activeClickedTag) {
-      const atBoundary = (start === activeClickedTag.start || start === activeClickedTag.end);
-      const isSelectingExactlyTag = (start === activeClickedTag.start && end === activeClickedTag.end);
-      if (!atBoundary && !isSelectingExactlyTag) {
-        setActiveClickedTag(null);
-        setShowRefDropdown(false);
-      }
-    }
-
-    // Caret safety - snap cursor to prevent entering inside the tags
-    const regex = /(@(?:图片|参考图)\s*(\d+))/g;
-    let match;
-    while ((match = regex.exec(prompt)) !== null) {
-      const matchStart = match.index;
-      const matchEnd = matchStart + match[0].length;
-
-      const isStartInside = (start > matchStart && start < matchEnd);
-      const isEndInside = (end > matchStart && end < matchEnd);
-
-      if (isStartInside || isEndInside) {
-        if (start === end) {
-          // Snap cursor to nearest outer edge (never allow cursor inside)
-          const toStart = start - matchStart;
-          const toEnd = matchEnd - start;
-          const snapPos = toStart < toEnd ? matchStart : matchEnd;
-          
-          start = snapPos;
-          end = snapPos;
-          changed = true;
-
-          // Activate dropdown and highlight backdrop
-          const clickedTag = {
-            start: matchStart,
-            end: matchEnd,
-            imageIndex: parseInt(match[2]) - 1,
-            text: match[0]
-          };
-          
-          setActiveClickedTag(clickedTag);
-          setShowRefDropdown(true);
-          setDropdownActiveIdx(clickedTag.imageIndex);
-        } else {
-          // Range selection overlaps tag boundary: expand to cover the whole tag
-          if (isStartInside) {
-            start = matchStart;
-            changed = true;
-          }
-          if (isEndInside) {
-            end = matchEnd;
-            changed = true;
-          }
-        }
-      }
-    }
-
-    if (changed) {
-      textarea.setSelectionRange(start, end);
-    }
-
-    selectionStartRef.current = start;
+    enforceCaretLimits();
   };
 
   const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
@@ -1062,11 +1148,11 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const promptValue = prompt || '';
+    const promptValue = textarea.value || '';
 
     // Intercept Backspace and Delete at tag boundaries to delete the entire tag as an atomic unit
     if (start === end) {
-      const tagRegex = /(@(?:图片|参考图)\s*(\d+))/g;
+      const tagRegex = getValidTagRegex();
       let tagMatch;
       while ((tagMatch = tagRegex.exec(promptValue)) !== null) {
         const mStart = tagMatch.index;
@@ -1105,6 +1191,20 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
           }, 0);
           return;
         }
+
+        // Arrow keys skip active tag completely when caret tries to enter
+        if (e.key === 'ArrowLeft' && start === mEnd) {
+          e.preventDefault();
+          textarea.setSelectionRange(mStart, mStart);
+          selectionStartRef.current = mStart;
+          return;
+        }
+        if (e.key === 'ArrowRight' && start === mStart) {
+          e.preventDefault();
+          textarea.setSelectionRange(mEnd, mEnd);
+          selectionStartRef.current = mEnd;
+          return;
+        }
       }
     }
 
@@ -1130,8 +1230,8 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       }
     }
 
-    // 2. Prevent caret selection from typing INSIDE any tag block (e.g. @图片1)
-    const tagRegex2 = /(@(?:图片|参考图)\s*\d+)/g;
+    // 2. Prevent caret selection from typing or manual movement INSIDE any tag block (e.g. @图片1)
+    const tagRegex2 = getValidTagRegex();
     let tagMatch;
     while ((tagMatch = tagRegex2.exec(promptValue)) !== null) {
       const mStart = tagMatch.index;
@@ -1141,8 +1241,21 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       const isTouchInner = (start === end && start > mStart && start < mEnd);
       
       if (overlaps || isTouchInner) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          textarea.setSelectionRange(mStart, mStart);
+          selectionStartRef.current = mStart;
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          textarea.setSelectionRange(mEnd, mEnd);
+          selectionStartRef.current = mEnd;
+          return;
+        }
+
         const isControlOrMovementKey = [
-          'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+          'ArrowUp', 'ArrowDown',
           'Home', 'End', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock',
           'PageUp', 'PageDown', 'Tab'
         ].includes(e.key);
@@ -1203,8 +1316,8 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     if (activeClickedTag) {
       if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
-        const left = prompt.slice(0, activeClickedTag.start);
-        const right = prompt.slice(activeClickedTag.end);
+        const left = promptValue.slice(0, activeClickedTag.start);
+        const right = promptValue.slice(activeClickedTag.end);
         const finalPrompt = left + right;
 
         setPrompt(finalPrompt);
@@ -1230,8 +1343,8 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         setShowRefDropdown(false);
       } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        const left = prompt.slice(0, activeClickedTag.start);
-        const right = prompt.slice(activeClickedTag.end);
+        const left = promptValue.slice(0, activeClickedTag.start);
+        const right = promptValue.slice(activeClickedTag.end);
         const finalPrompt = left + e.key + right;
 
         setPrompt(finalPrompt);
@@ -1255,13 +1368,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     if (e.key === 'Backspace' && start === end) {
       const regex = /(@(?:图片|参考图)\s*\d+)/g;
       let match;
-      while ((match = regex.exec(prompt)) !== null) {
+      while ((match = regex.exec(promptValue)) !== null) {
         const matchStart = match.index;
         const matchEnd = matchStart + match[0].length;
         if (start === matchEnd) {
           e.preventDefault();
-          const left = prompt.slice(0, matchStart);
-          const right = prompt.slice(matchEnd);
+          const left = promptValue.slice(0, matchStart);
+          const right = promptValue.slice(matchEnd);
           const finalPrompt = left + right;
 
           setPrompt(finalPrompt);
@@ -1283,13 +1396,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
     if (e.key === 'Delete' && start === end) {
       const regex = /(@(?:图片|参考图)\s*\d+)/g;
       let match;
-      while ((match = regex.exec(prompt)) !== null) {
+      while ((match = regex.exec(promptValue)) !== null) {
         const matchStart = match.index;
         const matchEnd = matchStart + match[0].length;
         if (start === matchStart) {
           e.preventDefault();
-          const left = prompt.slice(0, matchStart);
-          const right = prompt.slice(matchEnd);
+          const left = promptValue.slice(0, matchStart);
+          const right = promptValue.slice(matchEnd);
           const finalPrompt = left + right;
 
           setPrompt(finalPrompt);
@@ -1311,7 +1424,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
   const renderHighlightedPrompt = () => {
     if (!prompt) return null;
     
-    const regex = /(@(?:图片|参考图)\s*\d+)/g;
+    const regex = getValidTagRegexForSplit();
     const parts = prompt.split(regex);
     
     const matches: string[] = prompt.match(regex) || [];
@@ -1335,6 +1448,12 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         return (
           <span 
             key={index}
+            onMouseDown={(e) => {
+              isMouseInteractingRef.current = true;
+            }}
+            onTouchStart={(e) => {
+              isMouseInteractingRef.current = true;
+            }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -1742,6 +1861,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
             imgApiKey = geminiProf.apiKey || imgApiKey;
             imgBaseUrl = geminiProf.baseUrl || imgBaseUrl;
           }
+        } else if (activeTab === 'jimeng') {
+          // Explicitly resolve Doubao/Jimeng profile/credentials for Jimeng Image tab
+          const doubaoProf = (apiSettings.profiles || []).find((p: any) => p.id === 'doubao' || p.engine === 'doubao');
+          if (doubaoProf) {
+            imgApiKey = doubaoProf.apiKey || imgApiKey;
+            imgBaseUrl = doubaoProf.baseUrl || imgBaseUrl;
+          }
         } else if (apiSettings.profiles && apiSettings.activeProfileId) {
           const activeProf = (apiSettings.profiles as any[]).find((p: any) => p.id === apiSettings.activeProfileId);
           if (activeProf) {
@@ -2008,12 +2134,15 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                 onChange={(e) => { e.stopPropagation(); setGptModel(e.target.value); handleUpdateField('gptModel', e.target.value); }}
                 className="px-3 py-2 bg-[#121214]/60 border border-white/5 rounded-xl text-zinc-300 font-medium focus:border-indigo-500 hover:border-zinc-700 outline-none w-full cursor-pointer h-9 text-[11px]"
               >
-                <option value="gpt-image-2">gpt-image-2</option>
-                <option value="gpt-image-2:stable">gpt-image-2:stable (高成功率)</option>
-                <option value="gpt-image-2:nitro">gpt-image-2:nitro (高功速)</option>
-                <option value="gpt-image-2:floor">gpt-image-2:floor (低价格)</option>
-                <option value="dall-e-3">dall-e-3</option>
-                <option value="dall-e-2">dall-e-2</option>
+                {gptModelOptions.map((model) => {
+                  let displayName = model;
+                  if (model === 'gpt-image-2:stable') displayName = 'gpt-image-2:stable (高成功率)';
+                  else if (model === 'gpt-image-2:nitro') displayName = 'gpt-image-2:nitro (高功速)';
+                  else if (model === 'gpt-image-2:floor') displayName = 'gpt-image-2:floor (低价格)';
+                  return (
+                    <option key={model} value={model}>{displayName}</option>
+                  );
+                })}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -2150,8 +2279,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                 onChange={(e) => { e.stopPropagation(); setBananaModel(e.target.value); handleUpdateField('bananaModel', e.target.value); }}
                 className="px-3 py-2 bg-[#121214]/60 border border-white/5 rounded-xl text-zinc-300 font-medium focus:border-indigo-500 hover:border-zinc-700 outline-none w-full cursor-pointer h-9 text-[9px] truncate"
               >
-                <option value="gemini-2.0-flash-preview-image-generation">gemini-2.0-flash-preview...</option>
-                <option value="imagen-3.0-generate-001">imagen-3.0-generate-001</option>
+                {bananaModelOptions.map((model) => {
+                  let displayName = model;
+                  if (model === 'gemini-2.0-flash-preview-image-generation') displayName = 'gemini-2.0-flash-preview...';
+                  return (
+                    <option key={model} value={model}>{displayName}</option>
+                  );
+                })}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -2600,8 +2734,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                 onChange={(e) => { e.stopPropagation(); setJmModel(e.target.value); handleUpdateField('jmModel', e.target.value); }}
                 className="px-3 py-2 bg-[#121214]/60 border border-white/5 rounded-xl text-zinc-300 font-medium focus:border-indigo-500 hover:border-zinc-700 outline-none w-full cursor-pointer h-9 text-[10px]"
               >
-                <option value="doubao-seedream-5-0-260128">doubao-seedream-5-0...</option>
-                <option value="doubao-image-v2">doubao-image-v2</option>
+                {jimengModelOptions.map((model) => {
+                  let displayName = model;
+                  if (model === 'doubao-seedream-5-0-260128') displayName = 'doubao-seedream-5-0...';
+                  return (
+                    <option key={model} value={model}>{displayName}</option>
+                  );
+                })}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -3100,17 +3239,18 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
           {renderTabContent()}
 
           {/* 3. Horizontal Connected Reference Source Images Container [Fig 8] */}
-          {incomingImages.length > 0 && (
+          {localImagesList.length > 0 && (
             <div className="flex flex-col gap-2 mb-4 nodrag bg-[#0d0d0f]/20 py-3 px-4 rounded-2xl border border-white/5 shadow-inner">
               <div className="flex items-center justify-between select-none">
                 <span className="text-[10px] font-black text-zinc-400 tracking-widest uppercase flex items-center gap-2">
                   <Images size={13} className="text-indigo-500" /> 连接的参考图
                 </span>
-                <span className="text-[9px] font-mono text-zinc-500 font-bold">{incomingImages.length} 个资源已连接</span>
+                <span className="text-[9px] font-mono text-zinc-500 font-bold">{localImagesList.length} 个资源已连接</span>
               </div>
               
               <div className="flex gap-3 overflow-x-auto py-1.5 custom-scrollbar scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                {incomingImages.map((url, index) => {
+                {localImagesList.map((item, index) => {
+                  const url = item.url;
                   const isSelected = parsedPromptInfo.imageIndexes.includes(index);
                   const isDragged = draggedIdx === index;
                   const isHoveredOver = dragOverIdx === index;
@@ -3118,13 +3258,13 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
                   return (
                     <div 
-                      key={index}
+                      key={`ref-img-${item.sourceNodeId || item.url || index}`}
                       draggable={!isTouchDevice || longPressActiveIdx === index}
                       onDragStart={(e) => handleImageSortDragStart(e, index)}
                       onDragOver={(e) => handleImageSortDragOver(e, index)}
                       onDragLeave={() => handleImageSortDragLeave(index)}
                       onDrop={(e) => handleImageSortDrop(e, index)}
-                      onDragEnd={cleanupDragStates}
+                      onDragEnd={handleImageSortDragEnd}
                       onMouseDown={() => startLongPress(index)}
                       onMouseUp={handleMouseUpOrTouchEnd}
                       onTouchStart={() => startLongPress(index)}
@@ -3216,19 +3356,20 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
             {/* The beautifully synchronized rich mention field */}
             <div className="relative w-full min-h-[110px] bg-[#121214]/60 border border-white/5 rounded-2xl focus-within:border-indigo-500/50 transition-all overflow-hidden cursor-text">
-              {/* Backdrop rendering layered at bottom (z-10) with pointer-events-none and select-none */}
+              {/* Backdrop rendering layered on top (z-30) but with pointer-events-none (falling through to textarea except for tags) and hidden during composition */}
               <div 
                 ref={backdropRef}
-                className={`absolute inset-0 p-4 font-sans text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words text-transparent pointer-events-none select-none overflow-y-auto custom-scrollbar z-10 ${getFontSizeClass()}`}
+                className={`absolute inset-0 p-4 font-sans text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words text-transparent pointer-events-none select-none overflow-y-auto custom-scrollbar z-30 ${getFontSizeClass()}`}
                 style={{
                   ...getFontSizeStyle(),
-                  maxHeight: '100%'
+                  maxHeight: '100%',
+                  opacity: isComposing ? 0 : 1
                 }}
               >
                 {renderHighlightedPrompt()}
               </div>
               
-              {/* Actual interactive `<textarea>` on top (z-20) with synchronized caret and IME composition support */}
+              {/* Actual interactive `<textarea>` underneath (z-20) with synchronized caret and IME composition support */}
               <textarea
                 ref={textareaRef}
                 style={{

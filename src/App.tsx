@@ -83,6 +83,8 @@ import {
   Check,
   LogOut,
   Pin,
+  PinOff,
+  Minus,
   ChevronLeft,
   RotateCcw,
   ZoomIn,
@@ -705,7 +707,137 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [connectingHandle, setConnectingHandle] = useState<any | null>(null);
   const connectionMade = useRef(false);
   const [inputText, setInputText] = useState("");
+  const [showModelPopup, setShowModelPopup] = useState(false);
+  const [assistantModelSearch, setAssistantModelSearch] = useState("");
+
+  const chatModelsList = useMemo(() => {
+    const activeId = settings.apiSettings.activeProfileId || settings.apiSettings.engine || 'gemini';
+    
+    if (activeId === 'modelscope') {
+      const msModels = settings.apiSettings.modelscopeChatModels || [];
+      const defaultMsModels = [
+        "Qwen/Qwen3-235B-A22B",
+        "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        "MiniMax/MiniMax-M2.7:MiniMax",
+        "Qwen/QVQ-72B-Preview",
+        "Qwen/Qwen3.5-122B-A10B",
+        "Qwen/Qwen3.5-27B",
+        "Qwen/Qwen3.5-35B-A3B"
+      ];
+      return Array.from(new Set([
+        ...(settings.apiSettings.modelscopeSelectedChatModel ? [settings.apiSettings.modelscopeSelectedChatModel] : []),
+        ...msModels,
+        ...defaultMsModels
+      ]));
+    }
+
+    const profilesList = settings.apiSettings.profiles || [];
+    const activeProf = profilesList.find((p: any) => p.id === activeId) || { id: "gemini", engine: "gemini", models: [], modelId: "gemini-2.5-flash" };
+    const savedModels = activeProf.models || [];
+    
+    const imageKeywords = ['flux', 'stable-diffusion', 'sdxl', 'image', 'canvas', 'cv_tinynas', 'diffusion', 'instant-style', 'synthetic', 'banana', 'wan-video', 'seedream', 'imagine', 'midjourney', 'mj-', 'dall-e', 'dalle', 'imagen', 'sd3', 'sd-3', 'sd15', 'sd-1.5', 'sd1.5', 'kolors', 'recraft', 'ideogram', 'cogview', 'stable-video-diffusion', 'svd', 'runway', 'luma', 'sora', 'hunyuan', 'playground', 'adobe', 'firefly', 'lumina', 'pixart', 'wan', 'kling', 'drawing', 'paint', 'sketch', 'illustration', 'art', 'video', 't2v', 'i2v', 'v2v', 'animate', 'animated', 'animator'];
+
+    const filteredPulled = savedModels.filter((m: string) => 
+      !imageKeywords.some(kw => m.toLowerCase().includes(kw))
+    );
+
+    const defaultChatModels = [
+      "gemini-2.5-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
+      "gemini-3.1-flash-image-preview",
+      "gpt-4o-mini",
+      "gpt-4o",
+      "o1-mini",
+      "gpt-5.4-pro",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-haiku-20241022",
+      "deepseek-chat",
+      "deepseek-reasoner",
+      "doubao-pro-32k",
+      "doubao-pro-128k",
+      "doubao-lite-32k",
+      "qwen-max",
+      "qwen-plus",
+      "qwen-turbo"
+    ];
+
+    const activeEngine = activeProf.engine?.toLowerCase();
+    const relevantDefaults = defaultChatModels.filter(m => {
+      if (activeEngine === 'gemini') return m.startsWith('gemini');
+      if (activeEngine === 'openai') return m.startsWith('gpt-') || m.startsWith('o1-');
+      if (activeEngine === 'claude') return m.startsWith('claude');
+      if (activeEngine === 'deepseek') return m.startsWith('deepseek');
+      if (activeEngine === 'doubao') return m.startsWith('doubao');
+      if (activeEngine === 'qianwen' || activeEngine === 'qianwen') return m.startsWith('qwen');
+      return true;
+    });
+
+    return Array.from(new Set([
+      ...(activeProf.modelId ? [activeProf.modelId] : []),
+      ...filteredPulled,
+      ...relevantDefaults
+    ]));
+  }, [settings.apiSettings, settings.apiSettings.profiles]);
+
+  const handlePlatformChange = (platformId: string) => {
+    if (platformId === 'modelscope') {
+      updateSettings({
+        apiSettings: {
+          ...settings.apiSettings,
+          activeProfileId: 'modelscope',
+          engine: 'modelscope'
+        }
+      });
+    } else {
+      const rawProfiles = settings.apiSettings.profiles || [];
+      const prof = rawProfiles.find((p: any) => p.id === platformId);
+      if (prof) {
+        updateSettings({
+          apiSettings: {
+            ...settings.apiSettings,
+            isCustom: true,
+            engine: prof.engine,
+            baseUrl: prof.baseUrl,
+            apiKey: prof.apiKey,
+            modelId: prof.modelId,
+            activeProfileId: prof.id,
+          },
+        });
+      }
+    }
+  };
+
+  const handleModelSelect = (modelId: string) => {
+    const activeId = settings.apiSettings.activeProfileId || settings.apiSettings.engine || 'gemini';
+    if (activeId === 'modelscope') {
+      updateSettings({
+        apiSettings: {
+          ...settings.apiSettings,
+          modelscopeSelectedChatModel: modelId,
+        }
+      });
+    } else {
+      const updatedProfiles = (settings.apiSettings.profiles || []).map((p: any) => {
+        if (p.id === activeId) {
+          return { ...p, modelId: modelId };
+        }
+        return p;
+      });
+      updateSettings({
+        apiSettings: {
+          ...settings.apiSettings,
+          profiles: updatedProfiles,
+          modelId: modelId,
+        }
+      });
+    }
+  };
+
   const [isAssistantMaximized, setIsAssistantMaximized] = useState(false);
+  const [isAssistantMinimized, setIsAssistantMinimized] = useState(false);
+  const [isAssistantPinned, setIsAssistantPinned] = useState(true);
+  const [isTextareaFocused, setIsTextareaFocused] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<any[]>([]);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -2683,56 +2815,129 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
       {/* Right Assistant Panel */}
       <AnimatePresence>
         {showAssistant && (
-          <>
-            {/* Right Assistant Hover Sensor */}
-            <div 
-              onMouseEnter={() => setIsAssistantHovered(true)}
-              className={`fixed right-0 top-0 bottom-0 w-3 z-40 pointer-events-auto ${isAssistantMaximized ? "hidden" : ""}`}
-            />
+          isAssistantMinimized ? (
             <motion.div
-              onMouseEnter={() => setIsAssistantHovered(true)}
-              onMouseLeave={() => setIsAssistantHovered(false)}
-              initial={{ x: 400, width: "400px" }}
-              animate={{ 
-                x: isAssistantMaximized ? 0 : (isAssistantHovered ? 0 : 400),
-                width: isAssistantMaximized ? "100vw" : "400px"
-              }}
-              exit={{ x: 400 }}
-              transition={{ type: "tween", duration: 0.3 }}
-              className="fixed right-0 top-0 bottom-0 bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col z-50 overflow-hidden shadow-[-20px_0_40px_rgba(0,0,0,0.5)]"
+              drag
+              dragMomentum={false}
+              dragElastic={0.08}
+              onDoubleClick={() => setIsAssistantMinimized(false)}
+              initial={{ opacity: 0, scale: 0.8, y: 100 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 100 }}
+              className="fixed bottom-24 right-8 z-[9999] p-3 pl-4 bg-[var(--bg-secondary)] border border-[var(--accent)] hover:border-[var(--accent)]/80 text-white rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.65)] flex items-center gap-3 cursor-grab active:cursor-grabbing backdrop-blur-md select-none group border-glow transition-all duration-200"
+              style={{ touchAction: "none" }}
             >
-            <div
-              className={`p-6 flex items-center justify-between border-b border-[var(--border)] transition-all ${
-                settings.barTexture === "frosted"
-                  ? "frosted-glass border-b-white/5"
-                  : "bg-[var(--bg-secondary)]"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
-                <span className="text-base font-bold tracking-[0.2em] text-[var(--text-secondary)] uppercase">
-                  NEXT GEN ASSISTANT
+              <div className="relative pointer-events-none">
+                <div className="w-10 h-10 rounded-xl bg-[linear-gradient(135deg,var(--accent),#818cf8)] flex items-center justify-center text-white shadow-lg shadow-accent/20">
+                  <Sparkles size={18} className="animate-pulse" />
+                </div>
+                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-[var(--bg-secondary)] animate-bounce" />
+              </div>
+              <div className="flex flex-col text-left pointer-events-none">
+                <span className="text-[11px] font-black text-gray-200 uppercase tracking-widest leading-none mb-1">
+                  AI ASSISTANT
+                </span>
+                <span className="text-[9px] text-gray-400 font-medium">
+                  已最小化 · 双击展开
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setIsAssistantMaximized(!isAssistantMaximized)}
-                  className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors"
-                  title={isAssistantMaximized ? "缩小" : "全屏"}
+              <div className="flex items-center gap-1.5 ml-2 border-l border-[var(--border)] pl-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsAssistantMinimized(false);
+                  }}
+                  className="p-1.5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-colors"
+                  title="展开助手"
                 >
-                  {isAssistantMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  <Maximize2 size={13} />
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     toggleAssistant();
-                    setIsAssistantMaximized(false);
                   }}
-                  className="p-2 hover:bg-red-500/10 rounded-lg text-[var(--text-secondary)] hover:text-red-400 transition-colors"
+                  className="p-1.5 hover:bg-red-500/10 rounded-lg text-gray-400 hover:text-red-400 transition-colors"
+                  title="关闭"
                 >
-                  <X size={16} />
+                  <X size={13} />
                 </button>
               </div>
-            </div>
+            </motion.div>
+          ) : (
+            <>
+              {/* Right Assistant Hover Sensor */}
+              <div 
+                onMouseEnter={() => setIsAssistantHovered(true)}
+                className={`fixed right-0 top-0 bottom-0 w-3 z-40 pointer-events-auto ${(isAssistantMaximized || isAssistantPinned) ? "hidden" : ""}`}
+              />
+              <motion.div
+                onMouseEnter={() => setIsAssistantHovered(true)}
+                onMouseLeave={() => setIsAssistantHovered(false)}
+                initial={{ x: 400, width: "400px" }}
+                animate={{ 
+                  x: (isAssistantMaximized || isAssistantPinned || isTextareaFocused || inputText.trim() !== '') ? 0 : (isAssistantHovered ? 0 : 400),
+                  width: isAssistantMaximized ? "100vw" : "400px"
+                }}
+                exit={{ x: 400 }}
+                transition={{ type: "tween", duration: 0.3 }}
+                className="fixed right-0 top-0 bottom-0 bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col z-50 overflow-hidden shadow-[-20px_0_40px_rgba(0,0,0,0.5)]"
+              >
+              <div
+                className={`p-6 flex items-center justify-between border-b border-[var(--border)] transition-all ${
+                  settings.barTexture === "frosted"
+                    ? "frosted-glass border-b-white/5"
+                    : "bg-[var(--bg-secondary)]"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+                  <span className="text-base font-bold tracking-[0.2em] text-[var(--text-secondary)] uppercase">
+                    NEXT GEN ASSISTANT
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsAssistantPinned(!isAssistantPinned)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isAssistantPinned 
+                        ? "text-[var(--accent)] hover:bg-[var(--accent)]/10" 
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+                    }`}
+                    title={isAssistantPinned ? "启用悬浮自动隐藏" : "固定住助手 (常驻)"}
+                  >
+                    {isAssistantPinned ? <Pin size={16} className="fill-[var(--accent)]/15" /> : <PinOff size={16} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAssistantMinimized(true);
+                      setIsAssistantMaximized(false);
+                    }}
+                    className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors"
+                    title="最小化悬浮到画布"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <button 
+                    onClick={() => setIsAssistantMaximized(!isAssistantMaximized)}
+                    className="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg text-[var(--text-secondary)] transition-colors"
+                    title={isAssistantMaximized ? "侧边栏模式" : "全屏模式"}
+                  >
+                    {isAssistantMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      toggleAssistant();
+                      setIsAssistantMaximized(false);
+                      setIsAssistantMinimized(false);
+                    }}
+                    className="p-2 hover:bg-red-500/10 rounded-lg text-[var(--text-secondary)] hover:text-red-400 transition-colors"
+                    title="关闭助手"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
 
             <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar bg-[var(--bg-primary)]/50 relative">
               {/* Elegant floating feedback notification toast */}
@@ -2976,6 +3181,8 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                 <textarea
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
+                  onFocus={() => setIsTextareaFocused(true)}
+                  onBlur={() => setIsTextareaFocused(false)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -3125,124 +3332,201 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                     {webSearchEnabled && <span className="text-[10px]">联网开启</span>}
                   </button>
                 </div>
-                <div className="relative group/model">
-                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-white/5 rounded-xl border border-[var(--border)] hover:bg-white/10 cursor-pointer transition-colors">
+                <div className="relative">
+                  <div 
+                    onClick={() => setShowModelPopup(!showModelPopup)}
+                    className="flex items-center gap-2 px-2.5 py-1.5 bg-white/5 rounded-xl border border-[var(--border)] hover:bg-white/10 cursor-pointer transition-colors"
+                  >
                     <span className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1">
                       {(() => {
-                        const activeId = settings.apiSettings.activeProfileId;
+                        const activeId = settings.apiSettings.activeProfileId || settings.apiSettings.engine || 'gemini';
+                        if (activeId === 'modelscope') {
+                          return `ModelScope | ${settings.apiSettings.modelscopeSelectedChatModel || 'Default'}`;
+                        }
                         const profilesList = settings.apiSettings.profiles || [];
                         const activeProf = profilesList.find((p: any) => p.id === activeId);
-                        return activeProf ? activeProf.name : (settings.apiSettings.engine || '').toUpperCase();
-                      })()} | {settings.apiSettings.imageEngine}
+                        const profileName = activeProf ? activeProf.name : (settings.apiSettings.engine || '').toUpperCase();
+                        const modelName = activeProf ? activeProf.modelId : (settings.apiSettings.modelId || '');
+                        return `${profileName} | ${modelName}`;
+                      })()}
                     </span>
                     <ChevronUp size={12} className="text-gray-500" />
                   </div>
 
-                  <div className="absolute bottom-full right-0 mb-2 w-56 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl shadow-2xl opacity-0 invisible group-hover/model:opacity-100 group-hover/model:visible transition-all z-50 overflow-hidden">
-                    <div className="p-2 flex flex-col gap-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      <span className="text-sm font-bold text-gray-500 uppercase tracking-widest px-2 py-1 select-none border-b border-white/5 mb-1">
-                        Text Models
-                      </span>
-                      {(() => {
-                        const rawProfiles = settings.apiSettings.profiles || [];
-                        const displayProfiles = rawProfiles.length > 0 ? rawProfiles : [
-                          { id: "gemini", name: "Gemini 官方", engine: "gemini", baseUrl: "https://generativelanguage.googleapis.com", apiKey: settings.apiSettings.apiKey || "", modelId: "gemini-2.5-flash" },
-                          { id: "openai", name: "OpenAI 官方", engine: "openai", baseUrl: "https://api.openai.com/v1", apiKey: "", modelId: "gpt-4o-mini" },
-                          { id: "claude", name: "Claude 官方", engine: "claude", baseUrl: "https://api.openai.com/v1", apiKey: "", modelId: "claude-3-5-sonnet-20241022" },
-                          { id: "deepseek", name: "DeepSeek 官方", engine: "deepseek", baseUrl: "https://api.deepseek.com", apiKey: "", modelId: "deepseek-chat" },
-                          { id: "doubao", name: "火山引擎 (豆包)", engine: "doubao", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", apiKey: "", modelId: "doubao-pro-32k" },
-                          { id: "qianwen", name: "通义千问", engine: "qianwen", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: "", modelId: "qwen-max" }
-                        ];
+                  <AnimatePresence>
+                    {showModelPopup && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute bottom-full right-0 mb-2 w-72 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-2xl shadow-2xl z-50 overflow-hidden p-3 flex flex-col gap-3"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                            模型平台 / 服务商
+                          </span>
+                          <select
+                            value={settings.apiSettings.activeProfileId || settings.apiSettings.engine || 'gemini'}
+                            onChange={(e) => handlePlatformChange(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-[#121214]/60 border border-white/5 rounded-xl text-zinc-300 font-medium focus:border-indigo-500 hover:border-zinc-700 outline-none cursor-pointer text-xs"
+                          >
+                            {(settings.apiSettings.profiles && settings.apiSettings.profiles.length > 0) ? (
+                              settings.apiSettings.profiles.map((p: any) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))
+                            ) : (
+                              <>
+                                <option value="gemini">Gemini 官方</option>
+                                <option value="openai">OpenAI 官方</option>
+                                <option value="claude">Claude 官方</option>
+                                <option value="deepseek">DeepSeek 官方</option>
+                                <option value="doubao">火山引擎 (豆包)</option>
+                                <option value="qianwen">通义千问</option>
+                              </>
+                            )}
+                            <option value="modelscope">ModelScope 平台</option>
+                          </select>
+                        </div>
 
-                        return displayProfiles.map((prof: any) => {
-                          const isSelected = settings.apiSettings.activeProfileId === prof.id || 
-                            (!settings.apiSettings.activeProfileId && settings.apiSettings.engine === prof.engine);
-                          return (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                            具体模型选择 (Chat / LLM)
+                          </span>
+                          <input
+                            type="text"
+                            value={assistantModelSearch}
+                            onChange={(e) => setAssistantModelSearch(e.target.value)}
+                            placeholder="🔍 检索过滤模型..."
+                            className="w-full px-2.5 py-1.5 bg-black/40 border border-white/5 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 mb-1"
+                          />
+                          <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto custom-scrollbar bg-black/20 p-1.5 rounded-xl border border-white/5">
+                            {(() => {
+                              const filtered = chatModelsList.filter((model) => 
+                                model.toLowerCase().includes(assistantModelSearch.toLowerCase())
+                              );
+                              const displayed = filtered.slice(0, 40);
+                              
+                              return (
+                                <>
+                                  {displayed.map((model) => {
+                                    const activeId = settings.apiSettings.activeProfileId || settings.apiSettings.engine || 'gemini';
+                                    const currentSelected = activeId === 'modelscope'
+                                      ? settings.apiSettings.modelscopeSelectedChatModel
+                                      : (() => {
+                                          const prof = (settings.apiSettings.profiles || []).find((p: any) => p.id === activeId);
+                                          return prof ? prof.modelId : settings.apiSettings.modelId;
+                                        })();
+                                    const isSelected = currentSelected === model;
+                                    return (
+                                      <button
+                                        key={model}
+                                        onClick={() => {
+                                          handleModelSelect(model);
+                                          setShowModelPopup(false);
+                                          setAssistantModelSearch("");
+                                        }}
+                                        className={`w-full px-2.5 py-1.5 text-left rounded-lg text-xs font-semibold transition-all ${
+                                          isSelected 
+                                            ? "bg-indigo-600 text-white font-extrabold shadow-md"
+                                            : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                                        }`}
+                                      >
+                                        {model}
+                                      </button>
+                                    );
+                                  })}
+                                  {filtered.length > 40 && (
+                                    <span className="text-[9px] text-zinc-500 text-center block py-1 font-mono">
+                                      已截断显示前 40 个，输入关键词精准检索
+                                    </span>
+                                  )}
+                                  {filtered.length === 0 && (
+                                    <span className="text-[10px] text-zinc-500 text-center block py-3 font-mono">
+                                      没有找到匹配的模型
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        <div className="h-px bg-white/5 my-0.5" />
+                        
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                            绘画引擎 / 生图
+                          </span>
+                          <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto">
                             <button
-                              key={prof.id}
-                              onClick={() =>
+                              onClick={() => {
                                 updateSettings({
                                   apiSettings: {
                                     ...settings.apiSettings,
-                                    isCustom: true,
-                                    engine: prof.engine,
-                                    baseUrl: prof.baseUrl,
-                                    apiKey: prof.apiKey,
-                                    modelId: prof.modelId,
-                                    activeProfileId: prof.id,
+                                    imageEngine: "online",
+                                    imageModel: "Nano Banana Pro",
                                   },
-                                })
-                              }
-                              className={`px-3 py-1.5 text-sm rounded-lg text-left transition-colors flex flex-col justify-center ${
-                                isSelected
-                                  ? "bg-[var(--accent)] text-white font-extrabold"
+                                });
+                                setShowModelPopup(false);
+                              }}
+                              className={`px-2.5 py-1.5 text-left rounded-lg text-xs transition-colors ${
+                                settings.apiSettings.imageEngine === "online" && settings.apiSettings.imageModel === "Nano Banana Pro"
+                                  ? "bg-emerald-600 text-white font-bold"
                                   : "text-gray-300 hover:bg-white/5"
                               }`}
                             >
-                              <span className="text-xs truncate font-bold">
-                                {prof.name}
-                              </span>
-                              <span className={`text-[9px] font-mono truncate tracking-tight block ${
-                                isSelected ? "text-white/80" : "text-gray-500"
-                              }`}>
-                                {prof.modelId || prof.engine}
-                              </span>
+                              Nano Banana Pro
                             </button>
-                          );
-                        });
-                      })()}
-                      <div className="h-px bg-white/5 my-1 mx-2" />
-                      <span className="text-sm font-bold text-gray-500 uppercase tracking-widest px-2 py-1">
-                        Image Generation
-                      </span>
-                      <button
-                        onClick={() =>
-                          updateSettings({
-                            apiSettings: {
-                              ...settings.apiSettings,
-                              imageEngine: "online",
-                              imageModel: "Nano Banana Pro",
-                            },
-                          })
-                        }
-                        className="px-3 py-2 text-base text-gray-300 hover:bg-emerald-600 hover:text-white rounded-lg text-left transition-colors"
-                      >
-                        Nano Banana Pro
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateSettings({
-                            apiSettings: {
-                              ...settings.apiSettings,
-                              imageEngine: "online",
-                              imageModel: "chatgptimage2",
-                            },
-                          })
-                        }
-                        className="px-3 py-2 text-base text-gray-300 hover:bg-emerald-600 hover:text-white rounded-lg text-left transition-colors"
-                      >
-                        ChatGPT Image 2
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateSettings({
-                            apiSettings: {
-                              ...settings.apiSettings,
-                              imageEngine: "comfyui",
-                            },
-                          })
-                        }
-                        className="px-3 py-2 text-base text-gray-300 hover:bg-emerald-600 hover:text-white rounded-lg text-left transition-colors"
-                      >
-                        Local ComfyUI
-                      </button>
-                    </div>
-                  </div>
+                            <button
+                              onClick={() => {
+                                updateSettings({
+                                  apiSettings: {
+                                    ...settings.apiSettings,
+                                    imageEngine: "online",
+                                    imageModel: "chatgptimage2",
+                                  },
+                                });
+                                setShowModelPopup(false);
+                              }}
+                              className={`px-2.5 py-1.5 text-left rounded-lg text-xs transition-colors ${
+                                settings.apiSettings.imageEngine === "online" && settings.apiSettings.imageModel === "chatgptimage2"
+                                  ? "bg-emerald-600 text-white font-bold"
+                                  : "text-gray-300 hover:bg-white/5"
+                              }`}
+                            >
+                              ChatGPT Image 2
+                            </button>
+                            <button
+                              onClick={() => {
+                                updateSettings({
+                                  apiSettings: {
+                                    ...settings.apiSettings,
+                                    imageEngine: "comfyui",
+                                  },
+                                });
+                                setShowModelPopup(false);
+                              }}
+                              className={`px-2.5 py-1.5 text-left rounded-lg text-xs transition-colors ${
+                                settings.apiSettings.imageEngine === "comfyui"
+                                  ? "bg-emerald-600 text-white font-bold"
+                                  : "text-gray-300 hover:bg-white/5"
+                              }`}
+                            >
+                              Local ComfyUI
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </div>
           </motion.div>
           </>
+          )
         )}
       </AnimatePresence>
 
