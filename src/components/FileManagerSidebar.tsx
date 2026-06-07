@@ -277,8 +277,8 @@ export const FileManagerSidebar = () => {
       dragControls={dragControls}
       dragListener={false}
       dragMomentum={false}
-      onWheel={isPinned ? (e) => e.stopPropagation() : undefined}
-      onPointerDownCapture={isPinned ? (e) => e.stopPropagation() : undefined}
+      onWheel={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       initial={{ opacity: 0, scale: 0.95, y: 50, x: 200 }}
       animate={{ 
         opacity: 1, 
@@ -291,12 +291,12 @@ export const FileManagerSidebar = () => {
       }}
       exit={{ opacity: 0, scale: 0.95 }}
       style={{ 
-        position: (isPinned || isFullscreen) ? 'fixed' : 'absolute',
-        top: isFullscreen ? 0 : '7vh',
-        left: isFullscreen ? 0 : '10vw',
-        zIndex: isPinned ? 9999 : 100, // Make sure it sits on top of nodes
+        position: 'fixed',
+        top: isFullscreen ? 0 : '10vh',
+        left: isFullscreen ? 0 : '12vw',
+        zIndex: 9999, // Make sure it sits on top of nodes and other overlays
       }}
-      className={`bg-[var(--bg-secondary)] border border-[var(--border)] flex flex-col overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] ${!isPinned ? 'nowheel nodrag' : ''} ${isCollapsed ? 'backdrop-blur-xl bg-black/60 shadow-lg' : ''}`}
+      className={`bg-[var(--bg-secondary)] border border-[var(--border)] flex flex-col overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] nowheel nodrag nopan ${isCollapsed ? 'backdrop-blur-xl bg-black/60 shadow-lg' : ''}`}
     >
       {/* Resizer Handle on the Right (only when not fullscreen/collapsed) */}
       {!isFullscreen && !isCollapsed && (
@@ -469,7 +469,7 @@ export const FileManagerSidebar = () => {
 
   return (
     <>
-      {isPinned || isFullscreen ? sidebarContent : <ViewportPortal>{sidebarContent}</ViewportPortal>}
+      {sidebarContent}
 
     {fullscreenUrl && createPortal(
       <AnimatePresence>
