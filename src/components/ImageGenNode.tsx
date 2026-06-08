@@ -1509,11 +1509,10 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
       const posX = currentNode ? currentNode.position.x + 500 : 200;
       const posY = currentNode ? currentNode.position.y : 200;
       
-      addNode("apt-web-tool", posX, posY, {
+      addNode("comfyui-node", posX, posY, {
         initialWidth: 1000,
         initialHeight: 750,
         viewMode: 'comfy',
-        comfyUrl: comfyUrl,
         tabs: [
           { id: 'comfy-auto', title: 'ComfyUI Link', url: comfyUrl }
         ],

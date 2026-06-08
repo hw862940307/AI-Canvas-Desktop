@@ -247,7 +247,7 @@ const shouldProxyUrl = (url: string) => {
 
 interface BrowserFrameProps {
   isPortal?: boolean;
-  zoomScale?: number;
+  
   tabs: BrowserTab[];
   activeTabId: string;
   onSelectTab: (id: string) => void;
@@ -279,7 +279,7 @@ interface BrowserFrameProps {
 
 const BrowserFrame = React.memo(({ 
   isPortal = false, 
-  zoomScale = 1.0,
+  
   tabs,
   activeTabId,
   onSelectTab,
@@ -368,108 +368,17 @@ const BrowserFrame = React.memo(({
     ? `/api/proxy?url=${encodeURIComponent(iframeUrl)}`
     : iframeUrl;
 
-  if (isPortal) {
-    return (
-      <div 
-        className="flex flex-col bg-[#0f0f11] border border-[#27272a] rounded-[24px] shadow-2xl overflow-hidden w-full h-full nodrag"
-      >
-        {/* Top Header Row of Image 1 */}
-        <div className="h-14 px-6 bg-[#16161a] flex items-center justify-between border-b border-[#212124] shrink-0 select-none">
-          <span className="text-[15px] font-bold tracking-wide text-zinc-100">网页浏览</span>
-          <button 
-            onClick={() => onToggleOverlay(false)} 
-            className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer border-none bg-transparent"
-            title="关闭"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Main iframe Viewport */}
-        <div className="flex-1 w-full bg-white relative min-h-0 min-w-0">
-          {resolvedIframeSrc ? (
-            <iframe 
-              ref={iframeRef}
-              key={refreshKey}
-              src={resolvedIframeSrc} 
-              className="w-full h-full border-0 bg-white" 
-              referrerPolicy="no-referrer" 
-              onLoad={onIframeLoad}
-            />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1e1e24] text-gray-500 gap-3 opacity-35 select-none text-sm font-black uppercase tracking-[0.4em]">
-              Ready
-            </div>
-          )}
-        </div>
-
-        {/* Bottom Control Bar of Image 1 */}
-        <div className="h-16 px-6 bg-[#16161a] flex items-center gap-4 border-t border-[#212124] shrink-0">
-          {/* Nav buttons */}
-          <button 
-            onClick={onBackward}
-            className="p-2 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer flex items-center justify-center border-none bg-transparent"
-            title="后退"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <button 
-            onClick={onForward}
-            className="p-2 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer flex items-center justify-center border-none bg-transparent"
-            title="前进"
-          >
-            <ArrowRight size={18} />
-          </button>
-          <button 
-            onClick={onRefresh}
-            className="p-2 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer flex items-center justify-center border-none bg-transparent"
-            title="刷新"
-          >
-            <RefreshCw size={18} />
-          </button>
-
-          {/* Sleek Bottom Address Input exactly matching Image 1 */}
-          <div className="flex-1 flex items-center gap-3 bg-[#0d0d0f]/65 border border-[#27272a] rounded-xl px-4 py-2 hover:bg-[#0d0d0f]/90 transition-all font-sans relative">
-            <input 
-              className="flex-1 bg-transparent text-[14px] text-zinc-200 outline-none pr-16 font-mono placeholder:text-zinc-650 border-none h-full"
-              value={pageUrl || ''}
-              onChange={(e) => setPageUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && onNavigate()}
-              placeholder="输入网址或进行搜索..."
-            />
-            {onToggleForceProxy && (
-              <button 
-                onClick={() => onToggleForceProxy(activeTabId)}
-                className={`absolute right-10 top-1/2 -translate-y-1/2 transition-colors border-none bg-transparent cursor-pointer ${isTabProxied ? 'text-indigo-400 hover:text-indigo-300' : 'text-zinc-550 hover:text-zinc-400'}`}
-                title={isTabProxied ? "已启用「服务器中转代理」" : "未启用「服务器中转代理」（直连访问）"}
-              >
-                <Server size={15} />
-              </button>
-            )}
-            <button 
-              onClick={() => onAddFavorite()}
-              className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors border-none bg-transparent cursor-pointer ${favorites.includes(pageUrl) ? 'text-yellow-500' : 'text-zinc-500 hover:text-white'}`}
-              title="收藏网页"
-            >
-              <Star size={16} fill={favorites.includes(pageUrl) ? "currentColor" : "none"} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div 
-      className={`flex flex-col bg-[var(--bg-secondary)] border border-[var(--border)] nodrag ${isPortal ? 'w-[90vw] h-[85vh] rounded-[32px] shadow-2xl' : 'flex-1 rounded-2xl'}`}
+      className={`flex flex-col bg-[var(--bg-secondary)] border border-[var(--border)] nodrag nowheel ${isPortal ? 'w-[90vw] h-[85vh] rounded-[32px] shadow-2xl' : 'flex-1 rounded-2xl'}`}
       style={isPortal ? {} : {
         position: 'absolute',
         top: 0,
         left: 0,
-        width: `${100 / zoomScale}%`,
-        height: `${100 / zoomScale}%`,
-        transform: `scale(${zoomScale})`,
-        transformOrigin: 'top left',
+        width: '100%',
+        height: '100%',
+        
+        
       }}
     >
       
@@ -736,14 +645,27 @@ const BrowserFrame = React.memo(({
                         allowpopups={true}
                       />
                     ) : (
-                      <iframe 
-                        ref={isTabActive ? iframeRef : undefined}
-                        key={`${tab.id}-${refreshKey}`}
-                        src={resolvedSrc} 
-                        className="w-full h-full border-0 bg-white" 
-                        referrerPolicy="no-referrer" 
-                        onLoad={onIframeLoad}
-                      />
+                      <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+                        <iframe 
+                          ref={isTabActive ? iframeRef : undefined}
+                          key={`${tab.id}-${refreshKey}`}
+                          src={resolvedSrc} 
+                          className="border-0 bg-white" 
+                          referrerPolicy="no-referrer" 
+                          onLoad={onIframeLoad}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            transform: 'scale(1)',
+                            transformOrigin: 'top left',
+                            border: 'none',
+                            display: 'block',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0
+                          }}
+                        />
+                      </div>
                     )}
                     {isTabActive && isLocaltunnel && (
                        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-[30]">
@@ -985,36 +907,39 @@ const TabButton = ({ active, onClick, icon, label }: { active: boolean, onClick:
   </button>
 );
 
-export function AptWebToolNode({ id, data, selected }: NodeProps) {
-  const nodeData = data as any;
-  const updateNodeData = useStore((s) => s.updateNodeData);
+export function WebPreviewPanel() {
+  const showWebPreview = useStore(s => s.showWebPreview);
+  const isTopVisible = useStore(s => s.isTopVisible);
   const getIncomingData = useStore((s) => s.getIncomingData);
   const addFile = useStore((s) => s.addFile);
   const settings = useStore((s) => s.settings);
-  
+  const zoom = useStore((s: any) => Math.max(0.1, s.zoom || 1));
+  const nodeData = {} as any; // Shim to prevent rewrites
+  const id = 'web-preview-panel';
+  const updateNodeData = () => {};
   // Calculate zoom scale based on current node width (baseline is 1000px for this wide tool)
   const baselineWidth = 1000;
   const fontScale = (settings?.nodeUiFontSize ?? 14) / 14;
-  const zoomScale = Math.max(0.4, (nodeData.width || baselineWidth) / baselineWidth) * fontScale;
-  const fsScale = zoomScale;
+  
+  
   
   // Scraper States
-  const [tabs, setTabs] = useState<BrowserTab[]>(nodeData.tabs && nodeData.tabs.length > 0 ? nodeData.tabs : [
-    { id: '1', title: 'TUJIAGIRL', url: nodeData.pageUrl || 'https://www.tujiagirl.com/online_ps/' }
+  const [tabs, setTabs] = useState<BrowserTab[]>([
+    { id: '1', title: 'TUJIAGIRL', url: 'https://www.tujiagirl.com/online_ps/' }
   ]);
-  const [activeTabId, setActiveTabId] = useState<string>(nodeData.activeTabId || '1');
+  const [activeTabId, setActiveTabId] = useState<string>('1');
   
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0] || { id: '1', title: 'TUJIAGIRL', url: 'https://www.tujiagirl.com/online_ps/' };
   const iframeUrl = activeTab.url;
 
   const [pageUrl, setPageUrl] = useState(activeTab.url);
-  const [imageAddress, setImageAddress] = useState(nodeData.imageAddress || '');
-  const [imageCount, setImageCount] = useState(nodeData.imageCount || 1);
-  const [status, setStatus] = useState(nodeData.status || '支持在线网页预览、打开网页、加载图片。');
-  const [images, setImages] = useState<any[]>(nodeData.images || []);
-  const [selectedIndices, setSelectedIndices] = useState<number[]>(nodeData.selectedIndices || []);
+  const [imageAddress, setImageAddress] = useState('');
+  const [imageCount, setImageCount] = useState(1);
+  const [status, setStatus] = useState('支持在线网页预览、打开网页、加载图片。');
+  const [images, setImages] = useState<any[]>([]);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>(nodeData.favorites || [
+  const [favorites, setFavorites] = useState<string[]>([
     'https://www.tujiagirl.com/online_ps/',
     'https://liblib.art/',
     'https://www.shutterstock.com/'
@@ -1022,8 +947,8 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Persistent history entries and saved credentials
-  const [historyEntries, setHistoryEntries] = useState<{ url: string; title: string; timestamp: number }[]>(nodeData.historyEntries || []);
-  const [savedCredentials, setSavedCredentials] = useState<{ domain: string; username: string; passwordString: string; id: string }[]>(nodeData.savedCredentials || []);
+  const [historyEntries, setHistoryEntries] = useState<{ url: string; title: string; timestamp: number }[]>([]);
+  const [savedCredentials, setSavedCredentials] = useState<{ domain: string; username: string; passwordString: string; id: string }[]>([]);
 
   // Sync pageUrl input with active tab url when active tab switches
   useEffect(() => {
@@ -1939,7 +1864,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
   const BrowserFrameComponent = (isPortal = false) => (
     <BrowserFrame 
       isPortal={isPortal}
-      zoomScale={isPortal ? 1.0 : zoomScale}
+      
       tabs={tabs}
       activeTabId={activeTabId}
       onSelectTab={handleSelectTab}
@@ -2008,942 +1933,17 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
     </div>
   );
 
+  // if (!showWebPreview) {
+  //   return null;
+  // }
+
   return (
     <>
-      <NodeResizer minWidth={300} minHeight={400} isVisible={selected && !isFolded && !isPinned} lineClassName="border-accent/50" handleClassName="h-3 w-3 bg-white border-2 border-accent rounded-sm" keepAspectRatio={true} />
-      <div 
-        className={`flex flex-col w-full bg-[var(--bg-secondary)] rounded-[32px] border-2 border-[var(--border)] shadow-2xl transition-all ${selected ? 'border-accent ring-8 ring-accent/10' : ''}`}
-        style={{ 
-          height: isFolded ? 'auto' : '100%',
-          ['--node-zoom' as any]: zoomScale
-        }}
-      >
-        <Handle type="target" position={Position.Left} className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  />
-        <Handle type="source" position={Position.Right} className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  />
-
-        {/* Header */}
-        <div 
-          className="border-b border-[var(--border)] flex items-center justify-between bg-black/40 shrink-0 react-flow__node-draghandle rounded-t-2xl"
-          style={{ padding: 20 * zoomScale }}
-        >
-          <div 
-            className="flex items-center"
-            style={{ gap: 16 * zoomScale }}
-          >
-            <div 
-              className={`rounded-2xl flex items-center justify-center shadow-lg transition-all ${viewMode === 'scraper' ? 'bg-indigo-600' : 'bg-accent'}`}
-              style={{ width: 48 * zoomScale, height: 48 * zoomScale }}
-            >
-              {viewMode === 'scraper' ? <Globe2 size={24 * zoomScale} className="text-white" /> : <CloudLightning size={24 * zoomScale} className="text-white" />}
-            </div>
-            <div>
-              <h3 
-                className="font-black text-white tracking-widest uppercase italic"
-                style={{ fontSize: 14 * zoomScale }}
-              >
-                网页预览节点
-              </h3>
-              <div 
-                className="flex items-center font-mono text-gray-600 tracking-widest"
-                style={{ gap: 8 * zoomScale, fontSize: 10 * zoomScale, marginTop: 2 * zoomScale }}
-              >
-                <span>V2.0 WEB_PREVIEW_BRIDGE</span>
-                <div 
-                  className="rounded-full bg-indigo-500"
-                  style={{ width: 4 * zoomScale, height: 4 * zoomScale }}
-                />
-                <span className="text-indigo-500/60 uppercase">{viewMode === 'scraper' ? 'Asset Collector' : 'ComfyUI Bridge'}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div 
-            className="flex items-center"
-            style={{ gap: 8 * zoomScale }}
-          >
-            <div 
-              className="flex bg-white/5 rounded-xl border border-[var(--border)]"
-              style={{ padding: 4 * zoomScale, marginRight: 16 * zoomScale }}
-            >
-              <button 
-                onClick={() => { setViewMode('scraper'); updateStore({ viewMode: 'scraper' }); }}
-                className={`rounded-lg font-bold transition-all ${viewMode === 'scraper' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                style={{ 
-                  padding: `${6 * zoomScale}px ${12 * zoomScale}px`,
-                  fontSize: 10 * zoomScale
-                }}
-              >
-                网页采集
-              </button>
-              <button 
-                onClick={() => { setViewMode('comfy'); updateStore({ viewMode: 'comfy' }); }}
-                className={`rounded-lg font-bold transition-all ${viewMode === 'comfy' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                style={{ 
-                  padding: `${6 * zoomScale}px ${12 * zoomScale}px`,
-                  fontSize: 10 * zoomScale
-                }}
-              >
-                ComfyUI
-              </button>
-            </div>
-
-            {/* 顶层状态组件：折叠和固定 */}
-            <button 
-              onClick={() => {
-                const nextFolded = !isFolded;
-                setIsFolded(nextFolded);
-                updateNodeData(id, { isFolded: nextFolded });
-              }}
-              className={`hover:bg-white/5 rounded-2xl transition-all transform hover:scale-105 active:scale-95 ${isFolded ? 'text-indigo-400 bg-indigo-400/10' : 'text-gray-500 hover:text-white'}`}
-              style={{ padding: 12 * zoomScale }}
-              title={isFolded ? "展开窗口" : "折叠最小化窗口"}
-            >
-              {isFolded ? <ChevronDown size={20 * zoomScale} /> : <ChevronUp size={20 * zoomScale} />}
-            </button>
-
-            <button 
-              onClick={() => {
-                const nextPinned = !isPinned;
-                setIsPinned(nextPinned);
-                updateNodeData(id, { isPinned: nextPinned });
-                if (nextPinned && placeholderRef.current) {
-                  const r = placeholderRef.current.getBoundingClientRect();
-                  const pos = { x: r.left, y: r.top - 60 };
-                  setPinnedPos(pos);
-                  updateNodeData(id, { pinnedPos: pos });
-                }
-              }}
-              className={`hover:bg-white/5 rounded-2xl transition-all transform hover:scale-105 active:scale-95 ${isPinned ? 'text-yellow-400 bg-yellow-500/15' : 'text-gray-500 hover:text-white'}`}
-              style={{ padding: 12 * zoomScale }}
-              title={isPinned ? "取消视口固定" : "固定在当前视口位置(不随画布缩放)"}
-            >
-              {isPinned ? <PinOff size={20 * zoomScale} /> : <Pin size={20 * zoomScale} />}
-            </button>
-
-            <button 
-              onClick={() => setIsOverlayOpen(true)}
-              className="hover:bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all transform hover:scale-105 active:scale-95"
-              style={{ padding: 12 * zoomScale }}
-              title="全屏脱离画布"
-            >
-              <Maximize2 size={20 * zoomScale} />
-            </button>
-          </div>
-        </div>
-
-        {!isFolded && (
-          isPinned ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none bg-black/20 rounded-b-3xl min-h-[220px]" style={{ padding: 40 * zoomScale }}>
-              <Anchor size={48 * zoomScale} className="text-yellow-400 mb-4 animate-[spin_10s_linear_infinite]" />
-              <h4 className="text-sm font-black text-white uppercase tracking-widest" style={{ fontSize: 13 * zoomScale }}>已开启视口固定</h4>
-              <p className="text-xs text-gray-400 max-w-[280px] mt-2 font-medium leading-relaxed" style={{ fontSize: 11 * zoomScale }}>
-                浏览器窗口已脱离画布流，保持在固定屏幕坐标。你可以通过顶部的黄色指示条在屏幕上无级拖拽，并且它完全不受画布缩放与移动(Zoom/Pan)的影响。
-              </p>
-              <button 
-                onClick={() => {
-                  setIsPinned(false);
-                  updateNodeData(id, { isPinned: false });
-                }}
-                className="mt-6 px-5 py-2.5 bg-yellow-500/20 hover:bg-yellow-550/30 text-yellow-300 font-extrabold rounded-2xl border border-yellow-500/30 transition-all tracking-wider uppercase shadow-lg shadow-yellow-500/5 active:scale-95 cursor-pointer"
-                style={{ fontSize: 10 * zoomScale, padding: `${8 * zoomScale}px ${16 * zoomScale}px` }}
-              >
-                收回至画布
-              </button>
-            </div>
-          ) : (
-            <>
-              <div 
-                className="flex-1 flex flex-col overflow-hidden nodrag"
-                style={{ padding: 20 * zoomScale, gap: 16 * zoomScale }}
-              >
-          {viewMode === 'scraper' ? (
-            <>
-              <div 
-                ref={placeholderRef} 
-                className="relative flex-1 w-full min-h-0 overflow-hidden rounded-2xl bg-black/20 border border-[var(--border)]"
-              >
-                {/* Visual placeholder inside the actual React Flow node */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 opacity-20 select-none pointer-events-none">
-                  <Globe2 size={32 * zoomScale} />
-                  <span className="text-[10px] font-mono font-bold mt-2 uppercase tracking-widest text-center px-4">
-                    Desktop Sandbox Webview Active
-                  </span>
-                </div>
-              </div>
-
-              {/* Collection Bar */}
-              <div 
-                className="bg-black/40 border border-[var(--border)] overflow-hidden flex flex-col shrink-0"
-                style={{ height: 150 * zoomScale, borderRadius: 24 * zoomScale, padding: 16 * zoomScale, gap: 12 * zoomScale }}
-              >
-                <div 
-                  className="flex items-center justify-between"
-                  style={{ marginBottom: 4 * zoomScale }}
-                >
-                   <div 
-                    className="flex items-center"
-                    style={{ gap: 8 * zoomScale }}
-                   >
-                      <div 
-                        className="rounded-full bg-accent shadow-[0_0_8px_rgba(59,130,246,0.6)] animate-pulse" 
-                        style={{ width: 8 * zoomScale, height: 8 * zoomScale }}
-                      />
-                      <span 
-                        className="font-black text-gray-600 uppercase tracking-widest"
-                        style={{ fontSize: 10 * zoomScale }}
-                      >
-                        Captured Resources
-                      </span>
-                   </div>
-                   <div 
-                    className="flex items-center"
-                    style={{ gap: 16 * zoomScale }}
-                   >
-                     <button onClick={() => { setImages([]); setSelectedIndices([]); updateStore({ images: [], selectedIndices: [] }); }} className="text-gray-700 hover:text-red-500 transition-colors p-1" title="Purge All">
-                        <Trash2 size={14 * zoomScale} />
-                     </button>
-                     <div className="bg-white/10" style={{ height: 12 * zoomScale, width: 1 }} />
-                     <span 
-                      className="font-mono text-indigo-500/50 italic tracking-tighter"
-                      style={{ fontSize: 9 * zoomScale }}
-                     >
-                      REF_COUNT: {selectedIndices.length || images.length} / {images.length}
-                     </span>
-                   </div>
-                </div>
-                <div 
-                  className="flex-1 overflow-auto grid grid-cols-7 gap-3 custom-scrollbar pr-2 pb-1 scrollbar-hide"
-                  style={{ gap: 12 * zoomScale }}
-                >
-                  <AnimatePresence>
-                    {images.map((img, i) => (
-                      <motion.div 
-                        key={img.url + i}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleToggleSelect(i)}
-                        className={`group relative aspect-square border-2 overflow-hidden cursor-pointer transition-all ${selectedIndices.includes(i) ? 'border-accent shadow-[0_0_20px_rgba(59,130,246,0.4)]' : 'border-[var(--border)] hover:border-white/20'}`}
-                        style={{ borderRadius: 14 * zoomScale }}
-                      >
-                        <img draggable={false} src={img.url} className="w-full h-full object-cover" alt="" />
-                        <div className={`absolute inset-0 bg-accent/20 transition-opacity ${selectedIndices.includes(i) ? 'opacity-100' : 'opacity-0'}`} />
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(i); }}
-                          className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all border border-[var(--border)]"
-                          style={{ width: 20 * zoomScale, height: 20 * zoomScale, fontSize: 10 * zoomScale }}
-                        >
-                          ×
-                        </button>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                  {!images.length && (
-                    <div 
-                      className="col-span-full h-full flex flex-col items-center justify-center text-gray-700 opacity-40 italic"
-                      style={{ fontSize: 10 * zoomScale, gap: 12 * zoomScale }}
-                    >
-                       <div 
-                        className="rounded-full border border-dashed border-gray-700 flex items-center justify-center"
-                        style={{ width: 48 * zoomScale, height: 48 * zoomScale }}
-                       >
-                          <ImagePlus size={20 * zoomScale} strokeWidth={1} />
-                       </div>
-                       <span className="tracking-[0.2em] font-black uppercase">Awaiting Data Streams</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-               {/* ComfyUI Header / Address Bar */}
-               <div className="px-5 py-4 bg-black/40 border border-[var(--border)] rounded-[24px] flex flex-col gap-3 shrink-0 shadow-lg">
-                  <div className="flex items-center gap-4">
-                     <div className="flex-1 relative group">
-                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-accent/50 group-focus-within:text-accent transition-colors">
-                           <Globe2 size={14} />
-                         </div>
-                         <input 
-                           type="text"
-                           value={comfyUrl}
-                           onChange={(e) => setComfyUrl(e.target.value)}
-                           className={`w-full bg-white/5 border rounded-[18px] pl-10 pr-24 py-2.5 text-base transition-all font-mono ${
-                             comfyStatus === 'success' ? 'border-emerald-500/30 text-emerald-300' :
-                             comfyStatus === 'error' ? 'border-red-500/30 text-red-300' :
-                             'border-[var(--border)] text-white/70 focus:border-accent/50'
-                           }`}
-                           placeholder="ComfyUI Server URL..."
-                         />
-                         <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center">
-                            <div className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                              comfyStatus === 'success' ? 'bg-emerald-500' : 
-                              comfyStatus === 'error' ? 'bg-red-500' : 
-                              'bg-accent animate-pulse'
-                            }`} />
-                         </div>
-                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                           <button 
-                             onClick={() => {
-                               const nextVal = !forceProxyComfy;
-                               setForceProxyComfy(nextVal);
-                               updateStore({ forceProxyComfy: nextVal });
-                             }}
-                             className={`p-2 rounded-xl transition-all ${forceProxyComfy ? 'text-indigo-400 hover:text-indigo-300 bg-indigo-500/10' : 'text-gray-500 hover:text-white hover:bg-white/10'}`} 
-                             title={forceProxyComfy ? "已启用「服务器中转代理模式」：突破浏览器跨域和本地 HTTP 端口加载阻碍" : "已切换为「直连本地」：直连模式拥有最好的加载速度"}
-                           >
-                             <Server size={14} />
-                           </button>
-                           <button onClick={() => window.open(comfyUrl, '_blank')} className="p-2 hover:bg-white/10 rounded-xl text-orange-400/60 hover:text-orange-400 transition-all" title="Open in New Tab (Bypass HTTPS block)">
-                              <ExternalLink size={14} />
-                           </button>
-                           <button onClick={handleSyncFromLocal} className="p-2 hover:bg-white/10 rounded-xl text-emerald-400/60 hover:text-emerald-400 transition-all" title="Sync from Local">
-                              <RefreshCw size={14} />
-                           </button>
-                           <button onClick={handleComfyStatusCheck} className="p-2 hover:bg-white/10 rounded-xl text-accent/60 hover:text-accent transition-all" title="Test Connection">
-                              <CloudLightning size={14} />
-                           </button>
-                           <button onClick={() => setRefreshKey(prev => prev + 1)} className="p-2 hover:bg-white/10 rounded-xl text-gray-500 hover:text-white transition-all" title="Reload View">
-                              <RefreshCw size={14} />
-                           </button>
-                         </div>
-                     </div>
-                     <div className="flex bg-white/5 p-1 rounded-xl border border-[var(--border)]">
-                       <button 
-                         onClick={() => setComfyView('browser')}
-                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${comfyView === 'browser' ? 'bg-accent text-white' : 'text-gray-500 hover:text-white'}`}
-                       >
-                         <Globe2 size={10} /> 预览
-                       </button>
-                       <button 
-                         onClick={() => setComfyView('source')}
-                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${comfyView === 'source' ? 'bg-accent text-white' : 'text-gray-500 hover:text-white'}`}
-                       >
-                         <FileJson size={10} /> 源码
-                       </button>
-                     </div>
-                  </div>
-
-                  {showLocalHelp && checkIsLocal(comfyUrl) && (
-                    <motion.div 
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col gap-2 overflow-hidden"
-                    >
-                      <div className="flex items-center gap-2 text-amber-450 font-bold text-sm">
-                        <AlertCircle size={14} className="shrink-0" />
-                        <span>🔌 本地 ComfyUI 连接障碍与极速排障指南</span>
-                      </div>
-                      <p className="text-xs text-gray-400 leading-relaxed font-sans">
-                        由于本系统运行在安全的 <b>HTTPS</b> 环境中，而您的本地 ComfyUI 是未加密的 <b>HTTP (127.0.0.1)</b>。出于安全防范，现代浏览器会默认拦截此类混合内容（导致内嵌黑屏）。同时，<b>云端后台服务器无法越过公网访问您电脑本机的 127.0.0.1 (本地局域网) 地址</b>，因此对本地 IP 开启后台中转代理 (Server 图标) 必会报错 Connection Refused (ECONNREFUSED)。
-                      </p>
-                      <p className="text-xs text-zinc-300 font-bold mt-1">请任选以下一种极速打通方案来实现完全内嵌显示：</p>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
-                        <div className="bg-black/45 p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1.5 justify-between">
-                          <div>
-                            <span className="text-[11px] font-black text-indigo-400 uppercase tracking-wider block">方案 A：复制本地穿透 (完美推荐 🔑)</span>
-                            <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                              在您本机的终端/命令行运行穿透工具，获取一个公网 HTTPS 临时安全网址（如 <span className="font-mono text-indigo-300">https://xxx.loca.lt</span>），将其粘贴到上方地址栏中。无需修改浏览器任何安全设置，完美渲染连接！
-                            </p>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              try {
-                                navigator.clipboard.writeText('npx localtunnel --port 8188');
-                                alert('📋 穿透命令已复制成功！\n\n请在您运行 ComfyUI 的电脑上打开终端（Windows 的 CMD 或 PowerShell，Mac 的 Terminal），粘贴并按回车执行此命令。\n\n执行成功后，终端中会输出一个类似 "your url is: https://xxxx.loca.lt" 的网址，将其复制并粘贴到上方的 ComfyUI 地址栏即可连接！');
-                              } catch (err) {
-                                alert('复制失败，请手动选择复制以下命令：\nnpx localtunnel --port 8188');
-                              }
-                            }}
-                            className="w-full text-[10px] bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 px-2 py-1.5 rounded-lg border border-indigo-500/20 cursor-pointer font-mono font-bold transition-all text-center"
-                          >
-                            ⚡ 复制命令: npx localtunnel --port 8188
-                          </button>
-                        </div>
-                        
-                        <div className="bg-black/45 p-3 rounded-xl border border-[var(--border)] flex flex-col gap-1.5 justify-between">
-                          <div>
-                            <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider block">方案 B：配置浏览器不安全内容白名单 (直连精简 ⚡)</span>
-                            <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                              继续使用 <span className="font-mono text-emerald-300">http://127.0.0.1:8188</span>（确保 Server 按钮为白色关闭状态）：
-                              <br />1. 点击浏览器最顶部地址栏（包含本网页 https://...）左侧的 <b>🔒 锁头图标</b>
-                              <br />2. 选择 <b>“网站设置” (Site Settings)</b>
-                              <br />3. 找到 <b>“不安全内容” (Insecure Content)</b> 并改为 <b>“允许” (Allow)</b>
-                              <br />4. 返回此网页刷新，即可完美突破加密内嵌限制，完全显示本地界面！
-                            </p>
-                          </div>
-                          <button 
-                            onClick={() => setShowLocalHelp(false)}
-                            className="w-full text-[10px] bg-white/5 hover:bg-white/10 px-2 py-1.5 rounded-lg border border-[var(--border)] text-gray-400 cursor-pointer transition-all text-center font-bold"
-                          >
-                            💡 明白，保持直连并暂时隐藏此提示
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-               </div>
-
-               {/* ComfyUI Main Content: Preview & Control */}
-               <div className="flex-1 flex flex-col gap-5 overflow-hidden">
-                  {/* Top Area: Viewer */}
-                  <div className="h-[55%] relative bg-black/40 rounded-[28px] overflow-hidden border border-[var(--border)] group shadow-inner shrink-0">
-                    <AnimatePresence mode="wait">
-                      {comfyView === 'browser' ? (
-                        <motion.div key="iframe" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                          {checkIsLocal(comfyUrl) && window.location.protocol === 'https:' && !forceIframeRender ? (
-                            <div className="absolute inset-0 bg-[#090a0d] text-[#c5c8d0] flex flex-col items-center justify-start p-6 sm:p-8 overflow-y-auto font-sans custom-scrollbar select-none">
-                              {/* Title block */}
-                              <div className="flex items-center gap-3 mb-3 shrink-0 mt-2">
-                                <div className="p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-500 animate-pulse">
-                                  <Lock size={16} />
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-xs font-black text-white uppercase tracking-widest leading-none">本地 ComfyUI 沙盒安全策略隔离</span>
-                                  <span className="text-[9px] text-gray-500 mt-1 font-mono">Mixed Active Content Isolation Protocol</span>
-                                </div>
-                              </div>
-
-                              {/* Simple description */}
-                              <p className="text-[11px] text-zinc-400 text-center max-w-[550px] leading-relaxed mb-4 shrink-0">
-                                受现代主流浏览器 <span className="text-yellow-500/95 font-semibold font-mono">HTTPS 混合安全政策</span> 限制，主站在加密 HTTPS 传输下，内置 iframe 无法直接载入或解密您本机的未加密 <span className="text-yellow-500/95 font-semibold font-mono">HTTP ({comfyUrl})</span> 地址。请使用以下全通道直连桥梁解决连接：
-                              </p>
-
-                              {/* Direct popout action */}
-                              <div className="w-full max-w-[550px] bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 px-6 shadow-xl mb-4 shrink-0 backdrop-blur-sm">
-                                <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">推荐极速通道</span>
-                                <button
-                                  onClick={() => window.open(comfyUrl, '_blank')}
-                                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white rounded-lg text-[11px] font-black tracking-widest uppercase transition-all flex items-center justify-center gap-2 border-none cursor-pointer"
-                                >
-                                  <ExternalLink size={12} />
-                                  在新窗口内独立开启 ComfyUI 调试画板
-                                </button>
-                                <span className="text-[9px] text-zinc-500 text-center leading-normal">
-                                  外部新窗口不受 Mixed Content 限制可 100% 成功直连！点击开启后，即使此处黑屏，您只需完成下方配置，依旧可以直接在左下角点击 <b>[▶ 运行工作流]</b> 全自动跑图。
-                                </span>
-                              </div>
-
-                              {/* Tab option segments */}
-                              <div className="w-full max-w-[550px] space-y-3 text-left text-[11px] leading-relaxed shrink-0 mb-4">
-                                <div className="border-t border-white/5 pt-3">
-                                  <span className="text-[11px] font-black text-white/90 uppercase tracking-wider block mb-1.5 font-mono">⚡ 方案 A：一键解锁浏览器拦截项（不装工具，最方便）</span>
-                                  <div className="text-[10px] text-zinc-400 leading-relaxed font-sans space-y-1 rounded-lg bg-white/[0.01] p-2.5 border border-white/[0.02]">
-                                    <div>1. 点击当前浏览器地址栏最左端的 <span className="text-white font-mono">🔒 (锁头键)</span> 或“控制设置”图标。</div>
-                                    <div>2. 选中进入“网站设置” (Site Settings) 菜单页。</div>
-                                    <div>3. 在列表中找到 <span className="text-white font-semibold">“不安全内容” (Insecure Content)</span> 选项。</div>
-                                    <div>4. 将状态从“屏蔽”变更为 <span className="text-emerald-400 font-semibold font-mono">“允许” (Allow)</span> 即可。回到当前页面刷新后，点击下方强制按钮即可直接在内嵌框完美展示。</div>
-                                  </div>
-                                </div>
-
-                                <div className="border-t border-white/5 pt-3">
-                                  <span className="text-[11px] font-black text-white/90 uppercase tracking-wider block mb-1.5 font-mono">🌐 方案 B：使用网络隧道完成安全穿透（本生即是 HTTPS）</span>
-                                  <div className="text-[10px] text-zinc-400 leading-relaxed rounded-lg bg-white/[0.01] p-2.5 border border-white/[0.02]">
-                                    如果您不希望改动不安全内容限制，请在您运行 ComfyUI 的终端窗口运行：
-                                    <code className="block mt-1 px-2.5 py-1.5 bg-black/60 rounded text-emerald-400 font-mono text-[9px] border border-white/5 whitespace-pre-wrap select-text">
-                                      npx localtunnel --port 8188
-                                    </code>
-                                    运行后终端会给您一个安全的 <span className="text-emerald-400 font-bold font-mono">https://xxxx.loca.lt</span> 地址。将该 HTTPS 地址复制到上方地址栏中，无需任何配置，即可 120% 畅通内嵌使用！同时请附加启动参数：<span className="text-indigo-300 font-mono">--allow-cors-origin *</span>。
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Bypass and toggle buttons */}
-                              <div className="flex gap-3 shrink-0 pb-2">
-                                <button
-                                  onClick={() => setForceIframeRender(true)}
-                                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 active:scale-95 text-zinc-300 hover:text-white rounded-md text-[9px] font-bold tracking-widest uppercase transition-all border border-white/10 cursor-pointer"
-                                >
-                                  🔒 忽略隔离限制，强制装载内置框
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setForceProxyComfy(!forceProxyComfy);
-                                    addLog(`⚡ 已手动切换 ComfyUI 服务器端中转代理为: ${!forceProxyComfy}`);
-                                  }}
-                                  className={`px-3 py-1.5 rounded-md text-[9px] font-bold tracking-widest uppercase transition-all border cursor-pointer ${forceProxyComfy ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/20' : 'bg-white/5 text-zinc-400 border-white/5 hover:bg-white/10'}`}
-                                >
-                                  {forceProxyComfy ? '⚡ 已启用中转' : '🌐 尝试启用服务器中转'}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <iframe 
-                                key={refreshKey}
-                                ref={comfyIframeRef}
-                                src={forceProxyComfy ? `/api/proxy?url=${encodeURIComponent(comfyUrl)}` : comfyUrl}
-                                className="w-full h-full border-none"
-                                onLoad={() => setIsComfyIframeLoading(false)}
-                              />
-                              {isComfyIframeLoading && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--bg-secondary)]">
-                                   <Loader2 className="animate-spin text-accent mb-4" size={32} />
-                                   <span className="text-sm font-black text-gray-700 uppercase tracking-[0.4em]">Establishing Link...</span>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </motion.div>
-                      ) : (
-                        <motion.div key="workflow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 p-5 flex flex-col gap-4 bg-[var(--bg-primary)]">
-                           <div className="flex items-center justify-between">
-                              <div className="flex flex-col">
-                                 <span className="text-sm font-black text-accent uppercase tracking-widest">Workflow API JSON</span>
-                                 <span className="text-[10px] text-gray-600 mt-0.5">Enable "Dev Mode" to save API format</span>
-                              </div>
-                              <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-[var(--border)] rounded-xl text-accent text-sm font-black hover:bg-white/10 transition-all cursor-pointer uppercase tracking-widest">
-                                 <Upload size={12} /> 导入配置
-                                 <input type="file" accept=".json" onChange={handleJsonFileUpload} className="hidden" />
-                              </label>
-                           </div>
-                           <textarea 
-                             value={workflowText}
-                             onChange={(e) => setWorkflowText(e.target.value)}
-                             className="flex-1 w-full bg-black/40 border border-[var(--border)] rounded-2xl p-4 text-base font-mono text-emerald-500/80 focus:outline-none focus:border-emerald-500/20 resize-none custom-scrollbar"
-                             placeholder="在此粘贴或导入 JSON 工作流..."
-                           />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Bottom Area: Parameters & Results (Unified Stacked View) */}
-                  <div className="flex-1 flex flex-col gap-5 overflow-y-auto custom-scrollbar min-h-0 pr-1">
-                    {/* Parameters Control Dashboard */}
-                    <div className="shrink-0 flex flex-col bg-black/40 border border-[var(--border)] rounded-[28px] overflow-hidden shadow-2xl">
-                       <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0 bg-white/[0.03]">
-                          <div className="flex items-center gap-3">
-                             <div className="p-2 bg-accent/10 rounded-lg">
-                                <Database size={16} className="text-accent" />
-                             </div>
-                             <div className="flex flex-col">
-                                <span className="text-sm font-black text-white uppercase tracking-widest"> 执行配置控制台 </span>
-                                <span className="text-[10px] text-gray-600">管理识别的输入输出与参数</span>
-                             </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                             <span className="text-sm font-mono text-gray-700 bg-white/5 px-2 py-1 rounded-md">DETECTION_SCAN: {scanResult.exposedParams.length + scanResult.imageInputs.length + scanResult.imageOutputs.length}</span>
-                          </div>
-                       </div>
-                       <div className="p-8">
-                         {scanResult.exposedParams.length === 0 && scanResult.imageInputs.length === 0 && scanResult.imageOutputs.length === 0 ? (
-                           <div className="py-16 flex flex-col items-center justify-center text-gray-800 gap-4 opacity-40">
-                              <Info size={32} />
-                              <p className="text-sm font-black uppercase tracking-[0.2em] text-center max-w-[300px] leading-relaxed">
-                                未在工作流中检测到导出节点<br/>
-                                <span className="text-[10px] lowercase font-normal opacity-50 mt-2 block">提示：在 ComfyUI 中重命名节点，包含 #01, #02 等编号以暴露参数；图片节点 (LoadImage/SaveImage) 将被自动识别。</span>
-                              </p>
-                           </div>
-                         ) : (
-                           <div className="space-y-12">
-                              {/* 1. Auto Image Inputs */}
-                              {scanResult.imageInputs.length > 0 && (
-                                <section className="space-y-6">
-                                  <div className="flex items-center gap-3">
-                                    <div className="px-3 py-1 bg-indigo-600/20 rounded-lg text-indigo-400 text-sm font-black uppercase tracking-widest border border-indigo-500/20">
-                                      自动图像输入
-                                    </div>
-                                    <div className="flex-1 h-px bg-indigo-500/10" />
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    {scanResult.imageInputs.map((input, idx) => (
-                                      <div key={idx} className="bg-white/[0.02] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3 group/input transition-all hover:bg-white/[0.04]">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-sm font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{input.title}</span>
-                                          <span className="text-[10px] font-mono text-gray-700 italic">#{input.comfyNodeId}</span>
-                                        </div>
-                                        <div className="aspect-square bg-black/40 rounded-xl border border-dashed border-[var(--border)] flex flex-col items-center justify-center text-gray-700 gap-2 relative overflow-hidden">
-                                           {input.currentValue ? (
-                                              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                <ImageIcon size={24} className="opacity-20" />
-                                                <span className="text-sm mt-2 opacity-30 truncate px-2 w-full text-center">{input.currentValue}</span>
-                                              </div>
-                                           ) : (
-                                              <>
-                                                <Upload size={20} strokeWidth={1} />
-                                                <span className="text-[10px] uppercase tracking-widest">Awaiting Input</span>
-                                              </>
-                                           )}
-                                        </div>
-                                        <div className="text-[10px] text-gray-600 font-medium lowercase italic leading-relaxed">
-                                          * 当 AI Canvas 在此输入端连接图片节点时，执行引擎会自动代入。
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </section>
-                              )}
-                              {/* 2. Auto Image Outputs */}
-                              {scanResult.imageOutputs.length > 0 && (
-                                <section className="space-y-6">
-                                  <div className="flex items-center gap-3">
-                                    <div className="px-3 py-1 bg-emerald-600/20 rounded-lg text-emerald-400 text-sm font-black uppercase tracking-widest border border-emerald-500/20">
-                                      自动图像输出
-                                    </div>
-                                    <div className="flex-1 h-px bg-emerald-500/10" />
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    {scanResult.imageOutputs.map((output, idx) => (
-                                      <div key={idx} className="bg-white/[0.02] border border-[var(--border)] rounded-2xl p-4 flex flex-col gap-3 group/output transition-all hover:bg-white/[0.04]">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-sm font-black text-gray-400 uppercase tracking-widest truncate max-w-[120px]">{output.title}</span>
-                                          <span className="text-[10px] font-mono text-gray-700 italic">#{output.comfyNodeId}</span>
-                                        </div>
-                                        <div className="aspect-square bg-black/40 rounded-xl border border-dashed border-[var(--border)] flex flex-col items-center justify-center text-gray-700 gap-2">
-                                           <CheckCircle2 size={24} strokeWidth={1} />
-                                           <span className="text-[10px] uppercase tracking-widest">Image Destination</span>
-                                        </div>
-                                        <div className="text-[10px] text-gray-600 font-medium lowercase italic leading-relaxed">
-                                          * 任务完成后，由此节点产出的结果将自动同步回 AI Canvas。
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </section>
-                              )}
-                              {/* 3. Hashtag Params */}
-                              {scanResult.exposedParams.length > 0 && (
-                                <section className="space-y-6">
-                                  <div className="flex items-center gap-3">
-                                    <div className="px-3 py-1 bg-accent/20 rounded-lg text-accent text-sm font-black uppercase tracking-widest border border-accent/20">
-                                      # 标记参数控制
-                                    </div>
-                                    <div className="flex-1 h-px bg-accent/10" />
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                                    {scanResult.exposedParams.map((param, pIdx) => (
-                                      <div key={pIdx} className="space-y-5 p-5 bg-white/[0.02] border border-[var(--border)] rounded-2xl hover:border-accent/30 transition-all group/param">
-                                          <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-2 h-2 rounded-full bg-accent shadow-[0_0_12px_rgba(37,99,235,0.6)]" />
-                                                <span className="text-base font-black text-white uppercase tracking-widest">{param.title}</span>
-                                            </div>
-                                            <span className="text-[10px] font-mono text-gray-700 italic">ID:{param.comfyNodeId}</span>
-                                          </div>
-                                          <div className="space-y-5 pl-4 border-l-2 border-accent/10 group-hover/param:border-accent/40 transition-colors">
-                                            {param.editableFields.map((field, fIdx) => (
-                                              <div key={fIdx} className="space-y-2">
-                                                  <div className="flex items-center justify-between">
-                                                    <label className="text-sm font-black text-gray-500 uppercase tracking-widest">{field.label}</label>
-                                                    <span className="px-1.5 py-0.5 rounded-md bg-white/5 text-[7px] font-mono text-gray-700">{field.fieldType}</span>
-                                                  </div>
-                                                  {field.fieldType === 'textarea' ? (
-                                                    <textarea 
-                                                      value={field.value} 
-                                                      onChange={(e) => handleComfyFieldChange(param.comfyNodeId, field.name, e.target.value)} 
-                                                      className="w-full bg-black/40 border border-[var(--border)] hover:border-white/20 rounded-xl p-4 text-base text-white/90 focus:outline-none focus:border-accent/40 transition-all min-h-[100px] resize-none font-sans leading-relaxed custom-scrollbar"
-                                                      placeholder={`输入 ${field.label}...`}
-                                                    />
-                                                  ) : (
-                                                    <input 
-                                                      type={field.fieldType === 'number' ? 'number' : 'text'} 
-                                                      value={field.value} 
-                                                      onChange={(e) => handleComfyFieldChange(param.comfyNodeId, field.name, field.fieldType === 'number' ? Number(e.target.value) : e.target.value)} 
-                                                      className="w-full bg-black/40 border border-[var(--border)] hover:border-white/20 rounded-xl px-4 py-3 text-base text-white/90 focus:outline-none focus:border-accent/40 transition-all font-sans"
-                                                      placeholder={`设置 ${field.label}...`}
-                                                    />
-                                                  )}
-                                              </div>
-                                            ))}
-                                          </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </section>
-                              )}
-                            </div>
-                          )}
-                     </div>
-                   </div>
-
-                    {/* Results Hub */}
-                    <div className="shrink-0 flex flex-col bg-black/40 border border-[var(--border)] rounded-[28px] overflow-hidden shadow-2xl relative">
-                       {/* Floating Status Notification Dashboard */}
-                       <AnimatePresence>
-                          {(comfyStatus === 'success' || comfyStatus === 'error' || comfyStatus === 'running' || comfyStatus === 'uploading') && (
-                            <motion.div 
-                              initial={{ y: -40, opacity: 0, scale: 0.9 }}
-                              animate={{ y: 0, opacity: 1, scale: 1 }}
-                              exit={{ y: -40, opacity: 0, scale: 0.9 }}
-                              className="absolute top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-8 py-4 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl border min-w-[320px] justify-between"
-                              style={{ 
-                                backgroundColor: comfyStatus === 'success' ? 'rgba(16, 185, 129, 0.1)' : 
-                                                 comfyStatus === 'error' ? 'rgba(239, 68, 68, 0.1)' : 
-                                                 'rgba(59, 130, 246, 0.1)',
-                                borderColor: comfyStatus === 'success' ? 'rgba(16, 185, 129, 0.2)' : 
-                                             comfyStatus === 'error' ? 'rgba(239, 68, 68, 0.2)' : 
-                                             'rgba(59, 130, 246, 0.2)'
-                              }}
-                            >
-                               <div className="flex items-center gap-4">
-                                  <div className="relative">
-                                     <div className={`w-4 h-4 rounded-full ${
-                                       comfyStatus === 'success' ? 'bg-emerald-500' : 
-                                       comfyStatus === 'error' ? 'bg-red-500' : 
-                                       'bg-accent animate-ping absolute inset-0'
-                                     }`} />
-                                     {(comfyStatus === 'running' || comfyStatus === 'uploading') && (
-                                       <div className="w-4 h-4 rounded-full bg-accent relative z-10" />
-                                     )}
-                                     <div className={`absolute -inset-2 rounded-full blur-md ${
-                                       comfyStatus === 'success' ? 'bg-emerald-500/30' : 
-                                       comfyStatus === 'error' ? 'bg-red-500/30' : 
-                                       'bg-accent/30'
-                                     }`} />
-                                  </div>
-
-                                  <div className="flex flex-col">
-                                     <span className={`text-base font-black uppercase tracking-[0.2em] ${
-                                       comfyStatus === 'success' ? 'text-emerald-400' : 
-                                       comfyStatus === 'error' ? 'text-red-400' : 
-                                       'text-accent'
-                                     }`}>
-                                       {comfyStatus === 'success' ? '任务执行完毕' : 
-                                        comfyStatus === 'error' ? '任务执行中断' : 
-                                        comfyStatus === 'uploading' ? '正在上传资源' : '引擎运行中'}
-                                     </span>
-                                     <span className="text-sm text-white/40 font-medium lowercase">
-                                       {comfyStatus === 'success' ? '数据已同步至输出面板' : 
-                                        comfyStatus === 'error' ? '检测到运行错误，请检查日志' : 
-                                        '保持连接状态，请勿刷新'}
-                                     </span>
-                                  </div>
-                               </div>
-
-                               <div className="flex items-center gap-2">
-                                  {(comfyStatus === 'success' || comfyStatus === 'error') && (
-                                    <button 
-                                      onClick={() => setComfyStatus('ready')}
-                                      className="p-2 hover:bg-white/10 rounded-xl transition-all group"
-                                      title="Dismiss"
-                                    >
-                                      <X size={14} className="text-white/30 group-hover:text-white" />
-                                    </button>
-                                  )}
-                                  {(comfyStatus === 'running' || comfyStatus === 'uploading') && (
-                                    <Loader2 size={16} className="text-accent animate-spin" />
-                                  )}
-                               </div>
-                            </motion.div>
-                          )}
-                       </AnimatePresence>
-
-                       <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0 bg-white/[0.03]">
-                          <div className="flex items-center gap-3">
-                             <div className="p-2 bg-emerald-500/10 rounded-lg">
-                                <ImageIcon size={16} className="text-emerald-500" />
-                             </div>
-                             <div className="flex flex-col">
-                                <span className="text-sm font-black text-white uppercase tracking-widest"> 执行历史与实时输出 </span>
-                                <span className="text-[10px] text-gray-600">查看生成的图像和系统日志</span>
-                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                             <div className={`w-2 h-2 rounded-full ${outputImages.length > 0 ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-gray-800'}`} />
-                          </div>
-                       </div>
-                       
-                       <div className="p-8 flex flex-col lg:flex-row gap-10">
-                          {/* Image Feed */}
-                          <div className="flex-1">
-                             {outputImages.length > 0 ? (
-                               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                                  {outputImages.map((img, idx) => (
-                                    <div key={idx} className="group relative aspect-square rounded-[24px] overflow-hidden border border-[var(--border)] hover:border-emerald-500/50 shadow-2xl transition-all hover:-translate-y-1">
-                                       <img draggable={false} src={img.url} className="w-full h-full object-cover" alt="Output" />
-                                       <div className="absolute inset-0 bg-black/90 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-4 backdrop-blur-xl">
-                                          <button onClick={() => {
-                                             const nextImages = [...images, { url: img.url, name: `comfy_${img.nodeId}`, source: 'comfy' }];
-                                             setImages(nextImages);
-                                             updateStore({ images: nextImages });
-                                             setViewMode('scraper');
-                                             setStatus(`已将工作流结果导出至采集箱。`);
-                                          }} className="flex items-center gap-3 px-6 py-3 bg-indigo-600 rounded-2xl text-white text-base font-black uppercase hover:bg-indigo-500 transition-all active:scale-95 shadow-xl">
-                                             <Star size={14} fill="currentColor" /> 收藏结果
-                                          </button>
-                                          <a href={img.url} target="_blank" rel="noreferrer" className="text-sm font-black text-white/40 hover:text-white uppercase tracking-widest flex items-center gap-2 transition-colors">
-                                             <ExternalLink size={12} /> 查看原图
-                                          </a>
-                                       </div>
-                                    </div>
-                                  ))}
-                               </div>
-                             ) : (
-                               <div className="py-20 flex flex-col items-center justify-center text-gray-800 gap-4 opacity-20 italic">
-                                  <div className="p-5 border-2 border-dashed border-gray-800 rounded-full">
-                                    <Play size={40} strokeWidth={1} />
-                                  </div>
-                                  <span className="text-base font-black uppercase tracking-[0.4em]">Awaiting execution</span>
-                               </div>
-                             )}
-                          </div>
-
-                          {/* Live Log Stream */}
-                          <div className="w-full lg:w-[350px] flex flex-col gap-4 p-6 bg-black/40 rounded-3xl border border-[var(--border)]">
-                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                   <Terminal size={14} className="text-accent" />
-                                   <span className="text-sm font-black text-gray-500 uppercase tracking-widest">System Engine</span>
-                                </div>
-                                <button onClick={() => setLogs([])} className="text-[10px] font-black text-gray-700 hover:text-white uppercase tracking-widest transition-colors">Clear</button>
-                             </div>
-                             <div className="font-mono text-sm text-gray-500/80 leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar space-y-2">
-                                {logs.length === 0 ? (
-                                  <div className="text-[10px] italic opacity-30 mt-10 text-center">No logs generated yet</div>
-                                ) : (
-                                  logs.map((log, idx) => (
-                                    <div key={idx} className="break-all border-l border-[var(--border)] pl-3 py-1 hover:bg-white/[0.02] transition-all rounded-r">
-                                      {log}
-                                    </div>
-                                  ))
-                                )}
-                             </div>
-                          </div>
-                       </div>
-                    </div>
-                  </div>
-               </div>
-
-                {/* ComfyUI Footer */}
-                <div 
-                  className="flex items-center justify-between shrink-0 px-1 pt-2"
-                  style={{ gap: 12 * zoomScale }}
-                >
-                   <div 
-                     className="flex items-center bg-black/40 rounded-[24px] border border-[var(--border)] shadow-inner"
-                     style={{ gap: 12 * zoomScale, padding: `${12 * zoomScale}px ${24 * zoomScale}px` }}
-                   >
-                      <div 
-                        className="relative flex items-center justify-center"
-                        style={{ width: 16 * zoomScale, height: 16 * zoomScale }}
-                      >
-                        <div className={`absolute inset-0 rounded-full blur-sm opacity-50 ${
-                          comfyStatus === 'running' || comfyStatus === 'uploading' ? 'bg-accent animate-pulse' : 
-                          comfyStatus === 'success' ? 'bg-emerald-500' : 
-                          comfyStatus === 'error' ? 'bg-red-500' : 
-                          'bg-gray-700'
-                        }`} />
-                        <div 
-                          className={`rounded-full relative z-10 transition-colors duration-500 ${
-                            comfyStatus === 'running' || comfyStatus === 'uploading' ? 'bg-accent animate-pulse' : 
-                            comfyStatus === 'success' ? 'bg-emerald-400' : 
-                            comfyStatus === 'error' ? 'bg-red-400' : 
-                            'bg-gray-600'
-                          }`} 
-                          style={{ width: 10 * zoomScale, height: 10 * zoomScale }}
-                        />
-                      </div>
-                      <div className="flex flex-col">
-                        <div 
-                          className="flex items-center"
-                          style={{ gap: 8 * zoomScale }}
-                        >
-                          <span 
-                            className={`font-black uppercase tracking-widest leading-none ${
-                                comfyStatus === 'success' ? 'text-emerald-400' : 
-                                comfyStatus === 'error' ? 'text-red-400' : 
-                                'text-white/40'
-                            }`}
-                            style={{ fontSize: 10 * zoomScale }}
-                          >
-                            {comfyStatus === 'idle' ? '系统就绪' : 
-                             comfyStatus === 'ready' ? '就绪 / 已扫描' : 
-                             comfyStatus === 'uploading' ? '上传中...' : 
-                             comfyStatus === 'running' ? '运行中...' : 
-                             comfyStatus === 'success' ? '探测成功' : 
-                             comfyStatus === 'error' ? '执行故障' : comfyStatus}
-                          </span>
-                          {comfyStatus === 'success' && <CheckCircle2 size={10 * zoomScale} className="text-emerald-500" />}
-                          {comfyStatus === 'error' && <AlertCircle size={10 * zoomScale} className="text-red-500" />}
-                        </div>
-                        {promptId && <span className="font-mono mt-1 opacity-50 tracking-tighter text-gray-700" style={{ fontSize: 8 * zoomScale }}>TASK_ID: {promptId}</span>}
-                      </div>
-                   </div>
-                   <button 
-                     id="comfy-run-btn"
-                     onClick={handleComfyRun} 
-                     disabled={comfyStatus === 'running' || comfyStatus === 'uploading'}
-                     className={`flex-1 flex items-center justify-center rounded-2xl font-black uppercase tracking-[0.3em] transition-all shadow-2xl active:scale-95 group relative overflow-hidden ${
-                       comfyStatus === 'running' || comfyStatus === 'uploading' 
-                       ? 'bg-gray-800 text-gray-600 cursor-not-allowed border border-[var(--border)]' 
-                       : comfyStatus === 'error'
-                       ? 'bg-red-600/20 hover:bg-red-600/30 text-red-500 border border-red-500/30'
-                       : 'bg-accent hover:bg-accent text-white shadow-blue-900/40 hover:shadow-accent/40'
-                     }`}
-                     style={{ 
-                       padding: `${16 * zoomScale}px ${48 * zoomScale}px`, 
-                       fontSize: 12 * zoomScale,
-                       gap: 16 * zoomScale 
-                     }}
-                   >
-                      <div 
-                        className="relative z-10 flex items-center"
-                        style={{ gap: 12 * zoomScale }}
-                      >
-                        {comfyStatus === 'running' || comfyStatus === 'uploading' ? (
-                          <Loader2 size={18 * zoomScale} className="animate-spin text-accent" />
-                        ) : (
-                          <div 
-                            className={`rounded-lg transition-colors ${comfyStatus === 'error' ? 'bg-red-500/20' : 'bg-white/10 group-hover:bg-white/20'}`}
-                            style={{ padding: 4 * zoomScale }}
-                          >
-                             {comfyStatus === 'error' ? <AlertCircle size={16 * zoomScale} /> : <Play size={16 * zoomScale} className="group-hover:translate-x-0.5 transition-transform" />}
-                          </div>
-                        )}
-                        <span>{comfyStatus === 'error' ? '重新尝试' : '执行工作流'}</span>
-                      </div>
-                     {(comfyStatus === 'running' || comfyStatus === 'uploading') && (
-                        <motion.div 
-                          className="absolute inset-0 bg-accent/10"
-                          animate={{ x: ['-100%', '100%'] }}
-                          transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-                        />
-                     )}
-                   </button>
-                </div>
-            </div>
-          )}
-        </div>
-
-              <div 
-                className="bg-black/60 border-t border-[var(--border)] flex items-center justify-between shrink-0"
-                style={{ padding: `${12 * zoomScale}px ${24 * zoomScale}px` }}
-              >
-                <div 
-                  className="flex items-center font-mono italic truncate"
-                  style={{ gap: 12 * zoomScale, fontSize: 10 * zoomScale, maxWidth: 500 * zoomScale }}
-                >
-                   <Info size={14 * zoomScale} className="text-indigo-600 shrink-0" />
-                   <span className="truncate">{status}</span>
-                </div>
-                <div 
-                  className="flex items-center shrink-0"
-                  style={{ gap: 16 * zoomScale }}
-                >
-                   <div 
-                     className="bg-white/10"
-                     style={{ height: 16 * zoomScale, width: 1 }}
-                   />
-                   <span 
-                    className="font-black text-indigo-500 uppercase tracking-[0.3em]"
-                    style={{ fontSize: 9 * zoomScale }}
-                   >
-                     Stream Active
-                   </span>
-                </div>
-              </div>
-            </>
-          )
-        )}
-      </div>
-
       {/* ALWAYS ACTIVE WEB BROWSER PORTAL CONTAINER */}
       {createPortal(
         <div 
+          onMouseEnter={() => useStore.getState().setIsTopVisible(true)}
+          onMouseLeave={() => useStore.getState().setIsTopVisible(false)}
           onPointerDown={e => {
             e.stopPropagation();
             if (isPinned) handlePinnedHeaderPointerDown(e);
@@ -2956,7 +1956,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
           }}
           onMouseDown={e => e.stopPropagation()}
           onClick={e => e.stopPropagation()}
-          className="fixed border overflow-hidden shadow-2xl bg-[var(--bg-secondary)] flex flex-col"
+          className="fixed overflow-hidden shadow-2xl bg-[var(--bg-secondary)] flex flex-col"
           style={
             isOverlayOpen 
               ? {
@@ -2966,9 +1966,10 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                   height: '80%',
                   zIndex: 10001,
                   pointerEvents: 'auto',
-                  display: viewMode === 'scraper' ? 'flex' : 'none',
+                  display: showWebPreview ? 'flex' : 'none',
                   borderRadius: '24px',
                   border: '1px solid var(--border)',
+                  transform: 'none',
                   transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
                 }
               : (isPinned
@@ -2978,54 +1979,131 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                       width: '800px',
                       height: '600px',
                       zIndex: 10002,
-                      pointerEvents: (viewMode === 'scraper' && !isFolded) ? 'auto' : 'none',
-                      display: (viewMode === 'scraper' && !isFolded) ? 'flex' : 'none',
+                      pointerEvents: (showWebPreview && !isFolded) ? 'auto' : 'none',
+                      display: (showWebPreview && !isFolded) ? 'flex' : 'none',
                       borderRadius: '24px',
                       boxShadow: '0 25px 50px -12px rgba(0,0,0,0.85), 0 0 25px rgba(234,179,8,0.2)',
                       border: '2px solid rgba(234,179,8,0.45)',
                       transition: 'none',
                     }
                   : {
-                      left: (rect && !isFolded) ? `${rect.left}px` : '-9999px',
-                      top: (rect && !isFolded) ? `${rect.top}px` : '-9999px',
-                      width: (rect && !isFolded) ? `${rect.width}px` : '0px',
-                      height: (rect && !isFolded) ? `${rect.height}px` : '0px',
-                      zIndex: 40,
-                      pointerEvents: (viewMode === 'scraper' && rect && !isFolded) ? 'auto' : 'none',
-                      display: (viewMode === 'scraper' && !isFolded) ? 'flex' : 'none',
-                      borderRadius: '16px',
+                      left: '50%',
+                      top: '64px',
+                      width: '80vw',
+                      maxWidth: '1400px',
+                      height: 'min(75vh, 900px)',
+                      transform: `translateX(-50%) translateY(${isPinned ? '0' : (isTopVisible ? '0' : 'calc(-100% - 64px)')})`,
+                      opacity: isPinned ? 1 : (isTopVisible ? 1 : 0),
+                      zIndex: isPinned ? 40 : 39,
+                      pointerEvents: (showWebPreview && (isPinned || isTopVisible) && !isFolded) ? 'auto' : 'none',
+                      display: (showWebPreview && !isFolded) ? 'flex' : 'none',
+                      borderRadius: isPinned ? '16px' : '0 0 16px 16px',
                       border: '1px solid var(--border)',
-                      transition: 'none',
+                      borderTop: isPinned ? '1px solid var(--border)' : 'none',
+                      transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                      overflow: 'hidden',
+                      boxShadow: isTopVisible || isPinned ? '0 25px 50px -12px rgba(0,0,0,0.5)' : 'none',
                     }
                 )
           }
         >
-          {isPinned && (
+          {/* Header */}
+          <div 
+            className="border-b border-[var(--border)] flex items-center justify-between bg-black/40 shrink-0 rounded-t-2xl"
+            style={{ padding: '12px 20px', cursor: isPinned ? 'move' : 'default' }}
+          >
             <div 
-              className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 cursor-move select-none shrink-0"
+              className="flex items-center"
+              style={{ gap: 16 }}
             >
-              <div className="flex items-center gap-1.5 text-[10px] font-black text-yellow-400 tracking-wider font-mono">
-                <Pin size={10} className="animate-pulse text-yellow-500" />
-                <span>FLOATING VIEWPORT PINNED [按住此处拖拽面板]</span>
+              <div 
+                className={`rounded-2xl flex items-center justify-center shadow-lg transition-all bg-indigo-600`}
+                style={{ width: 44, height: 44 }}
+              >
+                <Globe2 size={22} className="text-white" />
               </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                  <h3 
+                    className="font-black text-white tracking-widest uppercase italic"
+                    style={{ fontSize: 13 }}
+                  >
+                    网页预览面板
+                  </h3>
+                  {isPinned && (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-yellow-500/20 border border-yellow-500/30 text-[10px] font-black text-yellow-400 tracking-wider font-mono">
+                      <Pin size={10} className="animate-pulse text-yellow-500" />
+                      <span>已固定</span>
+                    </div>
+                  )}
+                </div>
+                <div 
+                  className="flex items-center font-mono text-gray-500 tracking-widest"
+                  style={{ gap: 8, fontSize: 10 }}
+                >
+                  <span>V2.0 WEB_PREVIEW_BRIDGE</span>
+                </div>
+              </div>
+            </div>
+            
+            <div 
+              className="flex items-center"
+              style={{ gap: 8 }}
+            >
+              {/* 顶层状态组件：折叠和固定 */}
+              <button 
+                onClick={() => setIsOverlayOpen(true)}
+                className="hover:bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all transform hover:scale-105 active:scale-95"
+                style={{ padding: 10 }}
+                title="全屏脱离画布"
+              >
+                <Maximize2 size={18} />
+              </button>
+
               <button 
                 onClick={() => {
-                  setIsPinned(false);
-                  updateNodeData(id, { isPinned: false });
+                  const nextPinned = !isPinned;
+                  setIsPinned(nextPinned);
+                  if (nextPinned) {
+                    setPinnedPos({ x: window.innerWidth / 2 - 400, y: 150 });
+                  }
                 }}
-                className="text-gray-500 hover:text-white p-0.5 rounded transition-all bg-transparent border-none cursor-pointer"
+                className={`hover:bg-white/5 rounded-2xl transition-all transform hover:scale-105 active:scale-95 ${isPinned ? 'text-yellow-400 bg-yellow-500/15' : 'text-gray-500 hover:text-white'}`}
+                style={{ padding: 10 }}
+                title={isPinned ? "取消视口固定" : "固定在当前位置"}
               >
-                <X size={12} />
+                {isPinned ? <PinOff size={18} /> : <Pin size={18} />}
+              </button>
+
+              <button 
+                onClick={() => setIsFolded(!isFolded)}
+                className={`hover:bg-white/5 rounded-2xl transition-all transform hover:scale-105 active:scale-95 ${isFolded ? 'text-indigo-400 bg-indigo-400/10' : 'text-gray-500 hover:text-white'}`}
+                style={{ padding: 10 }}
+                title={isFolded ? "展开窗口" : "折叠最小化窗口"}
+              >
+                {isFolded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              </button>
+
+              <div className="w-px h-4 bg-[var(--border)] mx-1" />
+
+              <button 
+                onClick={() => useStore.getState().toggleWebPreview()}
+                className="hover:bg-red-500/20 rounded-2xl text-gray-500 hover:text-red-400 transition-all transform hover:scale-105 active:scale-95"
+                style={{ padding: 10 }}
+                title="关闭面板"
+              >
+                <X size={18} />
               </button>
             </div>
-          )}
-          {BrowserFrameComponent(isOverlayOpen)}
+          </div>
+
+          {!isFolded && BrowserFrameComponent(isOverlayOpen)}
         </div>,
         document.body
       )}
 
-      {/* FULLSCREEN OVERLAY BACKGROUND & COMFYUI PORTAL */}
-      {isOverlayOpen && createPortal(
+      {/* FULLSCREEN OVERLAY BACKGROUND */}
+      {(showWebPreview && isOverlayOpen) && createPortal(
         <div 
           className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-3xl" 
           onPointerDown={e => e.stopPropagation()}
@@ -3034,14 +2112,6 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
           <div className="absolute top-4 right-12 text-gray-500 font-bold select-none text-xs tracking-widest pointer-events-none uppercase">
             点击空白区域退出全屏
           </div>
-          {viewMode === 'comfy' && (
-            <div 
-              className="absolute inset-12" 
-              onClick={e => e.stopPropagation()}
-            >
-              <ComfyUIOverlay />
-            </div>
-          )}
         </div>,
         document.body
       )}

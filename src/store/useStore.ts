@@ -44,6 +44,7 @@ export type NodeType =
   | "spatial-view"
   | "comfy_web_bridge"
   | "apt-web-tool"
+  | "comfyui-node"
   | "io-image-list"
   | "reverse"
   | "ms-gen"
@@ -204,6 +205,8 @@ export interface AppState {
   isGridVisible: boolean;
   isMiniMapVisible: boolean;
   showAssistant: boolean;
+  showWebPreview: boolean;
+  isTopVisible: boolean;
   showFileManager: boolean;
   fileManagerWidth: number;
   files: FileItem[];
@@ -232,6 +235,8 @@ export interface AppState {
   toggleGrid: () => void;
   toggleMiniMap: () => void;
   toggleAssistant: () => void;
+  toggleWebPreview: () => void;
+  setIsTopVisible: (b: boolean) => void;
   toggleFileManager: () => void;
   setFileManagerWidth: (width: number) => void;
   updateSettings: (settings: Partial<AppSettings>) => void;
@@ -727,6 +732,8 @@ export const useStore = create<AppState>()(
       isGridVisible: true,
       isMiniMapVisible: true,
       showAssistant: true,
+      showWebPreview: false,
+      isTopVisible: false,
       showFileManager: false,
       fileManagerWidth: 320,
       files: [
@@ -1135,6 +1142,8 @@ export const useStore = create<AppState>()(
       toggleGrid: () => set({ isGridVisible: !get().isGridVisible }),
       toggleMiniMap: () => set({ isMiniMapVisible: !get().isMiniMapVisible }),
       toggleAssistant: () => set({ showAssistant: !get().showAssistant }),
+      toggleWebPreview: () => set({ showWebPreview: !get().showWebPreview }),
+      setIsTopVisible: (b: boolean) => set({ isTopVisible: b }),
       toggleFileManager: () => set({ showFileManager: !get().showFileManager }),
       setFileManagerWidth: (width: number) => set({ fileManagerWidth: width }),
       updateSettings: (newSettings) => {

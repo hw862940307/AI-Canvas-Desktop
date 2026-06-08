@@ -99,8 +99,8 @@ import { TranslateEngineNode } from "./components/TranslateEngineNode";
 import { LogicEngineNode } from "./components/LogicEngineNode";
 import FusionMasterNode from "./components/FusionMasterNode";
 import { SpatialViewNode } from "./components/SpatialViewNode";
-import { AptWebToolNode } from "./components/AptWebToolNode";
-import { BrowserNode } from "./components/BrowserNode";
+import { WebPreviewPanel } from "./components/AptWebToolNode";
+import { ComfyuiPortNode } from "./components/ComfyuiPortNode";
 import { WebScrapeNode, WebScreenshotNode, WebToTextNode } from "./components/WebActionNodes";
 import NativeHostNode from "./components/NativeHostNode";
 import { IoImageListNode } from "./components/IoImageListNode";
@@ -122,8 +122,7 @@ const nodeTypes = {
   "translate-engine": React.memo(TranslateEngineNode),
   "fusion-master": React.memo(FusionMasterNode),
   "spatial-view": React.memo(SpatialViewNode),
-  "apt-web-tool": React.memo(AptWebToolNode),
-  "browser-node": React.memo(BrowserNode),
+  "comfyui-node": React.memo(ComfyuiPortNode),
   "web-scrape": React.memo(WebScrapeNode),
   "web-screenshot": React.memo(WebScreenshotNode),
   "web-to-text": React.memo(WebToTextNode),
@@ -207,7 +206,8 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [isExited, setIsExited] = useState(false);
 
   const [isLeftSidebarHovered, setIsLeftSidebarHovered] = useState(false);
-  const [isTopHeaderHovered, setIsTopHeaderHovered] = useState(false);
+  const isTopHeaderHovered = useStore(s => s.isTopVisible);
+  const setIsTopHeaderHovered = useStore(s => s.setIsTopVisible);
   const [isBottomHovered, setIsBottomHovered] = useState(false);
   const [isBottomPinned, setIsBottomPinned] = useState(true);
   const [isAssistantHovered, setIsAssistantHovered] = useState(false);
@@ -969,6 +969,10 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
   const onPaneClick = useCallback(() => {
     setMenu(null);
     setSelectedNodeId(null);
+    const state = useStore.getState();
+    if (state.showWebPreview) {
+      state.toggleWebPreview();
+    }
   }, []);
 
   const handleAddNode = (type: any, x?: number, y?: number) => {
@@ -2357,12 +2361,12 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
               <TopBarButton
                 icon={<Globe2 size={16} />}
                 label="网页预览节点"
-                onClick={() => handleAddNode("apt-web-tool")}
+                onClick={() => useStore.getState().toggleWebPreview()}
               />
               <TopBarButton
                 icon={<Monitor size={16} />}
-                label="浏览器节点"
-                onClick={() => handleAddNode("browser-node")}
+                label="ComfyUI 端口"
+                onClick={() => handleAddNode("comfyui-node")}
               />
               <TopBarButton
                 icon={<Monitor size={16} />}
@@ -2720,10 +2724,10 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                         }
                       />
                       <ContextMenuItem
-                        label="浏览器节点 (Advanced)"
+                        label="ComfyUI 端口"
                         icon={<Monitor size={12} />}
                         onClick={() =>
-                          handleAddNode("browser-node", menu.x, menu.y)
+                          handleAddNode("comfyui-node", menu.x, menu.y)
                         }
                       />
                       <ContextMenuItem
@@ -4271,6 +4275,7 @@ function fallbackRender({ error, resetErrorBoundary }: any) {
   );
 }
 
+
 export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const { settings } = useStore();
@@ -4307,6 +4312,7 @@ export default function App() {
         <FlowInner onOpenSettings={() => setShowSettings(true)} />
 
         <AnimatePresence>
+          <WebPreviewPanel />
           {showSettings && (
             <SettingsModal onClose={() => setShowSettings(false)} />
           )}
