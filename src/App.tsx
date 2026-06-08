@@ -89,6 +89,9 @@ import {
   RotateCcw,
   ZoomIn,
   ZoomOut,
+  Database,
+  Camera,
+  FileJson,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -97,6 +100,8 @@ import { LogicEngineNode } from "./components/LogicEngineNode";
 import FusionMasterNode from "./components/FusionMasterNode";
 import { SpatialViewNode } from "./components/SpatialViewNode";
 import { AptWebToolNode } from "./components/AptWebToolNode";
+import { BrowserNode } from "./components/BrowserNode";
+import { WebScrapeNode, WebScreenshotNode, WebToTextNode } from "./components/WebActionNodes";
 import NativeHostNode from "./components/NativeHostNode";
 import { IoImageListNode } from "./components/IoImageListNode";
 import { DoubleBoxTransformNode } from "./components/DoubleBoxTransformNode";
@@ -118,6 +123,10 @@ const nodeTypes = {
   "fusion-master": React.memo(FusionMasterNode),
   "spatial-view": React.memo(SpatialViewNode),
   "apt-web-tool": React.memo(AptWebToolNode),
+  "browser-node": React.memo(BrowserNode),
+  "web-scrape": React.memo(WebScrapeNode),
+  "web-screenshot": React.memo(WebScreenshotNode),
+  "web-to-text": React.memo(WebToTextNode),
   "native-host": React.memo(NativeHostNode),
   "io-image-list": React.memo(IoImageListNode),
   "double-box-transform": React.memo(DoubleBoxTransformNode),
@@ -2347,8 +2356,13 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
             <div className="flex items-center gap-2 p-1 bg-white/5 border border-[var(--border)] rounded-xl">
               <TopBarButton
                 icon={<Globe2 size={16} />}
-                label="网页百宝箱"
+                label="网页预览节点"
                 onClick={() => handleAddNode("apt-web-tool")}
+              />
+              <TopBarButton
+                icon={<Monitor size={16} />}
+                label="浏览器节点"
+                onClick={() => handleAddNode("browser-node")}
               />
               <TopBarButton
                 icon={<Monitor size={16} />}
@@ -2699,11 +2713,33 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                         }
                       />
                       <ContextMenuItem
-                        label="网页百宝箱"
+                        label="网页预览节点"
                         icon={<Globe2 size={12} />}
                         onClick={() =>
                           handleAddNode("apt-web-tool", menu.x, menu.y)
                         }
+                      />
+                      <ContextMenuItem
+                        label="浏览器节点 (Advanced)"
+                        icon={<Monitor size={12} />}
+                        onClick={() =>
+                          handleAddNode("browser-node", menu.x, menu.y)
+                        }
+                      />
+                      <ContextMenuItem
+                        label="网页采集节点"
+                        icon={<Database size={12} />}
+                        onClick={() => handleAddNode("web-scrape", menu.x, menu.y)}
+                      />
+                      <ContextMenuItem
+                        label="网页截图节点"
+                        icon={<Camera size={12} />}
+                        onClick={() => handleAddNode("web-screenshot", menu.x, menu.y)}
+                      />
+                      <ContextMenuItem
+                        label="网页转文本节点"
+                        icon={<FileJson size={12} />}
+                        onClick={() => handleAddNode("web-to-text", menu.x, menu.y)}
                       />
                       <ContextMenuItem
                         label="Native Host - 本地宿主"

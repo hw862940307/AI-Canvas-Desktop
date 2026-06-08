@@ -147,41 +147,13 @@ export const FileManagerSidebar = () => {
   >("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [fullscreenUrl, setFullscreenUrl] = useState<string | null>(null);
-  const [zoomScale, setZoomScale] = useState(1);
-  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
-  const [isDraggingImage, setIsDraggingImage] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [fullscreenData, setFullscreenData] = useState<{
+    images: any[];
+    index: number;
+  } | null>(null);
 
-  const handleDoubleClickImage = (url: string) => {
-    setFullscreenUrl(url);
-    setZoomScale(1);
-    setZoomOffset({ x: 0, y: 0 });
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    const newScale = Math.min(Math.max(zoomScale + delta, 0.5), 5);
-    setZoomScale(newScale);
-  };
-
-  const handleImageMouseDown = (e: React.MouseEvent) => {
-    if (zoomScale <= 1) return;
-    setIsDraggingImage(true);
-    setDragStart({ x: e.clientX - zoomOffset.x, y: e.clientY - zoomOffset.y });
-  };
-
-  const handleImageMouseMove = (e: React.MouseEvent) => {
-    if (!isDraggingImage) return;
-    setZoomOffset({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    });
-  };
-
-  const handleImageMouseUp = () => {
-    setIsDraggingImage(false);
+  const handleDoubleClickImage = (images: any[], index: number) => {
+    setFullscreenData({ images, index });
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -396,6 +368,7 @@ export const FileManagerSidebar = () => {
       }}
       className={`bg-[var(--bg-secondary)] border border-[var(--border)] flex flex-col overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] nowheel nodrag nopan ${isCollapsed ? "backdrop-blur-xl bg-black/60 shadow-lg" : ""}`}
     >
+      {/* Rest of the file manager... */}
       {/* Resizer Handle on the Right (only when not fullscreen/collapsed) */}
       {!isFullscreen && !isCollapsed && (
         <>
@@ -586,110 +559,18 @@ export const FileManagerSidebar = () => {
         accept="image/*,video/*,audio/*"
         onChange={(e) => handleFileUpload(e)}
       />
+
+      {fullscreenData && (
+        <FullscreenViewer
+          images={fullscreenData.images}
+          initialIndex={fullscreenData.index}
+          onClose={() => setFullscreenData(null)}
+        />
+      )}
     </motion.div>
   );
 
-  return (
-    <>
-      {sidebarContent}
-
-      {fullscreenUrl &&
-        createPortal(
-          <AnimatePresence>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onWheel={handleWheel}
-              className="fixed inset-0 z-[10000] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-hidden"
-            >
-              <div className="absolute top-6 right-6 flex items-center gap-3 z-100">
-                <div className="flex items-center gap-2 bg-white/5 backdrop-blur-md rounded-2xl border border-[var(--border)] p-1.5 px-3">
-                  <button
-                    onClick={() => setZoomScale(Math.max(zoomScale - 0.2, 0.5))}
-                    className="p-2 hover:bg-white/10 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
-                  >
-                    <ZoomOut size={20} />
-                  </button>
-                  <span className="text-white/80 font-mono text-lg min-w-[60px] text-center">
-                    {Math.round(zoomScale * 100)}%
-                  </span>
-                  <button
-                    onClick={() => setZoomScale(Math.min(zoomScale + 0.2, 5))}
-                    className="p-2 hover:bg-white/10 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
-                  >
-                    <ZoomIn size={20} />
-                  </button>
-                  <div className="w-px h-4 bg-white/10 mx-1" />
-                  <button
-                    onClick={() => {
-                      setZoomScale(1);
-                      setZoomOffset({ x: 0, y: 0 });
-                    }}
-                    className="p-2 hover:bg-white/10 rounded-xl text-white/50 hover:text-white transition-all cursor-pointer"
-                    title="Reset"
-                  >
-                    <RotateCcw size={18} />
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setFullscreenUrl(null);
-                    setZoomScale(1);
-                    setZoomOffset({ x: 0, y: 0 });
-                  }}
-                  className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-red-500 text-white rounded-2xl transition-all border border-[var(--border)] shadow-2xl cursor-pointer"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div
-                className={`w-full h-full flex items-center justify-center overflow-hidden ${zoomScale > 1 ? "cursor-move" : "cursor-default"}`}
-                onMouseDown={handleImageMouseDown}
-                onMouseMove={handleImageMouseMove}
-                onMouseUp={handleImageMouseUp}
-                onMouseLeave={handleImageMouseUp}
-              >
-                <motion.div
-                  animate={{
-                    scale: zoomScale,
-                    x: zoomOffset.x,
-                    y: zoomOffset.y,
-                  }}
-                  transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                  className="relative max-w-full max-h-full flex items-center justify-center"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <img
-                    draggable={false}
-                    src={fullscreenUrl}
-                    alt="Fullscreen"
-                    className="max-w-[90vw] max-h-[85vh] object-contain shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-3xl border border-[var(--border)] select-none pointer-events-none"
-                  />
-                </motion.div>
-              </div>
-
-              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 px-6 py-3 bg-white/5 backdrop-blur-xl border border-[var(--border)] rounded-[24px] z-50">
-                <div className="flex items-center gap-2 pr-4 border-r border-[var(--border)]">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                  <span className="text-sm font-bold text-white/40 tracking-wider">
-                    FILE MANAGER VIEW
-                  </span>
-                </div>
-                <span className="text-sm font-mono text-white/60">
-                  PREVIEW MODE
-                </span>
-              </div>
-            </motion.div>
-          </AnimatePresence>,
-          document.body,
-        )}
-    </>
-  );
+  return sidebarContent;
 };
 
 const HistoryView = ({
@@ -757,13 +638,13 @@ const HistoryView = ({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
-            {files.map((file: FileItem) => (
+            {files.map((file: FileItem, index: number) => (
               <AspectRatioImageCard
                 key={file.id}
                 file={file}
                 onDragStart={(e) => onDragStart(e, file)}
                 onDoubleClick={() =>
-                  file.type === "image" && onDoubleClickImage?.(file.url)
+                  file.type === "image" && onDoubleClickImage?.(files, index)
                 }
                 className="hover:border-accent/30 rounded-2xl border border-[var(--border)] bg-black/20"
               >
@@ -969,25 +850,6 @@ const MaterialsView = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [tempPath, setTempPath] = useState("");
   const [colorMenuIndex, setColorMenuIndex] = useState<number | null>(null);
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
-  const [imageStatuses, setImageStatuses] = useState<Record<string, "loading" | "loaded" | "error">>({});
-  
-  const [sortOption, setSortOption] = useState<"createdAt" | "updatedAt" | "name" | "size">("createdAt");
-  const [sortDesc, setSortDesc] = useState(true);
-
-  // Helper for auto-categorizing files
-  const autoCategorize = (filename: string) => {
-    const lower = filename.toLowerCase();
-    for (const f of folders) {
-      const fName = f.name.toLowerCase();
-      if (lower.includes(fName)) return f.id;
-      if ((lower.includes("char") || lower.includes("hero")) && fName.includes("character")) return f.id;
-      if ((lower.includes("scene") || lower.includes("bg") || lower.includes("env")) && fName.includes("scene")) return f.id;
-      if ((lower.includes("item") || lower.includes("weapon") || lower.includes("prop")) && fName.includes("prop")) return f.id;
-      if ((lower.includes("icon") || lower.includes("ui")) && fName.includes("ui")) return f.id;
-    }
-    return selectedFolderId;
-  };
 
   // Custom states for drag-box selection
   const [selectionBox, setSelectionBox] = useState<{
@@ -1005,40 +867,76 @@ const MaterialsView = ({
     return Number(localStorage.getItem("fm_itemSize")) || 150;
   });
   const [hoverImageId, setHoverImageId] = useState<string | null>(null);
-  const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
   const [showBatchMenu, setShowBatchMenu] = useState(false);
   const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
-
-  const [simulatePalette] = useState([
-    "#e0cab4",
-    "#dbcdb8",
-    "#bf966c",
-    "#986a42",
-    "#79442d",
-    "#bea593",
-    "#e4d3c3",
-    "#ecdcc3",
-  ]);
-
-  const localSyncInputRef = useRef<HTMLInputElement>(null);
+  const [currentPalette, setCurrentPalette] = useState<string[]>([]);
 
   const selectedFolder = folders.find((f: any) => f.id === selectedFolderId);
-  const filteredMaterials = materials.filter((m: any) => {
-    const matchesFolder = !selectedFolderId || m.folderId === selectedFolderId;
-    const matchesSearch = !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.type.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFolder && matchesSearch;
-  }).sort((a: any, b: any) => {
-    let cmp = 0;
-    if (sortOption === "createdAt") cmp = (a.createdAt || 0) - (b.createdAt || 0);
-    else if (sortOption === "updatedAt") cmp = (a.updatedAt || a.createdAt || 0) - (b.updatedAt || b.createdAt || 0);
-    else if (sortOption === "size") cmp = (a.size || 0) - (b.size || 0);
-    else if (sortOption === "name") cmp = a.name.localeCompare(b.name);
-    
-    return sortDesc ? -cmp : cmp;
-  });
+  const filteredMaterials = materials.filter(
+    (m: any) => {
+      const matchFolder = !selectedFolderId || m.folderId === selectedFolderId;
+      const lowerSearch = searchQuery.toLowerCase();
+      const matchSearch = !searchQuery || 
+        m.name.toLowerCase().includes(lowerSearch) || 
+        m.tags?.some((tag: string) => tag.toLowerCase().includes(lowerSearch)) ||
+        m.comments?.toLowerCase().includes(lowerSearch);
+      return matchFolder && matchSearch;
+    }
+  );
   const selectedMaterial = materials.find(
     (m: any) => m.id === selectedMaterialId,
   );
+  
+  useEffect(() => {
+    if (!selectedMaterial?.url) {
+      setCurrentPalette([
+        "#e0cab4", "#dbcdb8", "#bf966c", "#986a42",
+        "#79442d", "#bea593", "#e4d3c3", "#ecdcc3"
+      ]);
+      return;
+    }
+    const extractColors = async () => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        canvas.width = 64;
+        canvas.height = 64;
+        ctx.drawImage(img, 0, 0, 64, 64);
+        try {
+          const imageData = ctx.getImageData(0, 0, 64, 64).data;
+          const colors = new Map<string, number>();
+          for (let i = 0; i < imageData.length; i += 4 * 16) {
+            const r = imageData[i];
+            const g = imageData[i + 1];
+            const b = imageData[i + 2];
+            const a = imageData[i + 3];
+            if (a < 128) continue;
+            const qR = Math.min(255, Math.round(r / 32) * 32);
+            const qG = Math.min(255, Math.round(g / 32) * 32);
+            const qB = Math.min(255, Math.round(b / 32) * 32);
+            const hex = `#${qR.toString(16).padStart(2, "0")}${qG.toString(16).padStart(2, "0")}${qB.toString(16).padStart(2, "0")}`;
+            colors.set(hex, (colors.get(hex) || 0) + 1);
+          }
+          const sortedColors = Array.from(colors.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8)
+            .map(([hex]) => hex);
+          if (sortedColors.length > 0) {
+            setCurrentPalette(sortedColors);
+          }
+        } catch (e) {
+          // Fallback if crossOrigin fails
+        }
+      };
+      img.src = selectedMaterial.url;
+    };
+    extractColors();
+  }, [selectedMaterial?.url]);
+
+  const localSyncInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (selectedFolderId)
@@ -1063,18 +961,77 @@ const MaterialsView = ({
     }
   };
 
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!selectedFolderId) return;
+    setIsDragOver(true);
+  };
+  
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
+  };
+  
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!selectedFolderId) return;
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      Array.from(e.dataTransfer.files).forEach((file: File) => {
+        if (file.type.startsWith("image/")) {
+          const url = URL.createObjectURL(file);
+          addMaterial({
+            name: file.name,
+            url: url,
+            type: "image",
+            size: file.size,
+            folderId: selectedFolderId,
+          });
+        }
+      });
+    }
+  };
+
+  const dirHandlesRef = useRef<Record<string, any>>({});
+
   // Real Sync Logic using Browser File Picker
-  const handleSync = async () => {
+  const handleSync = async (isRefresh: boolean = false) => {
     if (!selectedFolderId) return;
 
     if ("showDirectoryPicker" in window) {
       try {
-        // @ts-ignore
-        const dirHandle = await window.showDirectoryPicker();
+        let dirHandle = dirHandlesRef.current[selectedFolderId];
+        if (!isRefresh || !dirHandle) {
+          // @ts-ignore
+          dirHandle = await window.showDirectoryPicker();
+          dirHandlesRef.current[selectedFolderId] = dirHandle;
+        } else {
+          // Verify/request permissions
+          // @ts-ignore
+          const options = { mode: "read" };
+          // @ts-ignore
+          if ((await dirHandle.queryPermission(options)) !== "granted") {
+            // @ts-ignore
+            if ((await dirHandle.requestPermission(options)) !== "granted") {
+              // @ts-ignore
+              dirHandle = await window.showDirectoryPicker();
+              dirHandlesRef.current[selectedFolderId] = dirHandle;
+            }
+          }
+        }
+
         setIsSyncing(true);
         updateFolder(selectedFolderId, { path: `本地目录: ${dirHandle.name}` });
 
-        clearFolderMaterials(selectedFolderId);
+        const currentMaterials = useStore.getState().materials.filter(
+          (m: any) => m.folderId === selectedFolderId,
+        );
+        const currentNames = new Set(currentMaterials.map((m: any) => m.name));
 
         const newMaterials = [];
         // @ts-ignore
@@ -1082,6 +1039,7 @@ const MaterialsView = ({
           if (entry.kind === "file") {
             const file = await entry.getFile();
             if (file.type.startsWith("image/")) {
+              if (isRefresh && currentNames.has(file.name)) continue;
               const url = URL.createObjectURL(file);
               newMaterials.push({
                 name: file.name,
@@ -1093,6 +1051,8 @@ const MaterialsView = ({
             }
           }
         }
+        
+        if (!isRefresh) clearFolderMaterials(selectedFolderId);
         newMaterials.forEach((m) => addMaterial(m));
         setIsSyncing(false);
       } catch (err) {
@@ -1250,14 +1210,42 @@ const MaterialsView = ({
       setSelectionBox((prev) => (prev ? { ...prev, selecting: false } : null));
   };
 
-  const handleDeleteSelected = () => {
-    setShowDeleteConfirmModal(true);
-  };
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      if (
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement ||
+        (document.activeElement as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+      
+      // Don't trigger if fullscreen preview is open
+      if (document.querySelector(".fullscreen-viewer-active")) {
+        return;
+      }
+      
+      if (e.key === "Backspace" || e.key === "Delete") {
+        if (selectedIds.size > 0 || selectedMaterialId) {
+          handleDeleteSelected();
+        }
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedIds, selectedMaterialId, onDelete]);
 
-  const confirmDelete = () => {
-    selectedIds.forEach((id) => onDelete(id));
-    setSelectedIds(new Set());
-    setShowDeleteConfirmModal(false);
+  const handleDeleteSelected = () => {
+    if (selectedIds.size > 0) {
+      // 移除原有的 confirm 弹窗因 iframe 限制导致失效
+      selectedIds.forEach((id) => onDelete(id));
+      setSelectedIds(new Set());
+    } else if (selectedMaterialId) {
+      onDelete(selectedMaterialId);
+      setSelectedMaterialId(null);
+    }
   };
 
   return (
@@ -1384,34 +1372,6 @@ const MaterialsView = ({
             </span>
           </div>
           <div className="flex items-center gap-4 flex-1 justify-end">
-            <div className="flex items-center gap-2">
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value as any)}
-                className="bg-black/30 border border-[var(--border)] rounded-full py-1 pl-3 pr-8 text-sm text-gray-300 focus:border-accent/50 focus:outline-none transition-colors appearance-none cursor-pointer"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 8px center",
-                  backgroundSize: "14px"
-                }}
-              >
-                <option value="createdAt" className="bg-zinc-900 text-white">创建时间</option>
-                <option value="updatedAt" className="bg-zinc-900 text-white">修改时间</option>
-                <option value="name" className="bg-zinc-900 text-white">文件名称</option>
-                <option value="size" className="bg-zinc-900 text-white">文件大小</option>
-              </select>
-              <button
-                onClick={() => setSortDesc(!sortDesc)}
-                className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 transition-colors"
-                title={sortDesc ? "降序" : "升序"}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: sortDesc ? 'scaleY(-1)' : 'none' }}>
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <polyline points="19 12 12 19 5 12"></polyline>
-                </svg>
-              </button>
-            </div>
             <div className="relative w-48 shrink-0">
               <Search
                 size={14}
@@ -1569,7 +1529,7 @@ const MaterialsView = ({
 
         {selectedFolderId && (
           <div className="px-4 py-2 border-b border-[var(--border)] bg-black/20 flex flex-wrap items-center gap-3 shrink-0">
-            {/* Show Current Synced Folder Path */}
+            {/* Show Current Synced Folder Path or Selected File URL */}
             <div className="flex items-center gap-1.5 text-xs text-gray-400 font-mono flex-1 min-w-[150px] truncate">
               <span className="text-accent flex items-center gap-1 shrink-0 font-sans font-bold">
                 <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />{" "}
@@ -1577,41 +1537,15 @@ const MaterialsView = ({
               </span>
               <span
                 className="truncate text-gray-500"
-                title={selectedFolder?.path}
+                title={selectedMaterial ? selectedMaterial.url : selectedFolder?.path}
               >
-                {selectedFolder?.path || "C:\\AI\\Assets\\Local"}
+                {selectedMaterial ? selectedMaterial.url : (selectedFolder?.path || "C:\\AI\\Assets\\Local")}
               </span>
             </div>
 
             {/* Upload File Button */}
             <button
-              onClick={() => {
-                const fileInput = document.createElement("input");
-                fileInput.type = "file";
-                fileInput.multiple = true;
-                fileInput.accept = "image/*";
-                fileInput.onchange = (e) => {
-                  const files = (e.target as HTMLInputElement).files;
-                  if (!files || !selectedFolderId) return;
-                  setIsSyncing(true);
-                  Array.from(files).forEach((file: File) => {
-                    if (file.type.startsWith("image/")) {
-                      const url = URL.createObjectURL(file);
-                      addMaterial({
-                        name: file.name,
-                        url: url,
-                        type: "image",
-                        size: file.size,
-                        folderId: selectedFolderId,
-                      });
-                    }
-                  });
-                  setTimeout(() => {
-                    setIsSyncing(false);
-                  }, 400);
-                };
-                fileInput.click();
-              }}
+              onClick={() => handleSync(false)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/20 hover:bg-accent/30 border border-accent/20 hover:border-accent/40 rounded-lg text-accent text-xs font-bold transition-all shadow-sm shrink-0 cursor-pointer"
               title="上传文件导入"
             >
@@ -1621,61 +1555,7 @@ const MaterialsView = ({
 
             {/* Refresh / Sync assets in current folder address */}
             <button
-              onClick={async () => {
-                setIsSyncing(true);
-                // Simulate checking directory files
-                setTimeout(() => {
-                  const currentMaterials = materials.filter(
-                    (m: any) => m.folderId === selectedFolderId,
-                  );
-                  const currentNames = new Set(
-                    currentMaterials.map((m: any) => m.name),
-                  );
-
-                  // Get mockup files for the active folder
-                  const mockFiles = getMockFilesForFolder(
-                    selectedFolderId,
-                    selectedFolder?.name || "",
-                  );
-
-                  // Check which are new compared to materials in state
-                  const newFiles = mockFiles.filter(
-                    (f) => !currentNames.has(f.name),
-                  );
-
-                  if (newFiles.length > 0) {
-                    newFiles.forEach((file) => {
-                      addMaterial({
-                        name: file.name,
-                        url: file.url,
-                        type: "image",
-                        size: file.size,
-                        folderId: autoCategorize(file.name),
-                      });
-                    });
-                    alert(
-                      `刷新成功！检测到新增加的资源图片，已自动同步加载 ${newFiles.length} 个新文件至素材库，并自动进行了归类。`,
-                    );
-                  } else {
-                    const randomNum = Math.floor(Math.random() * 1000);
-                    const newRandomName = `New_${selectedFolder?.name || "Asset"}_${randomNum}.jpg`;
-                    const newRandomUrl = `https://picsum.photos/seed/new_${selectedFolder?.name || "asset"}_${randomNum}/400/400`;
-
-                    addMaterial({
-                      name: newRandomName,
-                      url: newRandomUrl,
-                      type: "image",
-                      size: 102400 + Math.floor(Math.random() * 500000),
-                      folderId: autoCategorize(newRandomName),
-                    });
-
-                    alert(
-                      `刷新成功！未发现固定资产变更，测试用：在本地地址中识别到刚新建的图片 "${newRandomName}" ，已自动同步归类到对应标签中。`,
-                    );
-                  }
-                  setIsSyncing(false);
-                }, 800);
-              }}
+              onClick={() => handleSync(true)}
               disabled={isSyncing}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-gray-200 hover:text-white text-xs transition-colors shadow-sm shrink-0 cursor-pointer"
               title="刷新当前文件的地址的图片更新"
@@ -1690,14 +1570,27 @@ const MaterialsView = ({
         )}
 
         <div
-          className="flex-1 overflow-y-auto p-4 custom-scrollbar relative select-none"
+          className={`flex-1 overflow-y-auto p-4 custom-scrollbar relative select-none transition-colors duration-200 ${isDragOver ? "bg-accent/10" : ""}`}
           onWheel={handleGridWheel}
           ref={gridContainerRef}
           onMouseDown={handleGridMouseDown}
           onMouseMove={handleGridMouseMove}
           onMouseUp={handleGridMouseUp}
-          onMouseLeave={handleGridMouseUp}
+          onMouseLeave={(e) => {
+             handleGridMouseUp();
+             handleDragLeave(e as unknown as React.DragEvent);
+          }}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
         >
+          {isDragOver && (
+            <div className="absolute inset-0 z-50 border-2 border-dashed border-accent bg-accent/5 flex items-center justify-center pointer-events-none rounded-xl mx-4 my-4">
+              <div className="bg-black/80 px-6 py-4 rounded-2xl flex flex-col items-center gap-3 shadow-2xl">
+                <Upload size={32} className="text-accent animate-bounce" />
+                <span className="text-white font-bold text-lg">松开鼠标添加至此文件夹</span>
+              </div>
+            </div>
+          )}
           {selectionBox?.selecting && (
             <div
               className="absolute bg-accent/20 border border-accent rounded-sm pointer-events-none z-[100]"
@@ -1739,7 +1632,7 @@ const MaterialsView = ({
                   data-id={file.id}
                   draggable
                   onDragStart={(e) => onDragStart(e, file)}
-                  onDoubleClick={() => setFullscreenIndex(index)}
+                  onDoubleClick={() => onDoubleClickImage?.(filteredMaterials, index)}
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest("button")) return;
                     if (e.ctrlKey || e.shiftKey || selectedIds.size > 0) {
@@ -1764,17 +1657,6 @@ const MaterialsView = ({
                         : "border-[var(--border)] hover:border-white/20"
                   }`}
                 >
-                  {/* Image Status Indicators */}
-                  {imageStatuses[file.id] === "error" && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-800 text-zinc-500 z-0">
-                      <ImageIcon size={24} className="mb-2 opacity-30" />
-                      <span className="text-[10px] uppercase tracking-wider">Failed</span>
-                    </div>
-                  )}
-                  {(!imageStatuses[file.id] || imageStatuses[file.id] === "loading") && (
-                    <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-900 animate-pulse z-0" />
-                  )}
-
                   {/* Checkbox for Multi-Select */}
                   <div
                     onClick={(e) => {
@@ -1811,7 +1693,6 @@ const MaterialsView = ({
                     src={file.url}
                     alt={file.name}
                     onLoad={(e) => {
-                      setImageStatuses((prev) => ({ ...prev, [file.id]: "loaded" }));
                       const { naturalWidth, naturalHeight } = e.currentTarget;
                       if (naturalWidth && naturalHeight) {
                         setLoadedAspects((prev) => ({
@@ -1820,12 +1701,7 @@ const MaterialsView = ({
                         }));
                       }
                     }}
-                    onError={() => {
-                      setImageStatuses((prev) => ({ ...prev, [file.id]: "error" }));
-                    }}
-                    className={`w-full h-auto block select-none z-10 relative transition-opacity duration-300 ${
-                      imageStatuses[file.id] === "loaded" ? "opacity-100" : "opacity-0"
-                    }`}
+                    className="w-full h-auto block select-none"
                   />
 
                   {/* Hover Action Overlay */}
@@ -1860,7 +1736,7 @@ const MaterialsView = ({
                     onMouseLeave={() => setHoverImageId(null)}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setFullscreenIndex(index);
+                      onDoubleClickImage?.(filteredMaterials, index);
                     }}
                     className="absolute bottom-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded border border-white/10 opacity-0 group-hover:opacity-100 text-white/70 hover:text-white hover:bg-zinc-800 transition-all shadow-lg pointer-events-auto"
                     title="放大镜"
@@ -1901,7 +1777,7 @@ const MaterialsView = ({
 
             {/* Color Palette Analysis */}
             <div className="flex gap-2.5 flex-wrap">
-              {simulatePalette.map((color, i) => (
+              {currentPalette.map((color, i) => (
                 <div key={i} className="relative">
                   <button
                     onClick={() =>
@@ -1960,9 +1836,8 @@ const MaterialsView = ({
                 </label>
                 <input
                   type="text"
-                  defaultValue={
-                    selectedMaterial.name.split(".")[0] || "Image Name"
-                  }
+                  value={selectedMaterial.name}
+                  onChange={(e) => useStore.getState().updateMaterial(selectedMaterial.id, { name: e.target.value })}
                   className="w-full bg-black/20 hover:bg-black/40 border border-transparent hover:border-white/10 focus:bg-black/50 focus:border-accent rounded-lg px-3 py-2 text-sm text-gray-300 focus:text-white transition-all outline-none"
                 />
               </div>
@@ -1971,6 +1846,8 @@ const MaterialsView = ({
                   注释
                 </label>
                 <textarea
+                  value={selectedMaterial.comments || ''}
+                  onChange={(e) => useStore.getState().updateMaterial(selectedMaterial.id, { comments: e.target.value })}
                   className="w-full bg-black/20 hover:bg-black/40 border border-transparent hover:border-white/10 focus:bg-black/50 focus:border-accent rounded-lg px-3 py-2 text-sm text-gray-300 focus:text-white transition-all outline-none resize-none h-24 custom-scrollbar leading-relaxed"
                   placeholder="添加备注信息..."
                 />
@@ -1981,6 +1858,8 @@ const MaterialsView = ({
                 </label>
                 <input
                   type="text"
+                  value={selectedMaterial.sourceUrl || ''}
+                  onChange={(e) => useStore.getState().updateMaterial(selectedMaterial.id, { sourceUrl: e.target.value })}
                   className="w-full bg-black/20 hover:bg-black/40 border border-transparent hover:border-white/10 focus:bg-black/50 focus:border-accent rounded-lg px-3 py-2 text-sm text-gray-300 focus:text-white transition-all outline-none font-mono"
                   placeholder="http://"
                 />
@@ -1988,13 +1867,39 @@ const MaterialsView = ({
             </div>
 
             {/* Tags */}
-            <div className="space-y-2 pb-4 border-b border-[var(--border)]">
+            <div className="space-y-3 pb-4 border-b border-[var(--border)]">
               <span className="text-xs font-bold text-gray-500 uppercase flex justify-between items-center px-1">
                 标签管理
               </span>
-              <button className="w-full py-2 border border-dashed border-[var(--border)] text-gray-500 hover:text-gray-300 hover:bg-white/5 hover:border-gray-500 rounded-lg text-sm flex items-center justify-center gap-1.5 transition-colors">
-                <Plus size={14} /> 添加标签
-              </button>
+              <div className="flex flex-wrap gap-2">
+                {(selectedMaterial.tags || []).map((tag: string, index: number) => (
+                  <span key={index} className="px-2 py-1 bg-white/10 text-gray-300 text-xs rounded-md flex items-center gap-1 group">
+                    <span className="cursor-pointer" onClick={() => setSearchQuery(tag)}>{tag}</span>
+                    <button 
+                      onClick={() => {
+                        const newTags = (selectedMaterial.tags || []).filter((_: string, i: number) => i !== index);
+                        useStore.getState().updateMaterial(selectedMaterial.id, { tags: newTags });
+                      }}
+                      className="opacity-0 group-hover:opacity-100 px-0.5 hover:text-white transition-opacity"
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <input 
+                type="text"
+                placeholder="输入标签按回车添加..."
+                className="w-full bg-black/20 border border-dashed border-[var(--border)] text-gray-300 focus:border-accent rounded-lg text-sm px-3 py-2 transition-colors outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                    const tag = e.currentTarget.value.trim();
+                    const newTags = [...(selectedMaterial.tags || []), tag];
+                    useStore.getState().updateMaterial(selectedMaterial.id, { tags: Array.from(new Set(newTags)) });
+                    e.currentTarget.value = '';
+                  }
+                }}
+              />
             </div>
 
             {/* Basic Info Details */}
@@ -2014,31 +1919,46 @@ const MaterialsView = ({
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500">尺寸</span>
                   <span className="text-gray-300 font-mono tracking-wider">
-                    2000 × 2500
+                    {loadedAspects[selectedMaterial.id]
+                      ? `${loadedAspects[selectedMaterial.id].split("/")[0]} × ${loadedAspects[selectedMaterial.id].split("/")[1]}`
+                      : "读取中..."}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500">文件大小</span>
                   <span className="text-gray-300 font-mono tracking-wider">
-                    {(selectedMaterial.size / 1024 / 1024).toFixed(2)} MB
+                    {selectedMaterial.size ? (selectedMaterial.size / 1024 / 1024).toFixed(2) + " MB" : "未知"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500">格式</span>
                   <span className="text-gray-300 uppercase tracking-widest">
-                    {selectedMaterial.name.split(".").pop() || "PNG"}
+                    {selectedMaterial.name.split(".").pop()?.toUpperCase() || "未知"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500">添加日期</span>
                   <span className="text-gray-300 font-mono text-[11px] opacity-80">
-                    2026/05/04 00:30
+                    {new Date(selectedMaterial.createdAt).toLocaleString("zh-CN", {
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-gray-500">修改日期</span>
                   <span className="text-gray-300 font-mono text-[11px] opacity-80">
-                    2026/05/04 00:30
+                    {/* fallback to createdAt if no modifiedAt exists */}
+                    {new Date(selectedMaterial.createdAt).toLocaleString("zh-CN", {
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
                 </div>
               </div>
@@ -2055,67 +1975,28 @@ const MaterialsView = ({
       )}
 
       {/* Hover Image Portal */}
-      {hoverImageId &&
-        createPortal(
-          <div className="fixed inset-0 z-[999999] pointer-events-none flex items-center justify-center p-8 bg-black/40 backdrop-blur-sm transition-all duration-200">
-            <img
-              src={materials.find((m: any) => m.id === hoverImageId)?.url}
-              className="max-w-[90vw] max-h-[90vh] object-contain drop-shadow-2xl rounded-sm scale-100"
-              style={{ filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.6))" }}
-              alt="Hover Preview"
-            />
-          </div>,
-          document.body,
-        )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirmModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in-95">
-            <h3 className="text-lg font-bold text-white mb-2">确认删除素材</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              您确定要删除选中的 {selectedIds.size} 个素材吗？此操作不可逆。
-            </p>
-            <div className="flex flex-wrap gap-2 mb-6 max-h-48 overflow-y-auto custom-scrollbar p-2 bg-black/30 rounded-lg">
-              {Array.from(selectedIds).map((id) => {
-                const material = materials.find((m: any) => m.id === id);
-                if (!material) return null;
-                return (
-                  <img
-                    key={id}
-                    src={material.url}
-                    alt={material.name}
-                    className="w-12 h-12 object-cover rounded-md border border-zinc-700"
-                  />
-                );
-              })}
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteConfirmModal(false)}
-                className="px-4 py-2 rounded-lg bg-zinc-800 text-white hover:bg-zinc-700 transition"
-              >
-                取消
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-500 transition shadow"
-              >
-                彻底删除
-              </button>
-            </div>
-          </div>
-        </div>
+      {createPortal(
+        <AnimatePresence>
+          {hoverImageId && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[999999] pointer-events-none flex items-center justify-center p-8 bg-black/40 backdrop-blur-sm"
+            >
+              <img
+                src={materials.find((m: any) => m.id === hoverImageId)?.url}
+                className="max-w-[90vw] max-h-[90vh] object-contain drop-shadow-2xl rounded-sm"
+                style={{ filter: "drop-shadow(0 25px 50px rgba(0,0,0,0.6))" }}
+                alt="Hover Preview"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
 
-      {/* Fullscreen Viewer Component */}
-      {fullscreenIndex !== null && (
-        <FullscreenViewer
-          images={filteredMaterials}
-          initialIndex={fullscreenIndex}
-          onClose={() => setFullscreenIndex(null)}
-        />
-      )}
     </div>
   );
 };
@@ -2201,12 +2082,12 @@ const OutputView = ({ onAdd, onDragStart, onDoubleClickImage }: any) => {
               </span>
             </div>
           ))}
-          {files.map((file) => (
+          {files.map((file, index) => (
             <div
               key={file.id}
               draggable
               onDragStart={(e) => onDragStart(e, file)}
-              onDoubleClick={() => onDoubleClickImage?.(file.url)}
+              onDoubleClick={() => onDoubleClickImage?.(files, index)}
               style={{ aspectRatio: loadedAspects[file.id] || "1/1" }}
               className="group relative bg-black/20 rounded-2xl overflow-hidden border border-[var(--border)] hover:border-accent/30 transition-all cursor-pointer w-full h-auto"
             >
@@ -2566,7 +2447,7 @@ const PromptsView = ({ fileManagerWidth, onAdd, onDragStart }: any) => {
       {displayPrompt &&
         createPortal(
           <div
-            className="prompt-floating-panel fixed top-1/2 -translate-y-1/2 w-[420px] max-h-[85vh] flex flex-col bg-[#1a1a1a]/95 backdrop-blur-xl rounded-2xl border shadow-2xl z-[1000] overflow-hidden transition-all duration-200"
+            className="prompt-floating-panel fixed top-1/2 -translate-y-1/2 w-[420px] max-h-[85vh] flex flex-col bg-[#1a1a1a]/95 backdrop-blur-xl rounded-2xl border shadow-2xl z-[10000] overflow-hidden transition-all duration-200"
             style={{
               left: `${Math.min(window.innerWidth - 440, fileManagerWidth + 92)}px`,
               borderColor: pinnedPromptId

@@ -1810,7 +1810,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
         } else if (event.data.type === 'OPEN_EXTERNAL_TAB') {
           const { url } = event.data;
           if (url) {
-            window.open(url, '_blank');
+            handleAddTab(url);
           }
         } else if (event.data.type === 'NAVIGATE_CURRENT_TAB') {
           const { url } = event.data;
@@ -1956,7 +1956,7 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
       onRemoveFavorite={handleRemoveFavorite}
       onBookmarkClick={handleBookmarkClick}
       onToggleOverlay={setIsOverlayOpen}
-      onOpenExternal={() => window.open(iframeUrl || pageUrl, '_blank')}
+      onOpenExternal={() => handleAddTab(iframeUrl || pageUrl)}
       onBackward={handleBackward}
       onForward={handleForward}
       historyEntries={historyEntries}
@@ -2041,13 +2041,13 @@ export function AptWebToolNode({ id, data, selected }: NodeProps) {
                 className="font-black text-white tracking-widest uppercase italic"
                 style={{ fontSize: 14 * zoomScale }}
               >
-                AI_网页百宝箱
+                网页预览节点
               </h3>
               <div 
                 className="flex items-center font-mono text-gray-600 tracking-widest"
                 style={{ gap: 8 * zoomScale, fontSize: 10 * zoomScale, marginTop: 2 * zoomScale }}
               >
-                <span>V1.3 APT_WEB_BRIDGE</span>
+                <span>V2.0 WEB_PREVIEW_BRIDGE</span>
                 <div 
                   className="rounded-full bg-indigo-500"
                   style={{ width: 4 * zoomScale, height: 4 * zoomScale }}

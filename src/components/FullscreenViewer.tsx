@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
-import { createPortal } from 'react-dom';
+import { ChevronLeft, ChevronRight, ArrowLeft, Crop, Maximize, Puzzle, Sidebar, Square, SplitSquareHorizontal, Layers, Eraser, Brush, Component } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface FullscreenViewerProps {
   images: any[];
@@ -16,6 +16,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({ images, init
   const dragStart = useRef({ x: 0, y: 0 });
   const [baseDim, setBaseDim] = useState({ w: 0, h: 0 });
   const [windowDim, setWindowDim] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const [showEscHint, setShowEscHint] = useState(true);
 
   const currentImage = images[currentIndex] || images[0];
 
@@ -28,9 +29,14 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({ images, init
     window.addEventListener('keydown', handleKeyDown);
     const handleResize = () => setWindowDim({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', handleResize);
+    
+    // Hide ESC hint after 3 seconds
+    const timer = setTimeout(() => setShowEscHint(false), 3000);
+    
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
+      clearTimeout(timer);
     };
   }, [images.length, onClose]);
 
@@ -42,9 +48,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({ images, init
   }, [currentIndex]);
 
   const handleWheel = (e: React.WheelEvent) => {
-    if (e.altKey || e.ctrlKey || true) { // Also allow normal scroll to zoom exactly like the image if wanted, actually wait, they requested alt+scroll previously but here they say "支持滑动缩放大小", normal wheel is fine or just alt. Let's keep it easy with alt or normal? They didn't say alt this time. Let's support normal wheel for zooming if it's fullscreen! It's an image viewer.
-      setScale(prev => Math.max(0.1, Math.min(20, prev - e.deltaY * 0.005)));
-    }
+    setScale(prev => Math.max(0.1, Math.min(20, prev - e.deltaY * 0.005)));
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -88,63 +92,86 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({ images, init
   const leftOff = (-position.x / scale / (baseDim.w || 1)) * 100;
   const topOff = (-position.y / scale / (baseDim.h || 1)) * 100;
 
-  return createPortal(
+  return (
     <div 
-      className="fixed inset-0 z-[2000] bg-[#1a1a1a]/95 flex flex-col items-center justify-center overflow-hidden touch-none"
+      className="fullscreen-viewer-active absolute inset-0 z-[2000] bg-[#1a1a1a] flex flex-col items-center justify-center overflow-hidden touch-none select-none"
       onWheel={handleWheel}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      {/* Top Header matching Figure 1 */}
-      <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 z-[2010] bg-black/40 backdrop-blur-sm border-b border-white/5">
-         <div className="flex items-center gap-6 text-gray-300">
-            <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg hover:text-white transition-colors" title="退出全屏 (Esc)">
-              <ArrowLeft size={18} />
+      <div className="absolute top-0 left-0 right-0 h-[48px] flex items-center justify-between px-4 z-[2010] bg-[#1d1d1d] border-b border-[#2a2a2a] select-none text-[#a0a0a0]">
+         <div className="flex items-center gap-4 w-1/3">
+            <button onClick={onClose} className="p-1.5 hover:bg-white/10 hover:text-white rounded-md transition-colors" title="退出全屏 (Esc)">
+              <ArrowLeft size={18} strokeWidth={1.5} />
             </button>
-            <div className="font-mono text-sm tracking-widest w-16 text-center -ml-2">{currentIndex + 1} / {images.length}</div>
-            
-            <div className="flex items-center gap-4">
-              <input 
-                type="range"
-                min="0.1"
-                max="5"
-                step="0.01"
-                value={scale}
-                onChange={(e) => setScale(parseFloat(e.target.value))}
-                className="w-48 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white hover:bg-white/30 transition-colors [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
-              />
-              <div className="font-mono text-sm tracking-wider w-12 text-right text-gray-400">{Math.round(scale * 100)}%</div>
+            <div className="font-sans text-[13px] tracking-wide text-[#a0a0a0] min-w-[80px]">{currentIndex + 1} / {images.length}</div>
+         </div>
+
+         {/* Center placeholder tools identical to Figure 1 */}
+         <div className="flex items-center justify-center gap-1.5 w-1/3 text-[#808080]">
+            {[Component, Layers, SplitSquareHorizontal, Eraser, Brush, Puzzle].map((Icon, i) => (
+              <button key={i} className="p-1.5 hover:bg-white/10 hover:text-white rounded transition-colors flex items-center justify-center">
+                <Icon size={16} strokeWidth={1.5} />
+              </button>
+            ))}
+         </div>
+
+         <div className="flex items-center justify-end gap-3 w-1/3">
+            {/* The right side icons from Figure 1 */}
+            <div className="flex items-center gap-1 mr-4">
+               {[Puzzle, Sidebar, Crop, Square, Maximize].map((Icon, i) => (
+                 <button key={'r'+i} className="p-1.5 hover:bg-white/10 hover:text-white rounded transition-colors flex items-center justify-center">
+                   <Icon size={16} strokeWidth={1.5} />
+                 </button>
+               ))}
+            </div>
+
+            <div className="flex items-center gap-0.5 border-l border-[#3a3a3a] pl-3">
+              <button 
+                onClick={() => setCurrentIndex(prev => (prev > 0 ? prev - 1 : images.length - 1))}
+                className="w-7 h-7 flex items-center justify-center hover:bg-white/10 hover:text-white rounded transition-colors"
+                title="上一张 (Left Arrow)"
+              >
+                <ChevronLeft size={20} strokeWidth={1.5} />
+              </button>
+              <button 
+                onClick={() => setCurrentIndex(prev => (prev < images.length - 1 ? prev + 1 : 0))}
+                className="w-7 h-7 flex items-center justify-center hover:bg-white/10 hover:text-white rounded transition-colors"
+                title="下一张 (Right Arrow)"
+              >
+                <ChevronRight size={20} strokeWidth={1.5} />
+              </button>
             </div>
          </div>
+      </div>
+      
+      {/* Esc Hint Toast matching Figure 3 */}
+      <AnimatePresence>
+        {showEscHint && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute top-[60px] left-4 z-[2010] bg-black/80 backdrop-blur text-[#d0d0d0] border border-white/10 shadow-lg px-3 py-1.5 rounded-md text-sm font-sans flex items-center gap-2 pointer-events-none"
+          >
+            离开 <span className="bg-white/20 text-white text-xs px-1.5 py-0.5 rounded border border-white/20 font-mono">ESC</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-         <div className="flex items-center gap-2 text-gray-400">
-            <button 
-              onClick={() => setCurrentIndex(prev => (prev > 0 ? prev - 1 : images.length - 1))}
-              className="p-2 hover:bg-white/10 rounded-lg hover:text-white transition-colors"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button 
-              onClick={() => setCurrentIndex(prev => (prev < images.length - 1 ? prev + 1 : 0))}
-              className="p-2 hover:bg-white/10 rounded-lg hover:text-white transition-colors"
-            >
-              <ChevronRight size={20} />
-            </button>
-         </div>
+      <div className="w-full h-full flex items-center justify-center pt-[52px]">
+        <img 
+          src={currentImage.url} 
+          alt={currentImage.name}
+          onLoad={(e) => setBaseDim({ w: e.currentTarget.clientWidth, h: e.currentTarget.clientHeight })}
+          className="max-w-[100vw] max-h-[calc(100vh-52px)] object-contain origin-center cursor-grab active:cursor-grabbing pointer-events-auto"
+          draggable={false}
+          style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
+          onMouseDown={handleMouseDown}
+        />
       </div>
 
-      <img 
-        src={currentImage.url} 
-        alt={currentImage.name}
-        onLoad={(e) => setBaseDim({ w: e.currentTarget.clientWidth, h: e.currentTarget.clientHeight })}
-        className="max-w-[95vw] max-h-[95vh] origin-center cursor-grab active:cursor-grabbing select-none pointer-events-auto shadow-2xl"
-        draggable={false}
-        style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
-        onMouseDown={handleMouseDown}
-      />
-
-      {/* Minimap matching Figure 2 */}
       {showMinimap && baseDim.w > 0 && (
          <div className="absolute bottom-6 right-6 z-[2010] bg-black/60 p-1 border border-white/10 shadow-2xl overflow-hidden rounded backdrop-blur-md pointer-events-none">
             <div style={{ width: minimapW, height: minimapH }} className="relative bg-black/80">
@@ -165,7 +192,6 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({ images, init
             </div>
          </div>
       )}
-    </div>,
-    document.body
+    </div>
   );
 };

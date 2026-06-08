@@ -184,6 +184,9 @@ export interface FileItem {
   createdAt: number;
   size?: number;
   folderId?: string;
+  comments?: string;
+  sourceUrl?: string;
+  tags?: string[];
 }
 
 export interface FolderItem {
@@ -244,6 +247,7 @@ export interface AppState {
   removeFile: (id: string, isMaterial?: boolean) => void;
   removeFolder: (id: string) => void;
   updateFolder: (id: string, updates: Partial<FolderItem>) => void;
+  updateMaterial: (id: string, updates: Partial<FileItem>) => void;
   toggleFolder: (id: string) => void;
   groupSelectedNodes: (name?: string) => void;
   ungroupNode: (groupNodeId: string) => void;
@@ -1260,6 +1264,13 @@ export const useStore = create<AppState>()(
         set({
           folders: get().folders.map((f) =>
             f.id === id ? { ...f, ...updates } : f,
+          ),
+        });
+      },
+      updateMaterial: (id, updates) => {
+        set({
+          materials: get().materials.map((m) =>
+            m.id === id ? { ...m, ...updates } : m,
           ),
         });
       },
