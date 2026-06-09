@@ -43,6 +43,8 @@ export const ScaleWrapper: React.FC<ScaleWrapperProps> = ({ id, type, baseWidth:
         return { width: 1000, height: 750 }; // 4:3
       case "io-image-list":
         return { width: 450, height: 600 }; // 3:4
+      case "ai-ps-engine":
+        return { width: 880, height: 640 };
       case "group-node":
         return { width: 800, height: 600 }; // 4:3
       default:

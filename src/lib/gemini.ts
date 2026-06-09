@@ -17,30 +17,33 @@ export const generateTextWithFallback = async (
   const api = settings.apiSettings;
 
   // Dynamically resolve parameters from active API profile to prevent mismatch
+  let engine = api.engine;
   let apiKey = api.apiKey;
   let baseUrl = api.baseUrl;
   let modelId = api.modelId;
 
   if (api.activeProfileId === 'modelscope') {
+    engine = 'modelscope';
     apiKey = api.modelscopeApiKey || apiKey;
     baseUrl = api.modelscopeBaseUrl || baseUrl;
     modelId = api.modelscopeSelectedChatModel || modelId;
   } else if (api.profiles && api.activeProfileId) {
     const activeProf = (api.profiles as any[]).find((p: any) => p.id === api.activeProfileId);
     if (activeProf) {
+      engine = activeProf.engine || engine;
       apiKey = activeProf.apiKey || apiKey;
       baseUrl = activeProf.baseUrl || baseUrl;
       modelId = activeProf.modelId || modelId;
     }
   }
 
-  if (!apiKey && api.engine === 'gemini') {
+  if (!apiKey && engine === 'gemini') {
     const env = (import.meta as any).env;
     apiKey = typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : (env ? env.VITE_GEMINI_API_KEY : '');
   }
 
   if (!apiKey) {
-    throw new Error(`API Key for ${api.activeProfileId === 'modelscope' ? 'modelscope' : api.engine} is not configured. Please set it in Settings > API.`);
+    throw new Error(`API Key for ${api.activeProfileId === 'modelscope' ? 'modelscope' : engine} is not configured. Please set it in Settings > API.`);
   }
 
   const messages: any[] = [];
@@ -63,7 +66,7 @@ export const generateTextWithFallback = async (
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      engine: api.activeProfileId === 'modelscope' ? 'modelscope' : api.engine,
+      engine: engine,
       baseUrl: baseUrl,
       apiKey: apiKey,
       modelId: modelId,

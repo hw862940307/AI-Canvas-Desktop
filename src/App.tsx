@@ -92,6 +92,7 @@ import {
   Database,
   Camera,
   FileJson,
+  Layers,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -108,6 +109,7 @@ import { DoubleBoxTransformNode } from "./components/DoubleBoxTransformNode";
 import { ReverseNode } from "./components/ReverseNode";
 import { MsGenNode } from "./components/MsGenNode";
 import { GroupNode } from "./components/GroupNode";
+import { AIPsEngineNode } from "./components/AIPsEngineNode";
 
 // Gemini initialization logic removed here, handled by getGenAI utility
 
@@ -132,6 +134,7 @@ const nodeTypes = {
   reverse: React.memo(ReverseNode),
   "ms-gen": React.memo(MsGenNode),
   "group-node": React.memo(GroupNode),
+  "ai-ps-engine": React.memo(AIPsEngineNode),
 };
 
 function ZoomDisplay() {
@@ -187,6 +190,8 @@ const getNodeDimensions = (node: any) => {
       return { width: 320, height: 450 };
     case "double-box-transform":
       return { width: 680, height: 500 };
+    case "ai-ps-engine":
+      return { width: 880, height: 640 };
     case "translate-engine":
     case "logic-engine":
       return { width: 400, height: 500 };
@@ -991,6 +996,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     else if (type === "apt-web-tool") { baseW = 1000; baseH = 750; }
     else if (type === "native-host") { baseW = 1000; baseH = 750; }
     else if (type === "io-image-list") { baseW = 450; baseH = 600; }
+    else if (type === "ai-ps-engine") { baseW = 880; baseH = 640; }
     else if (type === "image-gen" || type === "text-gen" || type === "translate-engine" || type === "logic-engine" || type === "prompt-engine" || type === "ms-gen" || type === "reverse") {
       baseW = 450;
       baseH = 600;
@@ -1117,11 +1123,23 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return;
+      const isInputElement = (target: any) => {
+        if (!target) return false;
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement
+        ) {
+          return true;
+        }
+        if (target.isContentEditable) return true;
+        if (typeof target.closest === 'function') {
+          return !!target.closest('input, textarea, select, [contenteditable="true"], .nodrag, .node-input-contain');
+        }
+        return false;
+      };
+
+      if (isInputElement(e.target)) return;
 
       // Early return if active op is running
       if (activeOpRef.current !== null) return;
@@ -1237,11 +1255,23 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
 
     const handlePaste = (e: ClipboardEvent) => {
       // Don't intercept if focused on an input or textarea
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return;
+      const isInputElement = (target: any) => {
+        if (!target) return false;
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement
+        ) {
+          return true;
+        }
+        if (target.isContentEditable) return true;
+        if (typeof target.closest === 'function') {
+          return !!target.closest('input, textarea, select, [contenteditable="true"], .nodrag, .node-input-contain');
+        }
+        return false;
+      };
+
+      if (isInputElement(e.target)) return;
 
       const clipboardData = e.clipboardData;
       if (!clipboardData) return;
@@ -1876,12 +1906,24 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   // Dedicated useEffect to track active hold of Z/z
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const isInputElement = (target: any) => {
+      if (!target) return false;
       if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target as HTMLElement).isContentEditable
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
       ) {
+        return true;
+      }
+      if (target.isContentEditable) return true;
+      if (typeof target.closest === 'function') {
+        return !!target.closest('input, textarea, select, [contenteditable="true"], .nodrag, .node-input-contain');
+      }
+      return false;
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isInputElement(e.target)) {
         return;
       }
 
@@ -1892,11 +1934,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target as HTMLElement).isContentEditable
-      ) {
+      if (isInputElement(e.target)) {
         return;
       }
 
@@ -2695,6 +2733,13 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
                         icon={<Move3d size={12} />}
                         onClick={() =>
                           handleAddNode("spatial-view", menu.x, menu.y)
+                        }
+                      />
+                      <ContextMenuItem
+                        label="AI 增强型 PS 引擎"
+                        icon={<Layers size={12} />}
+                        onClick={() =>
+                          handleAddNode("ai-ps-engine", menu.x, menu.y)
                         }
                       />
                       <ContextMenuItem label="生成视频" disabled />
@@ -4362,6 +4407,7 @@ function SidebarWrapper({
     else if (type === "apt-web-tool") { baseW = 500; baseH = 500; }
     else if (type === "native-host") { baseW = 500; baseH = 500; }
     else if (type === "io-image-list") { baseW = 300; baseH = 400; }
+    else if (type === "ai-ps-engine") { baseW = 880; baseH = 640; }
     else if (type === "image-source") { baseW = 300; baseH = 350; }
     
     const initialWidth = Math.round(baseW * scaleFactor);
@@ -4446,6 +4492,13 @@ function SidebarWrapper({
           onClick={() => handleAddNode("spatial-view")}
           label="3D 空间视角"
           active={active === "spatial-view"}
+          expanded={isHovered}
+        />
+        <SidebarButton
+          icon={<Layers size={22} />}
+          onClick={() => handleAddNode("ai-ps-engine")}
+          label="AI PS 引擎"
+          active={active === "ai-ps-engine"}
           expanded={isHovered}
         />
         <SidebarButton

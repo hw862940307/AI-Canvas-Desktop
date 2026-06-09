@@ -275,6 +275,11 @@ interface BrowserFrameProps {
   iframeRef?: React.RefObject<HTMLIFrameElement | null>;
   onIframeLoad?: (e: React.SyntheticEvent<HTMLIFrameElement>) => void;
   onToggleForceProxy?: (tabId: string) => void;
+  isFolded?: boolean;
+  setIsFolded?: (folded: boolean) => void;
+  isPinned?: boolean;
+  setIsPinned?: (pinned: boolean) => void;
+  setPinnedPos?: (pos: { x: number; y: number }) => void;
 }
 
 const BrowserFrame = React.memo(({ 
@@ -306,7 +311,12 @@ const BrowserFrame = React.memo(({
   onDeleteCredential,
   iframeRef,
   onIframeLoad,
-  onToggleForceProxy
+  onToggleForceProxy,
+  isFolded = false,
+  setIsFolded,
+  isPinned = false,
+  setIsPinned,
+  setPinnedPos
 }: BrowserFrameProps) => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'history' | 'passwords'>('history');
@@ -505,9 +515,56 @@ const BrowserFrame = React.memo(({
           <button onClick={onOpenExternal} className="p-2 text-gray-500 hover:text-white transition-all" title="在新标签页打开">
             <ExternalLink size={16} />
           </button>
-          <button onClick={() => onToggleOverlay(!isPortal)} className="p-2 text-gray-500 hover:text-white transition-all" title={isPortal ? "最小化" : "最大化"}>
+          
+          <button 
+            onClick={() => onToggleOverlay(!isPortal)} 
+            className="p-2 text-gray-500 hover:text-white transition-all transform hover:scale-105 active:scale-95" 
+            title={isPortal ? "最小化" : "最大化全屏"}
+          >
             {isPortal ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
+
+          {!isPortal && (
+            <>
+              {setIsPinned && setPinnedPos && (
+                <button 
+                  onClick={() => {
+                    const nextPinned = !isPinned;
+                    setIsPinned(nextPinned);
+                    if (nextPinned) {
+                      setPinnedPos({ x: window.innerWidth / 2 - 400, y: 150 });
+                      useStore.getState().setIsTopVisible(false);
+                    } else {
+                      useStore.getState().setIsTopVisible(true);
+                    }
+                  }}
+                  className={`p-2 transition-all transform hover:scale-105 active:scale-95 ${isPinned ? 'text-yellow-400' : 'text-gray-500 hover:text-white'}`}
+                  title={isPinned ? "取消视口固定" : "固定在当前位置"}
+                >
+                  {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
+                </button>
+              )}
+
+              {setIsFolded && (
+                <button 
+                  onClick={() => setIsFolded(!isFolded)}
+                  className={`p-2 transition-all transform hover:scale-105 active:scale-95 ${isFolded ? 'text-indigo-400' : 'text-gray-500 hover:text-white'}`}
+                  title={isFolded ? "展开窗口" : "折叠最小化窗口"}
+                >
+                  {isFolded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                </button>
+              )}
+
+              <button 
+                onClick={() => useStore.getState().toggleWebPreview()}
+                className="p-2 text-gray-500 hover:text-red-400 transition-all transform hover:scale-105 active:scale-95 ml-1"
+                title="关闭面板"
+              >
+                <X size={16} />
+              </button>
+            </>
+          )}
+
           {isPortal && (
             <button onClick={() => onToggleOverlay(false)} className="p-2 text-red-500/50 hover:text-red-500 ml-1">
               <X size={18} />
@@ -916,7 +973,7 @@ export function WebPreviewPanel() {
   const zoom = useStore((s: any) => Math.max(0.1, s.zoom || 1));
   const nodeData = {} as any; // Shim to prevent rewrites
   const id = 'web-preview-panel';
-  const updateNodeData = () => {};
+  const updateNodeData = (..._args: any[]) => {};
   // Calculate zoom scale based on current node width (baseline is 1000px for this wide tool)
   const baselineWidth = 1000;
   const fontScale = (settings?.nodeUiFontSize ?? 14) / 14;
@@ -1892,6 +1949,11 @@ export function WebPreviewPanel() {
       iframeRef={iframeRef}
       onIframeLoad={handleIframeLoad}
       onToggleForceProxy={handleToggleForceProxy}
+      isFolded={isFolded}
+      setIsFolded={setIsFolded}
+      isPinned={isPinned}
+      setIsPinned={setIsPinned}
+      setPinnedPos={setPinnedPos}
     />
   );
 
@@ -1933,17 +1995,21 @@ export function WebPreviewPanel() {
     </div>
   );
 
-  // if (!showWebPreview) {
-  //   return null;
-  // }
-
   return (
     <>
       {/* ALWAYS ACTIVE WEB BROWSER PORTAL CONTAINER */}
       {createPortal(
         <div 
-          onMouseEnter={() => useStore.getState().setIsTopVisible(true)}
-          onMouseLeave={() => useStore.getState().setIsTopVisible(false)}
+          onMouseEnter={() => {
+            if (!isPinned) {
+              useStore.getState().setIsTopVisible(true);
+            }
+          }}
+          onMouseLeave={() => {
+            if (!isPinned) {
+              useStore.getState().setIsTopVisible(false);
+            }
+          }}
           onPointerDown={e => {
             e.stopPropagation();
             if (isPinned) handlePinnedHeaderPointerDown(e);
@@ -1977,26 +2043,27 @@ export function WebPreviewPanel() {
                       left: `${pinnedPos.x}px`,
                       top: `${pinnedPos.y}px`,
                       width: '800px',
-                      height: '600px',
+                      height: isFolded ? '68px' : '600px',
                       zIndex: 10002,
-                      pointerEvents: (showWebPreview && !isFolded) ? 'auto' : 'none',
-                      display: (showWebPreview && !isFolded) ? 'flex' : 'none',
+                      pointerEvents: showWebPreview ? 'auto' : 'none',
+                      display: showWebPreview ? 'flex' : 'none',
                       borderRadius: '24px',
                       boxShadow: '0 25px 50px -12px rgba(0,0,0,0.85), 0 0 25px rgba(234,179,8,0.2)',
                       border: '2px solid rgba(234,179,8,0.45)',
-                      transition: 'none',
+                      transition: 'height 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                      overflow: 'hidden',
                     }
                   : {
                       left: '50%',
                       top: '64px',
                       width: '80vw',
                       maxWidth: '1400px',
-                      height: 'min(75vh, 900px)',
+                      height: isFolded ? '68px' : 'min(75vh, 900px)',
                       transform: `translateX(-50%) translateY(${isPinned ? '0' : (isTopVisible ? '0' : 'calc(-100% - 64px)')})`,
                       opacity: isPinned ? 1 : (isTopVisible ? 1 : 0),
                       zIndex: isPinned ? 40 : 39,
-                      pointerEvents: (showWebPreview && (isPinned || isTopVisible) && !isFolded) ? 'auto' : 'none',
-                      display: (showWebPreview && !isFolded) ? 'flex' : 'none',
+                      pointerEvents: (showWebPreview && (isPinned || isTopVisible)) ? 'auto' : 'none',
+                      display: showWebPreview ? 'flex' : 'none',
                       borderRadius: isPinned ? '16px' : '0 0 16px 16px',
                       border: '1px solid var(--border)',
                       borderTop: isPinned ? '1px solid var(--border)' : 'none',
@@ -2052,12 +2119,12 @@ export function WebPreviewPanel() {
             >
               {/* 顶层状态组件：折叠和固定 */}
               <button 
-                onClick={() => setIsOverlayOpen(true)}
+                onClick={() => setIsOverlayOpen(!isOverlayOpen)}
                 className="hover:bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all transform hover:scale-105 active:scale-95"
                 style={{ padding: 10 }}
-                title="全屏脱离画布"
+                title={isOverlayOpen ? "退出全屏" : "全屏脱离画布"}
               >
-                <Maximize2 size={18} />
+                {isOverlayOpen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
               </button>
 
               <button 
@@ -2066,6 +2133,9 @@ export function WebPreviewPanel() {
                   setIsPinned(nextPinned);
                   if (nextPinned) {
                     setPinnedPos({ x: window.innerWidth / 2 - 400, y: 150 });
+                    useStore.getState().setIsTopVisible(false);
+                  } else {
+                    useStore.getState().setIsTopVisible(true);
                   }
                 }}
                 className={`hover:bg-white/5 rounded-2xl transition-all transform hover:scale-105 active:scale-95 ${isPinned ? 'text-yellow-400 bg-yellow-500/15' : 'text-gray-500 hover:text-white'}`}

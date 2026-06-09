@@ -1020,7 +1020,7 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
   };
 
   const handleUpdateActiveField = (field: string, value: any) => {
-    setProfiles(prev => prev.map(p => p.id === selectedProfileId ? { ...p, [field]: value } : p));
+    setProfiles(prev => prev.map(p => p.id === currentProfile.id ? { ...p, [field]: value } : p));
   };
 
   const handleAddProfile = () => {
@@ -1133,6 +1133,9 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
     "Qwen/Qwen3-VL-235B-A22B-Instruct",
     "MiniMax/MiniMax-M2.7:MiniMax"
   ]);
+
+  const [msSelectedImageModel, setMsSelectedImageModel] = useState<string>(api.modelscopeSelectedImageModel || "Tongyi-MAI/Z-Image-Turbo");
+  const [msSelectedChatModel, setMsSelectedChatModel] = useState<string>(api.modelscopeSelectedChatModel || "Qwen/Qwen3-235B-A22B");
 
   // ModelScope manual loading inputs
   const [addingModelType, setAddingModelType] = useState<'image' | 'chat' | null>(null);
@@ -1399,6 +1402,8 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
         modelscopeModelUrl: msModelUrl,
         modelscopeImageModels: msImageModels,
         modelscopeChatModels: msChatModels,
+        modelscopeSelectedImageModel: msSelectedImageModel,
+        modelscopeSelectedChatModel: msSelectedChatModel,
         modelscopeLoraEnabled: msLoraEnabled,
         modelscopeLoraModelId: msLoraModelId,
         modelscopeLoraWeight: msLoraWeight,
@@ -1408,7 +1413,7 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
         modelscopeProtocol: msProtocol,
       } as any
     });
-    alert("🎉 ModelScope 平台设置及 LoRA 权重参数已成功保存并载入运行上下文！");
+    alert("🎉 ModelScope 平台设置已成功保存并载入运行上下文！");
   };
 
   const msMsLoraVersion = msLoraVersion;
@@ -2428,23 +2433,37 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
                       </div>
                       <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
                         {filteredMsImage.length > 0 ? (
-                          filteredMsImage.map(m => (
-                            <div 
-                              key={m} 
-                              onMouseEnter={(e) => handleModelEnter(e, m, 'image')}
-                              onMouseLeave={handleModelLeave}
-                              className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group"
-                            >
-                              <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
-                              <button
-                                type="button"
-                                onClick={() => setMsImageModels(prev => prev.filter(x => x !== m))}
-                                className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
+                          filteredMsImage.map(m => {
+                            const isSelected = msSelectedImageModel === m;
+                            return (
+                              <div 
+                                key={m} 
+                                onClick={() => setMsSelectedImageModel(m)}
+                                onMouseEnter={(e) => handleModelEnter(e, m, 'image')}
+                                onMouseLeave={handleModelLeave}
+                                className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer group ${
+                                  isSelected
+                                    ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 font-extrabold shadow-sm shadow-orange-500/5'
+                                    : 'bg-black/30 text-white border-white/5 hover:border-white/10'
+                                }`}
                               >
-                                <Trash2 size={10} />
-                              </button>
-                            </div>
-                          ))
+                                <span className={`text-[10px] font-mono truncate max-w-[85%] ${isSelected ? 'text-orange-400 font-bold' : 'text-white'}`}>{m}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMsImageModels(prev => prev.filter(x => x !== m));
+                                    if (msSelectedImageModel === m) {
+                                      setMsSelectedImageModel('');
+                                    }
+                                  }}
+                                  className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100 p-0.5"
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
+                            );
+                          })
                         ) : (
                           <div className="text-[9px] text-zinc-650 italic py-2">无匹配的生图模型</div>
                         )}
@@ -2465,23 +2484,37 @@ const ApiTabContent = ({ settings, update }: { settings: AppSettings; update: (s
                       </div>
                       <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
                         {filteredMsChat.length > 0 ? (
-                          filteredMsChat.map(m => (
-                            <div 
-                              key={m} 
-                              onMouseEnter={(e) => handleModelEnter(e, m, 'chat')}
-                              onMouseLeave={handleModelLeave}
-                              className="flex items-center justify-between bg-black/30 p-2 rounded-xl border border-white/5 hover:border-white/10 group"
-                            >
-                              <span className="text-[10px] text-white font-mono truncate max-w-[85%]">{m}</span>
-                              <button
-                                type="button"
-                                onClick={() => setMsChatModels(prev => prev.filter(x => x !== m))}
-                                className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100"
+                          filteredMsChat.map(m => {
+                            const isSelected = msSelectedChatModel === m;
+                            return (
+                              <div 
+                                key={m} 
+                                onClick={() => setMsSelectedChatModel(m)}
+                                onMouseEnter={(e) => handleModelEnter(e, m, 'chat')}
+                                onMouseLeave={handleModelLeave}
+                                className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer group ${
+                                  isSelected
+                                    ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 font-extrabold shadow-sm shadow-orange-500/5'
+                                    : 'bg-black/30 text-white border-white/5 hover:border-white/10'
+                                }`}
                               >
-                                <Trash2 size={10} />
-                              </button>
-                            </div>
-                          ))
+                                <span className={`text-[10px] font-mono truncate max-w-[85%] ${isSelected ? 'text-orange-400 font-bold' : 'text-white'}`}>{m}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMsChatModels(prev => prev.filter(x => x !== m));
+                                    if (msSelectedChatModel === m) {
+                                      setMsSelectedChatModel('');
+                                    }
+                                  }}
+                                  className="text-zinc-500 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100 p-0.5"
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
+                            );
+                          })
                         ) : (
                           <div className="text-[9px] text-zinc-650 italic py-2">无匹配的聊天模型</div>
                         )}

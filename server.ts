@@ -1421,13 +1421,47 @@ async function startServer() {
       return res.status(400).json({ error: 'API Key is missing' });
     }
 
-    try {
+    let resolvedModelId = modelId;
+
+    // Guard against model cross-usage and determine if it's an image generation model
+    const isImageModelCheck = (id: string): boolean => {
+      if (!id) return false;
+      const m = id.toLowerCase();
+      const keywords = [
+        'flux', 'dall-e', 'dalle', 'stable-diffusion', 'sdxl', 'sd3', 'sd15', 'kolors', 
+        'recraft', 'ideogram', 'cogview', 'hunyuan', 'playground', 'firefly', 'pixart', 
+        'kling', 'wan-video', 'seedream', 'svd', 'luma', 'sora', 'jimeng', 'banana',
+        'image', 'preview', 'paint', 'canvas', 'illustration', 'sketch', 'draw', 'art'
+      ];
+      return keywords.some(kw => m.includes(kw));
+    };
+
+    if (resolvedModelId && isImageModelCheck(resolvedModelId)) {
+      // Dynamic fallback for graphics/image models to keep chatbot working flawlessly
       if (engine === 'gemini') {
+        resolvedModelId = 'gemini-1.5-flash';
+      } else if (engine === 'deepseek') {
+        resolvedModelId = 'deepseek-chat';
+      } else if (engine === 'doubao') {
+        resolvedModelId = 'doubao-pro-32k';
+      } else if (engine === 'qianwen') {
+        resolvedModelId = 'qwen-max';
+      } else if (engine === 'claude') {
+        resolvedModelId = 'claude-3-5-sonnet-20241022';
+      } else {
+        resolvedModelId = 'gpt-4o-mini';
+      }
+      console.log(`[API Chat Fallback] Model ${modelId} is an image model. Dynamically fell back to "${resolvedModelId}" to ensure chat success.`);
+    }
+
+    try {
+      const useOpenAiFormat = (engine !== 'gemini' || (baseUrl && !baseUrl.includes('googleapis.com')));
+      if (!useOpenAiFormat) {
         let finalBaseUrl = (baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
         if (finalBaseUrl.endsWith('/v1beta')) {
           finalBaseUrl = finalBaseUrl.slice(0, -7);
         }
-        const url = `${finalBaseUrl}/v1beta/models/${modelId || 'gemini-1.5-flash'}:generateContent?key=${apiKey}`;
+        const url = `${finalBaseUrl}/v1beta/models/${resolvedModelId || 'gemini-1.5-flash'}:generateContent?key=${apiKey}`;
         
         // Construct the multi-turn contents structure for Gemini API
         let contents: any[] = [];
@@ -1546,7 +1580,7 @@ async function startServer() {
         }
 
         const response = await axios.post(url, {
-          model: modelId || 'gpt-3.5-turbo',
+          model: resolvedModelId || 'gpt-3.5-turbo',
           messages: openAiMessages,
         }, {
           headers: {
@@ -1565,12 +1599,248 @@ async function startServer() {
     }
   });
 
+  // Helper to fetch list of supported models from the third-party upstream API
+  async function fetchUpstreamModels(baseUrl: string, apiKey: string): Promise<string[]> {
+    const cleanUrl = baseUrl.trim().replace(/\/$/, "");
+    let base = cleanUrl;
+    const suffixesToStrip = [
+      "/v1/chat/completions",
+      "/v1/images/generations",
+      "/v1/messages",
+      "/chat/completions",
+      "/images/generations",
+      "/embeddings",
+      "/completions",
+      "/messages",
+      "/chat",
+      "/images",
+      "/generations"
+    ];
+
+    for (const suffix of suffixesToStrip) {
+      if (base.toLowerCase().endsWith(suffix)) {
+        base = base.slice(0, -suffix.length);
+        break;
+      }
+    }
+    base = base.replace(/\/$/, "");
+
+    const targets = [
+      `${base}/models`,
+      `${base}/v1/models`,
+      cleanUrl.includes('/v1') ? `${cleanUrl.split('/v1')[0]}/v1/models` : `${cleanUrl}/v1/models`
+    ];
+
+    const uniqueTargets = Array.from(new Set(targets));
+    const headers: any = {
+      'Accept': 'application/json'
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    for (const target of uniqueTargets) {
+      try {
+        appendLog(`[Upstream Model Probe] Querying models from: ${target}`);
+        const res = await axios.get(target, { headers, timeout: 8000 });
+        if (res.status === 200 && res.data) {
+          let list: string[] = [];
+          if (Array.isArray(res.data.data)) {
+            list = res.data.data.map((m: any) => typeof m === 'string' ? m : (m.id || m.name || m.modelId)).filter(Boolean);
+          } else if (Array.isArray(res.data.models)) {
+            list = res.data.models.map((m: any) => typeof m === 'string' ? m : (m.id || m.name || m.modelId)).filter(Boolean);
+          } else if (Array.isArray(res.data)) {
+            list = res.data.map((m: any) => typeof m === 'string' ? m : (m.id || m.name || m.modelId)).filter(Boolean);
+          }
+          if (list.length > 0) {
+            appendLog(`[Upstream Model Probe Success] Found ${list.length} models: ${JSON.stringify(list.slice(0, 15))}`);
+            return list;
+          }
+        }
+      } catch (e: any) {
+        appendLog(`[Upstream Model Probe Failed] URL: ${target}, error: ${e.message}`);
+      }
+    }
+    return [];
+  }
+
+  // Helper to map and verify API parameters, auto-resolving conflicts (e.g. model vs model_id) and matching correct model
+  function verifyAndMapImageRequest(options: {
+    baseUrl: string;
+    apiKey: string;
+    modelId: string;
+    prompt: string;
+    size: string;
+    n: any;
+    availableModels: string[];
+  }) {
+    const { baseUrl, apiKey, modelId, prompt, size, n, availableModels } = options;
+
+    let mappedSize = size || '1024x1024';
+    if (mappedSize === '自动' || mappedSize === 'Auto' || !mappedSize || mappedSize === 'auto') {
+      mappedSize = '1024x1024';
+    } else if (mappedSize === '1:1') {
+      mappedSize = '1024x1024';
+    } else if (mappedSize === '16:9') {
+      mappedSize = '1024x576';
+    } else if (mappedSize === '9:16') {
+      mappedSize = '576x1024';
+    } else if (mappedSize === '4:3') {
+      mappedSize = '1024x768';
+    } else if (mappedSize === '3:4') {
+      mappedSize = '768x1024';
+    }
+
+    let matchedModel = modelId;
+    appendLog(`[Auto-Match] Nominated model: "${modelId}". Catalog size: ${availableModels.length}`);
+
+    if (availableModels && availableModels.length > 0) {
+      const cleanList = availableModels.map(m => String(m).trim());
+
+      // (a) Exact match
+      const exact = cleanList.find(m => m === modelId);
+      // (b) Case-insensitive match
+      const caseInsensitive = cleanList.find(m => m.toLowerCase() === modelId.toLowerCase());
+      // (c) Partial match
+      const partial = cleanList.find(m => m.toLowerCase().includes(modelId.toLowerCase()) || modelId.toLowerCase().includes(m.toLowerCase()));
+
+      if (exact) {
+        matchedModel = exact;
+        appendLog(`[Auto-Match] Found exact match: "${matchedModel}"`);
+      } else if (caseInsensitive) {
+        matchedModel = caseInsensitive;
+        appendLog(`[Auto-Match] Found case-insensitive match: "${matchedModel}"`);
+      } else if (partial) {
+        matchedModel = partial;
+        appendLog(`[Auto-Match] Found partial match: "${matchedModel}"`);
+      } else {
+        // (d) Context matching (especially for "banana" or general image keywords)
+        const imageKeywords = ['banana', 'flux', 'imagen', 'image', 'generate', 'sd', 'stable-diffusion', 'dalle', 'dall-e', 'mj', 'midjourney', 'paint', 'art'];
+        const possibleImageModels = cleanList.filter(m => {
+          const ml = m.toLowerCase();
+          return imageKeywords.some(kw => ml.includes(kw));
+        });
+
+        if (possibleImageModels.length > 0) {
+          // Check if "banana" exists in catalog if we are requesting a banana or if the title of the node is "香蕉图像"
+          const bananaModel = possibleImageModels.find(m => m.toLowerCase().includes('banana'));
+          if (bananaModel && (modelId.toLowerCase().includes('banana') || modelId.toLowerCase().includes('香蕉'))) {
+            matchedModel = bananaModel;
+            appendLog(`[Auto-Match] Mapped to available banana model: "${matchedModel}"`);
+          } else {
+            const geminiKeywords = ['gemini', 'imagen'];
+            const isGeminiSelected = geminiKeywords.some(kw => modelId.toLowerCase().includes(kw));
+            let match = null;
+            if (isGeminiSelected) {
+              match = possibleImageModels.find(m => m.toLowerCase().includes('gemini') || m.toLowerCase().includes('imagen'));
+            }
+            if (match) {
+              matchedModel = match;
+              appendLog(`[Auto-Match] Auto-associated compatible image model: "${matchedModel}"`);
+            } else {
+              matchedModel = modelId;
+              appendLog(`[Auto-Match] No context-matched model, preserving requested: "${matchedModel}"`);
+            }
+          }
+        } else {
+          matchedModel = modelId;
+          appendLog(`[Auto-Match] No possible image models, preserving requested: "${matchedModel}"`);
+        }
+      }
+    }
+
+    // Comprehensive payload properties to fully avoid parameter key name conflicts
+    const payload: any = {
+      prompt: prompt,
+      input: prompt,
+      text: prompt,
+      model: matchedModel,
+      model_id: matchedModel, // resolve 'model' vs 'model_id' conflict
+      modelId: matchedModel,
+      n: parseInt(n) || 1,
+      num_images: parseInt(n) || 1,
+      sampleCount: parseInt(n) || 1,
+      count: parseInt(n) || 1,
+      size: mappedSize,
+      dimensions: mappedSize,
+      width: mappedSize.includes('x') ? parseInt(mappedSize.split('x')[0]) : 1024,
+      height: mappedSize.includes('x') ? parseInt(mappedSize.split('x')[1]) : 1024
+    };
+
+    return {
+      matchedModel,
+      payload
+    };
+  }
+
+  // Proxy to fetch logs from compatible upstream One API / New API gateways
+  app.post('/api/images/logs', async (req, res) => {
+    const { baseUrl, apiKey } = req.body;
+    if (!apiKey) {
+      return res.status(400).json({ error: 'API Key is missing' });
+    }
+
+    try {
+      let base = (baseUrl || 'https://api.openai.com/v1').trim().replace(/\/$/, "");
+      if (base.endsWith('/v1')) {
+        base = base.slice(0, -3);
+      }
+      base = base.replace(/\/$/, "");
+      const logUrl = `${base}/api/log?p=0&page_size=45`;
+
+      appendLog(`[Proxy Logs Request] Querying logs from: ${logUrl}`);
+      const logsRes = await axios.get(logUrl, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      if (logsRes.status === 200 && logsRes.data) {
+        return res.json(logsRes.data);
+      } else {
+        return res.status(logsRes.status).json({ error: `无法获取日志 (HTTP ${logsRes.status})` });
+      }
+    } catch (err: any) {
+      appendLog(`[Proxy Logs Failed] Error: ${err.message}`);
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err.message;
+      return res.status(500).json({ error: typeof errMsg === 'object' ? JSON.stringify(errMsg) : String(errMsg) });
+    }
+  });
+
   // Proxy for LLM Image Generations (OpenAI format and Gemini format)
   app.post('/api/images', async (req, res) => {
     const { engine, baseUrl, apiKey, modelId, prompt, size, n, quality, lora, msAsync, opMode, images, format, background, moderation } = req.body;
 
     if (!apiKey) {
       return res.status(400).json({ error: 'API Key is missing' });
+    }
+
+    // Add authorization restriction: prevent standard LLM chat models from using image API
+    const isImageModelCheck = (id: string): boolean => {
+      if (!id) return false;
+      const m = id.toLowerCase();
+      const keywords = [
+        'flux', 'dall-e', 'dalle', 'stable-diffusion', 'sdxl', 'sd3', 'sd15', 'kolors', 
+        'recraft', 'ideogram', 'cogview', 'hunyuan', 'playground', 'firefly', 'pixart', 
+        'kling', 'wan-video', 'seedream', 'svd', 'luma', 'sora', 'jimeng', 'banana'
+      ];
+      return keywords.some(kw => m.includes(kw));
+    };
+
+    const isChatModelCheck = (id: string): boolean => {
+      if (!id) return false;
+      const m = id.toLowerCase();
+      const keywords = [
+        'gpt', 'gemini-1.5', 'gemini-2.0', 'gemini-2.5', 'chat', 'claude', 'sonnet', 
+        'haiku', 'opus', 'deepseek', 'doubao', 'qwen', 'llama', 'mistral', 'phi', 'gemma'
+      ];
+      return keywords.some(kw => m.includes(kw));
+    };
+
+    if (modelId && !isImageModelCheck(modelId) && isChatModelCheck(modelId)) {
+      return res.status(403).json({ error: `权限受限：该 API 路由仅限图像生成 (Image Generations)，不支持纯文本聊天模型「${modelId}」，请换用文本聊天路由接口。` });
     }
 
     // Helper to recursively find all HTTP/HTTPS image-like URLs in a response object
@@ -1832,43 +2102,240 @@ async function startServer() {
         return res.json({ urls });
       } else if (engine === 'gemini') {
         let finalBaseUrl = (baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
-        if (finalBaseUrl.endsWith('/v1beta')) {
-          finalBaseUrl = finalBaseUrl.slice(0, -7);
-        }
-        let geminiModel = 'imagen-3.0-generate-001';
-        if (modelId && modelId.startsWith('imagen-')) {
-          geminiModel = modelId;
-        }
-        const url = `${finalBaseUrl}/v1beta/models/${geminiModel}:predict?key=${apiKey}`;
-        
-        let aspectRatio = '1:1';
-        if (size) {
-            const aspectStr = size.split(' ')[0];
-            if (['1:1', '4:3', '3:4', '16:9', '9:16'].includes(aspectStr)) {
-                aspectRatio = aspectStr;
-            } else if (aspectStr === '4:5') {
-                aspectRatio = '3:4'; // Fallback for unsupported ratios
+        const isOfficialGoogle = finalBaseUrl.includes('googleapis.com');
+
+        if (isOfficialGoogle) {
+          if (finalBaseUrl.endsWith('/v1beta')) {
+            finalBaseUrl = finalBaseUrl.slice(0, -7);
+          }
+          let geminiModel = 'imagen-3.0-generate-001';
+          if (modelId && modelId.startsWith('imagen-')) {
+            geminiModel = modelId;
+          }
+          const url = `${finalBaseUrl}/v1beta/models/${geminiModel}:predict?key=${apiKey}`;
+          
+          let aspectRatio = '1:1';
+          if (size) {
+              const aspectStr = size.split(' ')[0];
+              if (['1:1', '4:3', '3:4', '16:9', '9:16'].includes(aspectStr)) {
+                  aspectRatio = aspectStr;
+              } else if (aspectStr === '4:5') {
+                  aspectRatio = '3:4'; // Fallback for unsupported ratios
+              }
+          }
+
+          const response = await axios.post(url, {
+            instances: [
+              { prompt: prompt }
+            ],
+            parameters: {
+              sampleCount: parseInt(n) || 1,
+              aspectRatio: aspectRatio
             }
+          }, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          // The response format for imagen-3 prediction:
+          // { predictions: [ { mimeType: "image/jpeg", bytesBase64: "..." }, ... ] }
+          const urls = response.data.predictions?.map((p: any) => `data:${p.mimeType || 'image/jpeg'};base64,${p.bytesBase64}`) || [];
+          const savedUrls = await Promise.all(urls.map(u => saveImageToHistory(u)));
+          return res.json({ urls: savedUrls });
+        } else {
+          // Third-party mapping to OpenAI compatible format (like yuli.host)
+          let finalBaseUrlOpenAI = finalBaseUrl.trim().replace(/\/$/, '');
+          if (finalBaseUrlOpenAI.endsWith('/images/generations')) {
+            finalBaseUrlOpenAI = finalBaseUrlOpenAI.slice(0, -'/images/generations'.length);
+          } else if (finalBaseUrlOpenAI.endsWith('/images/edits')) {
+            finalBaseUrlOpenAI = finalBaseUrlOpenAI.slice(0, -'/images/edits'.length);
+          } else if (finalBaseUrlOpenAI.endsWith('/images')) {
+            finalBaseUrlOpenAI = finalBaseUrlOpenAI.slice(0, -'/images'.length);
+          }
+          finalBaseUrlOpenAI = finalBaseUrlOpenAI.replace(/\/$/, '');
+
+          if (!finalBaseUrlOpenAI.includes('/v1') && 
+              !finalBaseUrlOpenAI.includes('/v3') && 
+              !finalBaseUrlOpenAI.includes('compatible-mode') &&
+              !finalBaseUrlOpenAI.includes('api.deepseek.com')) {
+            finalBaseUrlOpenAI = `${finalBaseUrlOpenAI}/v1`;
+          }
+
+          const url = `${finalBaseUrlOpenAI}/images/generations`;
+
+          // 1. Fetch available models from upstream API to detect support dynamically
+          let availableModels: string[] = [];
+          try {
+            availableModels = await fetchUpstreamModels(finalBaseUrlOpenAI, apiKey);
+          } catch (fetchErr: any) {
+            appendLog(`[Gemini Proxy Models Fetch Error] Could not retrieve upstream model list: ${fetchErr.message}`);
+          }
+
+          // 2. Perform verification, automatic mapping and parameter conflict resolution
+          const defaultRequestedModel = modelId || 'gemini-2.5-flash-image';
+          const { matchedModel, payload: basePayload } = verifyAndMapImageRequest({
+            baseUrl: finalBaseUrlOpenAI,
+            apiKey,
+            modelId: defaultRequestedModel,
+            prompt,
+            size,
+            n,
+            availableModels
+          });
+
+          // 3. Build prioritized list of model attempts to ensure maximum channel success
+          let attemptModels: string[] = [matchedModel];
+
+          // If different from matchedModel, add default requested models as primary cascade
+          if (defaultRequestedModel !== matchedModel) {
+            attemptModels.push(defaultRequestedModel);
+          }
+
+          // Fallbacks based on original config
+          if (defaultRequestedModel === 'gemini-3-pro-image-preview' || 
+              defaultRequestedModel === 'gemini-3.1-flash-image-preview' || 
+              defaultRequestedModel === 'gemini-2.5-flash-image' || 
+              defaultRequestedModel === 'gemini-2.0-flash-preview-image-generation') {
+            const defaults = ['imagen-3', 'imagen-3.0-generate-001', 'imagen-3.0-generate-002', 'gemini-2.0-flash-preview-image-generation'];
+            defaults.forEach(d => attemptModels.push(d));
+          } else if (defaultRequestedModel.startsWith('gemini') || defaultRequestedModel.startsWith('imagen')) {
+            const defaults = ['imagen-3', 'imagen-3.0-generate-001'];
+            defaults.forEach(d => attemptModels.push(d));
+          }
+
+          // Append any potential image models from catalog as a wide net fallback
+          if (availableModels.length > 0) {
+            const imageKeywords = ['banana', 'flux', 'imagen', 'image', 'generate', 'sd', 'stable-diffusion', 'dalle', 'dall-e', 'mj', 'midjourney', 'paint', 'art'];
+            const catalogImageModels = availableModels.filter(m => imageKeywords.some(kw => String(m).toLowerCase().includes(kw)));
+            catalogImageModels.forEach(m => attemptModels.push(String(m).trim()));
+          }
+
+          // Remove duplicates & empty entries
+          attemptModels = Array.from(new Set(attemptModels)).filter(Boolean);
+
+          let response: any = null;
+          let lastError: any = null;
+
+          for (const modelAttempt of attemptModels) {
+            try {
+              // Construct the robust dual-mapped payload for this specific attempt to auto-resolve parameter conflicts
+              const attemptDetails = verifyAndMapImageRequest({
+                baseUrl: finalBaseUrlOpenAI,
+                apiKey,
+                modelId: modelAttempt,
+                prompt,
+                size,
+                n,
+                availableModels
+              });
+
+              appendLog(`[Gemini Proxy Request] Attempting URL: ${url}, Model Attempt: ${modelAttempt}, Keys Mapped: ${JSON.stringify(Object.keys(attemptDetails.payload))}`);
+              response = await axios.post(url, attemptDetails.payload, {
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                timeout: 240000
+              });
+              appendLog(`[Gemini Proxy Success] Model ${modelAttempt} generated image successfully!`);
+              break; // Success! Break the loop
+            } catch (err: any) {
+              lastError = err;
+              const errMsg = err?.response?.data?.error?.message || err?.response?.data?.error || err.message;
+              appendLog(`[Gemini Proxy Attempt Failed] Model: ${modelAttempt}, Error: ${JSON.stringify(errMsg)}`);
+              // Continue and try next model ID
+              continue;
+            }
+          }
+
+          if (!response) {
+            throw lastError || new Error('All model attempts for Gemini image generation failed');
+          }
+
+          // Re-use standard helper to parse and extract the generated images
+          const parseImageResponse = (responseData: any): string[] => {
+            if (!responseData) return [];
+            appendLog(`[Image API Success] Response keys: ${Object.keys(responseData)}`);
+            appendLog(`[Image API Success] Response preview: ${JSON.stringify(responseData).substring(0, 1000)}`);
+
+            let extractedUrls: string[] = [];
+
+            const arraysToTry = [
+              responseData.data,
+              responseData.images,
+              responseData.results,
+              responseData.output?.results,
+              responseData.output
+            ];
+
+            for (const item of arraysToTry) {
+              if (Array.isArray(item)) {
+                const parsed = item.map((d: any) => {
+                  if (typeof d === 'string') {
+                    if (d.startsWith('http://') || d.startsWith('https://') || d.startsWith('data:')) {
+                      return d;
+                    }
+                    if (d.length > 50) {
+                      return d.startsWith('data:') ? d : `data:image/png;base64,${d}`;
+                    }
+                    return null;
+                  }
+                  if (d && typeof d === 'object') {
+                    if (d.url) return d.url;
+                    if (d.b64_json) {
+                      return d.b64_json.startsWith('data:') ? d.b64_json : `data:image/png;base64,${d.b64_json}`;
+                    }
+                    if (d.image) return d.image;
+                    if (d.base64) {
+                      return d.base64.startsWith('data:') ? d.base64 : `data:image/png;base64,${d.base64}`;
+                    }
+                  }
+                  return null;
+                }).filter(Boolean) as string[];
+
+                if (parsed.length > 0) {
+                  extractedUrls = parsed;
+                  break;
+                }
+              }
+            }
+
+            if (extractedUrls.length === 0) {
+              const scannedFromKeys = extractImageUrls(responseData);
+              if (scannedFromKeys.length > 0) {
+                extractedUrls = scannedFromKeys;
+              }
+            }
+
+            if (extractedUrls.length === 0) {
+              if (typeof responseData === 'string' && responseData.length > 1000) {
+                extractedUrls = [responseData.startsWith('data:') ? responseData : `data:image/png;base64,${responseData}`];
+              } else if (responseData && typeof responseData === 'object') {
+                const checkedKeys = ['b64_json', 'base64', 'image', 'url'];
+                for (const key of checkedKeys) {
+                  if (typeof responseData[key] === 'string' && responseData[key].length > 10) {
+                    const content = responseData[key];
+                    if (content.startsWith('http://') || content.startsWith('https://')) {
+                      extractedUrls = [content];
+                      break;
+                    } else if (content.length > 100) {
+                      extractedUrls = [content.startsWith('data:') ? content : `data:image/png;base64,${content}`];
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            appendLog(`[Parser Result] Extracted URLs count: ${extractedUrls.length}`);
+            return extractedUrls;
+          };
+
+          const urls = parseImageResponse(response.data);
+          const savedUrls = await Promise.all(urls.map(u => saveImageToHistory(u)));
+          return res.json({ urls: savedUrls });
         }
-
-        const response = await axios.post(url, {
-          instances: [
-            { prompt: prompt }
-          ],
-          parameters: {
-            sampleCount: parseInt(n) || 1,
-            aspectRatio: aspectRatio
-          }
-        }, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-
-        // The response format for imagen-3 prediction:
-        // { predictions: [ { mimeType: "image/jpeg", bytesBase64: "..." }, ... ] }
-        const urls = response.data.predictions?.map((p: any) => `data:${p.mimeType || 'image/jpeg'};base64,${p.bytesBase64}`) || [];
-        return res.json({ urls });
       } else {
         let finalBaseUrl = (baseUrl || 'https://api.openai.com/v1').trim().replace(/\/$/, '');
         if (finalBaseUrl.endsWith('/images/generations')) {

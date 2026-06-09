@@ -75,7 +75,8 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
-  Pencil
+  Pencil,
+  FileText
 } from 'lucide-react';
 import { useStore, useNodeIncomingData } from '../store/useStore';
 import { downloadImage } from '../lib/download';
@@ -257,6 +258,86 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
   // General States mapped to Node Data to ensure persistence
   const [activeTab, setActiveTab] = useState<string>(data.activeTab || 'gpt');
+
+  // --- API Usage Logs States & Handlers ---
+  const [showLogs, setShowLogs] = useState(false);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logsList, setLogsList] = useState<any[]>([]);
+  const [logError, setLogError] = useState<string>('');
+
+  const loadLogs = async () => {
+    setLogLoading(true);
+    setLogError('');
+    try {
+      const apiSettings = (settings.apiSettings as any) || {};
+      let imgApiKey = apiSettings.apiKey;
+      let imgBaseUrl = apiSettings.baseUrl;
+
+      if (activeTab === 'banana') {
+        const geminiProf = (apiSettings.profiles || []).find((p: any) => p.id === 'gemini');
+        if (geminiProf) {
+          imgApiKey = geminiProf.apiKey || imgApiKey;
+          imgBaseUrl = geminiProf.baseUrl || imgBaseUrl;
+        }
+      } else if (activeTab === 'gpt') {
+        const openaiProf = (apiSettings.profiles || []).find((p: any) => p.id === 'openai');
+        if (openaiProf) {
+          imgApiKey = openaiProf.apiKey || imgApiKey;
+          imgBaseUrl = openaiProf.baseUrl || imgBaseUrl;
+        }
+      } else if (activeTab === 'jimeng') {
+        const doubaoProf = (apiSettings.profiles || []).find((p: any) => p.id === 'doubao' || p.engine === 'doubao');
+        if (doubaoProf) {
+          imgApiKey = doubaoProf.apiKey || imgApiKey;
+          imgBaseUrl = doubaoProf.baseUrl || imgBaseUrl;
+        }
+      } else if (apiSettings.profiles && apiSettings.activeProfileId) {
+        const activeProf = (apiSettings.profiles as any[]).find((p: any) => p.id === apiSettings.activeProfileId);
+        if (activeProf) {
+          imgApiKey = activeProf.apiKey || imgApiKey;
+          imgBaseUrl = activeProf.baseUrl || imgBaseUrl;
+        }
+      }
+
+      if (!imgApiKey) {
+        throw new Error('未配置当前通道/服务商的的 API 密钥，请先在设置中填写');
+      }
+
+      const response = await fetch('/api/images/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: imgBaseUrl,
+          apiKey: imgApiKey
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || `请求失败 (HTTP ${response.status})`);
+      }
+
+      if (resData && Array.isArray(resData.data)) {
+        setLogsList(resData.data);
+      } else {
+        setLogsList([]);
+      }
+    } catch (err: any) {
+      console.error('Failed to load logs:', err);
+      setLogError(err.message || '获取使用日志失败');
+    } finally {
+      setLogLoading(false);
+    }
+  };
+
+  const handleToggleLogs = () => {
+    if (!showLogs) {
+      setShowLogs(true);
+      loadLogs();
+    } else {
+      setShowLogs(false);
+    }
+  };
   const [prompt, setPrompt] = useState<string>(data.prompt || '');
   const [isComposing, setIsComposing] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<string[]>(data.images || (data.imageUrl ? [data.imageUrl] : []));
@@ -3073,7 +3154,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         <div className={`p-4 border-b border-[var(--border)] flex items-center justify-between transition-all rounded-t-3xl shrink-0 react-flow__node-draghandle ${
           settings.barTexture === 'frosted' ? 'frosted-glass border-b-white/5' : 'bg-gradient-to-r from-[var(--bg-tertiary)] to-[var(--bg-secondary)]'
         }`}>
-          <div className="flex items-center gap-2.5 text-[var(--text-primary)]">
+          <div className="flex items-center gap-2 text-[var(--text-primary)] relative">
             <Sparkles size={18} className="text-accent shrink-0" />
             <span className="text-[14px] font-bold tracking-wider">生成图像</span>
             {generationTime !== null && (
@@ -3084,6 +3165,21 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                handleToggleLogs();
+              }}
+              className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center ${
+                showLogs 
+                  ? 'border-red-500 bg-red-500/15 text-red-400 font-bold' 
+                  : 'border-red-500/40 hover:border-red-500 hover:bg-red-500/10 text-red-400'
+              }`}
+              title="查看使用日志"
+            >
+              <FileText size={14} />
+            </button>
             <button 
               type="button"
               onClick={(e) => { e.stopPropagation(); previewUrls.forEach((url, idx) => downloadImage(url, `generated-image-${id}-${idx}.png`)); }}
@@ -3120,6 +3216,28 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         <div className={`p-4 min-h-[220px] max-h-[350px] flex items-center justify-center relative border-b border-[var(--border)] overflow-hidden ${
           settings.barTexture === 'frosted' ? 'bg-transparent' : 'bg-[var(--bg-primary)]/40'
         }`}>
+          {/* Pulsing red floating button for API usage logs */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleLogs();
+            }}
+            className={`absolute bottom-3 right-3 z-30 flex items-center gap-2 px-3.5 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-950/60 hover:scale-105 active:scale-95 transition-all cursor-pointer pointer-events-auto border group select-none ${
+              showLogs
+                ? 'bg-red-500 border-red-400 text-white animate-pulse'
+                : 'bg-red-600 hover:bg-red-500 border-red-500/20 text-white'
+            }`}
+            title="查看 API 实时使用日志"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+            </span>
+            <span>使用日志</span>
+            <FileText size={11} className="text-red-100 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+
           {previewUrls.length > 0 ? (
             <div className={`grid gap-4 w-full h-full relative z-10 ${
               previewUrls.length === 1 ? 'grid-cols-1 font-bold' :
@@ -3383,9 +3501,27 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
                 onBlur={handleTextareaBlur}
                 onClick={handleTextareaClick}
                 onSelect={handleTextareaSelect}
-                onKeyUp={handleTextareaSelect}
                 onScroll={handleTextareaScroll}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  handleKeyDown(e);
+                }}
+                onKeyUp={(e) => {
+                  e.stopPropagation();
+                  handleTextareaSelect();
+                }}
+                onKeyPress={(e) => {
+                  e.stopPropagation();
+                }}
+                onCopy={(e) => {
+                  e.stopPropagation();
+                }}
+                onCut={(e) => {
+                  e.stopPropagation();
+                }}
+                onPaste={(e) => {
+                  e.stopPropagation();
+                }}
                 onMouseDown={() => {
                   isMouseInteractingRef.current = true;
                 }}
@@ -3455,7 +3591,6 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
         className="!bg-green-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#222] shadow-sm hover:!scale-150 hover:!border-white transition-all duration-200 z-50 ease-out"  
       />
     </div>
-
     {fullscreenUrl && createPortal(
       <AnimatePresence>
         <motion.div 
@@ -3529,7 +3664,7 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
 
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 px-6 py-3 bg-white/5 backdrop-blur-xl border border-[var(--border)] rounded-[24px] z-50">
              <div className="flex items-center gap-2 pr-4 border-r border-[var(--border)]">
-               <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+               <div className="w-2 h-2 rounded-full bg-blue-200 animate-pulse" />
                <span className="text-sm font-bold text-white/40 tracking-wider">GENERATED PREVIEW</span>
              </div>
              <span className="text-sm font-mono text-white/60">
@@ -3537,6 +3672,145 @@ export const ImageGenNode = ({ id, data, selected }: { id: string; data: any; se
              </span>
           </div>
         </motion.div>
+      </AnimatePresence>,
+      document.body
+    )}
+
+    {showLogs && createPortal(
+      <AnimatePresence>
+        <div 
+          className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 outline-none border-none select-none"
+          onPointerDown={(e) => { e.stopPropagation(); }}
+          onMouseDown={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); setShowLogs(false); }}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="w-full max-w-4xl h-[600px] bg-[#0c0c0e]/95 backdrop-blur-2xl border border-white/10 rounded-3xl flex flex-col shadow-2xl relative text-zinc-200 overflow-hidden font-sans pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5 shrink-0 select-none">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-red-500 animate-pulse" />
+                <span className="text-[14px] font-bold tracking-wider text-red-400">API 实时使用日志 (API Usage Logs)</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button 
+                  type="button" 
+                  onClick={(e) => { e.stopPropagation(); loadLogs(); }}
+                  disabled={logLoading}
+                  className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-50 text-[11px] font-extrabold rounded-xl cursor-pointer transition-colors border border-white/5"
+                >
+                  {logLoading ? '正在刷新...' : '刷新'}
+                </button>
+                <button 
+                  type="button" 
+                  onClick={(e) => { e.stopPropagation(); setShowLogs(false); }}
+                  className="p-1.5 px-3.5 bg-red-950/40 hover:bg-red-900/40 text-red-500 hover:text-red-400 border border-red-500/20 text-[11px] font-extrabold rounded-xl cursor-pointer transition-colors"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+
+            {/* Table Container */}
+            <div className="flex-1 overflow-auto p-4 scrollbar-thin">
+              {logLoading ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+                  <span className="text-zinc-500 font-mono text-[11px]">正在从后端拉取 API 调用和额度记录...</span>
+                </div>
+              ) : logError ? (
+                <div className="flex flex-col items-center justify-center h-full text-center px-6">
+                  <div className="text-red-400 font-bold mb-2 text-sm">加载错误</div>
+                  <div className="text-zinc-500 text-[11px] max-w-md font-mono mb-4 bg-red-400/5 p-3 rounded-2xl border border-red-500/10 leading-relaxed">
+                    {logError}
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={(e) => { e.stopPropagation(); loadLogs(); }}
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold rounded-xl cursor-pointer transition-all border border-white/5"
+                  >
+                    重新试一下
+                  </button>
+                </div>
+              ) : logsList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-zinc-500 font-mono text-center gap-2">
+                  <div className="text-zinc-400 font-bold text-sm">没有数据</div>
+                  <div className="text-[11px] text-zinc-600 max-w-xs">当前通道未找到调用历史。请先生成一些图片或检查您的 API 连接。</div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto min-w-full">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 text-zinc-400 text-[10px] uppercase tracking-wider font-bold bg-white/[0.02]">
+                        <th className="py-3 px-3">时间</th>
+                        <th className="py-3 px-3">令牌</th>
+                        <th className="py-3 px-3">分组</th>
+                        <th className="py-3 px-3">类型</th>
+                        <th className="py-3 px-3">模型</th>
+                        <th className="py-3 px-3">用时</th>
+                        <th className="py-3 px-3">提示</th>
+                        <th className="py-3 px-3 font-bold text-accent">补全</th>
+                        <th className="py-3 px-3 font-bold text-red-100">花费</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 font-mono text-[11px] whitespace-nowrap">
+                      {logsList.map((log: any, idx: number) => {
+                        const formatTime = (ts: number) => {
+                          if (!ts) return '-';
+                          const d = new Date(ts * 1000);
+                          const pad = (n: number) => String(n).padStart(2, '0');
+                          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                        };
+                        return (
+                          <tr key={log.id || idx} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="py-3 px-3 whitespace-nowrap text-zinc-400">
+                              {formatTime(log.created_at)}
+                            </td>
+                            <td className="py-3 px-3 text-zinc-300 max-w-[120px] truncate" title={log.token_name}>
+                              {log.token_name || '-'}
+                            </td>
+                            <td className="py-3 px-3 text-zinc-500">{log.group || log.user_group || 'default'}</td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                                log.type === 1 ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
+                                log.type === 2 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                                'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                              }`}>
+                                {log.type === 1 ? '消费' : log.type === 2 ? '充值' : log.type === 3 ? '扣费' : '系统'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-zinc-100 select-all font-semibold max-w-[150px] truncate" title={log.model_name || log.model_id}>
+                              {log.model_name || log.model_id || '-'}
+                            </td>
+                            <td className="py-3 px-3 text-zinc-300">
+                              {log.use_time ? `${log.use_time}s` : '0s'}
+                            </td>
+                            <td className="py-3 px-3 text-zinc-400">{log.prompt_tokens ?? 0}</td>
+                            <td className="py-3 px-3 text-accent font-bold">{log.completion_tokens ?? 0}</td>
+                            <td className="py-3 px-3 text-red-400 font-extrabold tracking-tight">
+                              ${((log.quota || 0) / 500000).toFixed(6)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 px-6 bg-white/[0.01] border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-500 shrink-0 select-none">
+              <span>数据源: 对应 API 兼容网关实时上报账单接口 (完全调用)</span>
+              <span>每次打开将自动以当前生成通道的 API 密匙向后端发起代理查询</span>
+            </div>
+          </motion.div>
+        </div>
       </AnimatePresence>,
       document.body
     )}
