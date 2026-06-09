@@ -111,6 +111,9 @@ interface PSLayer {
     saturation: number;         // -100 to 100
     hue: number;                // -180 to 180 (color hue shift)
     lightness: number;          // -100 to 100 (adjustment HSL lightness)
+    invert?: boolean;           // Invert colors
+    threshold?: number;         // 0-255 threshold
+    posterize?: number;         // 2-255 posterize levels
     levels: {
       blackMin: number;         // 0-255 levels
       gamma: number;            // 0.1-5.0 levels gamma
@@ -1064,7 +1067,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
 
       // 2. Compute non-destructive pixel-by-pixel stack (Curves, Levels, HSL shift, Exposure, Temp, Tint)
       const adj = layer.adjustments;
-      const hasAdjustment = adj.exposure !== 0 || adj.contrast !== 0 || adj.temp !== 0 || adj.tint !== 0 || adj.saturation !== 0 || adj.curves.length > 2 || adj.hue !== 0 || adj.lightness !== 0 || (adj.levels && (adj.levels.blackMin !== 0 || adj.levels.gamma !== 1.0 || adj.levels.whiteMin !== 255));
+      const hasAdjustment = adj.exposure !== 0 || adj.contrast !== 0 || adj.temp !== 0 || adj.tint !== 0 || adj.saturation !== 0 || adj.curves.length > 2 || adj.hue !== 0 || adj.lightness !== 0 || (adj.levels && (adj.levels.blackMin !== 0 || adj.levels.gamma !== 1.0 || adj.levels.whiteMin !== 255)) || adj.invert || (adj.threshold && adj.threshold > 0) || (adj.posterize && adj.posterize < 255);
       
       if (hasAdjustment) {
         try {
@@ -1147,6 +1150,28 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
             r = gray + (r - gray) * satFactor;
             g = gray + (g - gray) * satFactor;
             b = gray + (b - gray) * satFactor;
+
+            // H. Invert (反相)
+            if (adj.invert) {
+              r = 255 - r;
+              g = 255 - g;
+              b = 255 - b;
+            }
+
+            // I. Threshold (阈值)
+            if (adj.threshold && adj.threshold > 0) {
+              const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+              const val = lum >= adj.threshold ? 255 : 0;
+              r = val; g = val; b = val;
+            }
+
+            // J. Posterize (色调分离)
+            if (adj.posterize && adj.posterize < 255 && adj.posterize >= 2) {
+              const step = 255 / (adj.posterize - 1);
+              r = Math.round(r / step) * step;
+              g = Math.round(g / step) * step;
+              b = Math.round(b / step) * step;
+            }
 
             pixels[i] = Math.max(0, Math.min(255, r));
             pixels[i+1] = Math.max(0, Math.min(255, g));
@@ -1682,6 +1707,61 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
       return;
     }
 
+    if (activeTool === 'text') {
+      const newText = prompt('请输入你要绘制的文字:', textVal) || textVal;
+      if (newText) {
+        setTextVal(newText);
+        const newId = `layer-${Date.now()}`;
+        const newLayer: PSLayer = {
+          id: newId,
+          name: `文字图层 (Text ${layers.length})`,
+          type: 'text',
+          visible: true,
+          opacity: 1.0,
+          blendMode: 'source-over',
+          text: newText,
+          fontSize: textSize,
+          fontWeight: 'bold',
+          textColor: brushColor,
+          offsetX: Math.floor(coords.cx - 50),
+          offsetY: Math.floor(coords.cy - 10),
+          width: 300,
+          height: 100,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+          isClipped: false,
+          hasMask: false,
+          adjustments: {
+            curves: [[0, 0], [255, 255]],
+            exposure: 0,
+            temp: 0,
+            tint: 0,
+            contrast: 0,
+            highlights: 0,
+            shadows: 0,
+            clarity: 0,
+            saturation: 0,
+            hue: 0,
+            lightness: 0,
+            levels: { blackMin: 0, gamma: 1.0, whiteMin: 255 }
+          },
+          effects: {
+            dropShadow: { enabled: false, color: '#000000', blur: 12, distance: 8, angle: 135, opacity: 0.6 },
+            bevelEmboss: { enabled: false, depth: 120, size: 8, soften: 2 }
+          }
+        };
+        const updated = [newLayer, ...layers];
+        setLayers(updated);
+        syncNodeData(updated);
+        pushToHistory('添加文字', updated);
+        setActiveLayerId(newId);
+        setSelectedLayerIds([newId]);
+        setActiveTool('move');
+      }
+      return;
+    }
+
     if (activeTool === 'gradient') {
       setGradientStartPos({ x: coords.cx, y: coords.cy });
       setIsDrawing(true);
@@ -1689,15 +1769,55 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     }
 
     if (activeTool === 'transform' || activeTool === 'move') {
+      let targetLayer = activeLayer;
+      
+      // Auto-select layer if move tool and clicked outside current active layer or just an enhancement
+      if (activeTool === 'move') {
+        const flatCanvas = canvasRef.current;
+        // In a real context with separate canvases, we'd check alpha of each layer sequentially (top to bottom).
+        // Since we composite, we can loop reverse over layers, read their own offscreen cache
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const l = layers[i];
+          if (!l.visible) continue;
+          
+          const lx = coords.cx - l.offsetX;
+          const ly = coords.cy - l.offsetY;
+          
+          if (lx >= 0 && lx < l.width && ly >= 0 && ly < l.height) {
+            const lCache = layerCanvasCache[l.id];
+            if (lCache) {
+               const lCtx = lCache.getContext('2d');
+               if (lCtx) {
+                 try {
+                   const pixel = lCtx.getImageData(lx, ly, 1, 1).data;
+                   if (pixel[3] > 10) { // Alpha threshold
+                     targetLayer = l;
+                     if (l.id !== activeLayer.id) {
+                       setActiveLayerId(l.id);
+                       setSelectedLayerIds([l.id]);
+                     }
+                     break;
+                   }
+                 } catch (e) {
+                   // Ignore CORS taint errors for auto select
+                 }
+               }
+            }
+          }
+        }
+      }
+
+      if (!targetLayer) return;
+
       // Determine if clicked coordinate falls inside rotation or sizing handles
       let action: typeof activeTransformAction = 'translate';
       
       if (activeTool === 'transform') {
-        const cx = activeLayer.offsetX + activeLayer.width / 2;
-        const cy = activeLayer.offsetY + activeLayer.height / 2;
+        const cx = targetLayer.offsetX + targetLayer.width / 2;
+        const cy = targetLayer.offsetY + targetLayer.height / 2;
         
         // Handle check rotating handle (above 30px of Top side border)
-        const rotY = activeLayer.offsetY - 30;
+        const rotY = targetLayer.offsetY - 30;
         const rotDist = Math.hypot(coords.cx - cx, coords.cy - rotY);
         
         if (rotDist < 25) {
@@ -1708,15 +1828,15 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
       setActiveTransformAction(action);
 
       transformStartRef.current = {
-        offsetX: activeLayer.offsetX,
-        offsetY: activeLayer.offsetY,
-        width: activeLayer.width,
-        height: activeLayer.height,
-        rotation: activeLayer.rotation || 0,
+        offsetX: targetLayer.offsetX,
+        offsetY: targetLayer.offsetY,
+        width: targetLayer.width,
+        height: targetLayer.height,
+        rotation: targetLayer.rotation || 0,
         clientX: e.clientX,
         clientY: e.clientY,
-        scaleX: activeLayer.scaleX || 1,
-        scaleY: activeLayer.scaleY || 1
+        scaleX: targetLayer.scaleX || 1,
+        scaleY: targetLayer.scaleY || 1
       };
       setIsDrawing(true);
       return;
@@ -2499,6 +2619,16 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
               }`}
             >
               <Pipette size={15} />
+            </button>
+
+            <button 
+              title="文字工具 (T)"
+              onClick={() => setActiveTool('text')}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
+                activeTool === 'text' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'text-zinc-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Type size={15} />
             </button>
 
             <button 
@@ -3584,6 +3714,45 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                         />
                       </div>
                     ))}
+                  </div>
+
+                  <div className="p-3 bg-[#18181b] rounded-xl border border-zinc-800 space-y-3 mt-4">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block">高级调整 (Filters)</span>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
+                      <input 
+                        type="checkbox" 
+                        checked={activeLayer.adjustments.invert || false}
+                        onChange={(e) => updateActiveLayer(l => ({ adjustments: { ...l.adjustments, invert: e.target.checked } }))} 
+                        className="accent-indigo-500 rounded border-zinc-700 bg-zinc-800"
+                      />
+                      <span>反相 (Invert)</span>
+                    </label>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[9.5px] text-zinc-400 font-mono font-medium">
+                        <span>阈值 (Threshold)</span>
+                        <span>{activeLayer.adjustments.threshold || 0}</span>
+                      </div>
+                      <input 
+                        type="range" min={0} max={255} 
+                        value={activeLayer.adjustments.threshold || 0}
+                        onChange={(e) => updateActiveLayer(l => ({ adjustments: { ...l.adjustments, threshold: Number(e.target.value) } }))}
+                        className="w-full accent-indigo-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[9.5px] text-zinc-400 font-mono font-medium">
+                        <span>色调分离 (Posterize)</span>
+                        <span>{activeLayer.adjustments.posterize || 255}</span>
+                      </div>
+                      <input 
+                        type="range" min={2} max={255} 
+                        value={activeLayer.adjustments.posterize || 255}
+                        onChange={(e) => updateActiveLayer(l => ({ adjustments: { ...l.adjustments, posterize: Number(e.target.value) } }))}
+                        className="w-full accent-indigo-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
