@@ -15,6 +15,8 @@ import {
   ArrowDown, 
   Eye, 
   EyeOff, 
+  Lock,
+  Unlock,
   Settings, 
   Sparkles, 
   Wand2, 
@@ -39,7 +41,15 @@ import {
   Scaling,
   RotateCw,
   Pipette,
-  HelpCircle
+  HelpCircle,
+  Link,
+  Brush,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Copy,
+  PlusSquare,
+  Image as ImageIcon
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,6 +57,56 @@ import { ScaleWrapper } from './ScaleWrapper';
 import { generateTextWithFallback } from '../lib/gemini';
 import { renderLiquifyWebGL } from '../lib/webglLiquify';
 import { get } from 'idb-keyval';
+
+const LayerThumbnail = ({ 
+  layer, 
+  adjustedLayerCacheRef, 
+  imageElements 
+}: { 
+  layer: PSLayer, 
+  adjustedLayerCacheRef: React.MutableRefObject<Record<string, { canvas: HTMLCanvasElement, hash: string }>>,
+  imageElements: Record<string, HTMLImageElement>
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const renderThumb = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const cached = adjustedLayerCacheRef.current[layer.id];
+      if (cached && cached.canvas) {
+        ctx.drawImage(cached.canvas, 0, 0, canvas.width, canvas.height);
+      } else if (layer.imageUrl && imageElements[layer.imageUrl]) {
+        ctx.drawImage(imageElements[layer.imageUrl], 0, 0, canvas.width, canvas.height);
+      } else if (layer.type === 'solid' || layer.vectorType === 'rect' || layer.vectorType === 'circle') {
+         ctx.fillStyle = (layer.color || '#27272a') as string;
+         ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else if (layer.type === 'text') {
+         ctx.fillStyle = '#ffffff';
+         ctx.font = '20px sans-serif';
+         ctx.textAlign = 'center';
+         ctx.textBaseline = 'middle';
+         ctx.fillText('Aa', canvas.width/2, canvas.height/2);
+      }
+    };
+    
+    const timer = setTimeout(renderThumb, 50);
+    return () => clearTimeout(timer);
+  });
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      width={64} 
+      height={64} 
+      className="w-full h-full object-cover pointer-events-none" 
+    />
+  );
+};
 
 // Resolves db_blob: to blob URL or returns fallback
 const resolveDbBlob = async (url: string) => {
@@ -74,10 +134,12 @@ const resolveDbBlob = async (url: string) => {
 interface PSLayer {
   id: string;
   name: string;
-  type: 'image' | 'text' | 'solid' | 'vector';
+  type: 'image' | 'text' | 'solid' | 'vector' | 'folder';
   visible: boolean;
+  locked?: boolean;         // Prevents transformation, moving, and drawing when true
   opacity: number;          // 0 to 1
   blendMode: string;        // 'source-over', 'multiply', 'screen', 'overlay', 'difference', 'color-burn', 'color-dodge'
+  linkGroupId?: string;     // Group ID for layers linked to transform together
   imageUrl?: string;        // original image URL
   color?: string;           // for solid color layer / shape fill
   text?: string;            // for text layer
@@ -97,6 +159,10 @@ interface PSLayer {
   isClipped: boolean;       // Clips to the layer below it
   hasMask: boolean;         // Enables a separate alpha mask
   maskData?: Uint8ClampedArray; // Custom hand-drawn mask opacity values
+  maskDensity?: number;     // Density of the mask interface (0 to 1)
+  maskFeather?: number;     // Blur feather radius of the mask (0 to 100)
+  parentId?: string;        // Parent folder ID if nested
+  collapsed?: boolean;      // If folder is collapsed in the drawer UI
   
   // Custom non-destructive adjustments
   adjustments: {
@@ -159,6 +225,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   const getIncomingData = useStore((s) => s.getIncomingData);
   const nodes = useStore((s) => s.nodes);
   const edges = useStore((s) => s.edges);
+  const setActiveEditor = useStore((s) => s.setActiveEditor);
 
   // Core Document State
   const [docWidth, setDocWidth] = useState<number>(() => typeof data.docWidth === "number" ? data.docWidth : 500);
@@ -234,6 +301,22 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([layers[0]?.id || 'bg-layer']);
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
 
+  // References to handle unmounting and state synchronization without stale closures
+  const isUnmountedRef = useRef(false);
+  const layersRef = useRef(layers);
+  const transformStartLayersRef = useRef<Record<string, { offsetX: number; offsetY: number }>>({});
+
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+
+  useEffect(() => {
+    isUnmountedRef.current = false;
+    return () => {
+      isUnmountedRef.current = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (activeLayerId && !selectedLayerIds.includes(activeLayerId)) {
       setSelectedLayerIds([activeLayerId]);
@@ -257,7 +340,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     }
   };
   const [activeTab, setActiveTab] = useState<'layers' | 'adjustments' | 'fx' | 'ai'>('layers');
-  const [activeTool, setActiveTool] = useState<'move' | 'transform' | 'brush' | 'magic-wand' | 'gradient' | 'clone-stamp' | 'eyedropper' | 'shape-rect' | 'shape-circle' | 'shape-line' | 'crop' | 'liquify'>('move');
+  const [activeTool, setActiveTool] = useState<'move' | 'transform' | 'brush' | 'magic-wand' | 'gradient' | 'clone-stamp' | 'eyedropper' | 'shape-rect' | 'shape-circle' | 'shape-line' | 'crop' | 'liquify' | 'text'>('move');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   
   // Interactive parameters
@@ -280,10 +363,41 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   const [magicWandTolerance, setMagicWandTolerance] = useState<number>(32);
   const [magicWandMode, setMagicWandMode] = useState<'tolerance' | 'colorRange' | 'luminance'>('tolerance');
   const [cropOverlay, setCropOverlay] = useState<{x: number, y: number, w: number, h: number} | null>(null);
+  const [cropDragHandle, setCropDragHandle] = useState<string | null>(null);
+  const cropDragStartRef = useRef<{ x: number, y: number, crop: { x: number, y: number, w: number, h: number } | null } | null>(null);
+
+  // Crop input temporary values matching Figure 2 (does not synchronously stretch the real canvas resolution until confirmed)
+  const [cropInputX, setCropInputX] = useState<string>('0');
+  const [cropInputY, setCropInputY] = useState<string>('0');
+  const [cropInputW, setCropInputW] = useState<string>('0');
+  const [cropInputH, setCropInputH] = useState<string>('0');
+  const [autoFitFirstImage, setAutoFitFirstImage] = useState<boolean>(true);
+  const [cropAspectRatio, setCropAspectRatio] = useState<number | 'free' | 'original'>('free');
+
+  // Handle crop keyboard & click typing input change
+  const handleCropInputChange = (field: 'x' | 'y' | 'w' | 'h', value: string) => {
+    if (field === 'x') setCropInputX(value);
+    if (field === 'y') setCropInputY(value);
+    if (field === 'w') setCropInputW(value);
+    if (field === 'h') setCropInputH(value);
+
+    const numValue = Number(value) || 0;
+    setCropOverlay(prev => {
+      const base = prev || { x: 0, y: 0, w: docWidth, h: docHeight };
+      if (field === 'x') return { ...base, x: numValue };
+      if (field === 'y') return { ...base, y: numValue };
+      if (field === 'w') return { ...base, w: numValue };
+      if (field === 'h') return { ...base, h: numValue };
+      return base;
+    });
+  };
 
   // Clone stamp source point
   const [cloneSourcePos, setCloneSourcePos] = useState<{ x: number; y: number } | null>(null);
   const [isAltPressed, setIsAltPressed] = useState<boolean>(false);
+  const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false);
+  const [isPanning, setIsPanning] = useState<boolean>(false);
+  const panStartRef = useRef<{x: number, y: number, startPanX: number, startPanY: number} | null>(null);
 
   // Gradient options
   const [gradientType, setGradientType] = useState<'linear' | 'radial' | 'angle'>('linear');
@@ -313,6 +427,8 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   // Custom local Canvas drawing buffer cache to allow destructive pixel edits (like brushes, blurring)
   const [layerCanvasCache, setLayerCanvasCache] = useState<Record<string, HTMLCanvasElement>>({});
   const [maskCanvasCache, setMaskCanvasCache] = useState<Record<string, HTMLCanvasElement>>({});
+  const adjustedLayerCacheRef = useRef<Record<string, { canvas: HTMLCanvasElement, hash: string }>>({});
+  const renderReqRef = useRef<number | null>(null);
   const [currentEditingMask, setCurrentEditingMask] = useState<boolean>(false);
 
   // AI & ComfyUI Collaboration panel states
@@ -325,6 +441,16 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   // DOM Refs
   const workspaceRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Auto-initialize crop overlay to cover the full document when selecting Crop Tool
+  useEffect(() => {
+    if (activeTool === 'crop') {
+      setCropOverlay({ x: 0, y: 0, w: docWidth, h: docHeight });
+    } else {
+      setCropOverlay(null);
+      setCropDragHandle(null);
+    }
+  }, [activeTool]);
 
   // Tracking keyboard events for holding Alt (for clone stamp) and Spacebar (for hand pan navigation)
   const executeCrop = useCallback(() => {
@@ -339,51 +465,44 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     }
 
     const updatedLayers = layers.map(layer => {
-      // Create new canvas for cropped layer
-      const lCache = getOrCreateLayerCanvas(layer);
-      const newCanvas = document.createElement('canvas');
-      newCanvas.width = nw;
-      newCanvas.height = nh;
-      const mCtx = newCanvas.getContext('2d');
-      if (mCtx) {
-         // draw from old canvas, offset by nx/ny and layer offset
-         // source image is at doc coords (layer.offsetX, layer.offsetY) with size (layer.width, layer.height)
-         // we want to place it in new doc: 
-         mCtx.drawImage(lCache, layer.offsetX - nx, layer.offsetY - ny);
-      }
-      
-      // Update cache
-      setLayerCanvasCache(prev => ({...prev, [layer.id]: newCanvas}));
-      
       return {
         ...layer,
-        offsetX: Math.max(0, layer.offsetX - nx),
-        offsetY: Math.max(0, layer.offsetY - ny),
-        width: nw,
-        height: nh,
-        // liquifyMesh, masks etc might need adjusting, but this keeps it simple
+        offsetX: layer.offsetX - nx,
+        offsetY: layer.offsetY - ny,
       };
     });
 
-    setDocWidth(nw);
-    setDocHeight(nh);
+    setDocWidth(Math.round(nw));
+    setDocHeight(Math.round(nh));
     setCropOverlay(null);
     setLayers(updatedLayers);
     setActiveTool('move');
     pushToHistory('裁剪画布', updatedLayers);
+    setAiLogs(prev => [...prev, `✂️ 画布尺寸已裁剪为 ${Math.round(nw)} x ${Math.round(nh)}，图层保持原始比例未拉伸。`]);
   }, [cropOverlay, layers]);
+
+  const activeToolRef = useRef(activeTool);
+  useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Avoid tracking if user is typing
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
       if (e.key === 'Alt') {
         setIsAltPressed(true);
-      } else if (e.key === 'Enter' && activeTool === 'crop') {
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        setIsSpacePressed(true);
+      } else if (e.key === 'Enter' && activeToolRef.current === 'crop') {
         executeCrop();
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Alt') {
         setIsAltPressed(false);
+      } else if (e.code === 'Space') {
+        setIsSpacePressed(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -392,7 +511,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [executeCrop]);
 
   // Sync state with history
   const pushToHistory = (name: string, updatedLayers: PSLayer[], command?: Command) => {
@@ -435,7 +554,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   }, [layers]);
 
   // Load incoming images from preceding nodes reactively
-  const incomingImages = useMemo(() => {
+  const rawIncomingImages = useMemo(() => {
     const incomingEdges = edges.filter((e) => e.target === id);
     return incomingEdges
       .map((e) => {
@@ -446,6 +565,11 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
       })
       .filter((img): img is { url: string; name: string } => !!img.url);
   }, [id, nodes, edges]);
+
+  // Memoize utilizing stringified value as dependency to bypass redundant dragging updates
+  const incomingImages = useMemo(() => {
+    return rawIncomingImages;
+  }, [JSON.stringify(rawIncomingImages)]);
 
   const incomingImagesRaw = useMemo(() => {
     return incomingImages.map(img => img.url);
@@ -497,66 +621,118 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     }
   };
 
-  // Handle incoming data node connections trigger
+  // Handle incoming data node connections trigger with original image resolutions
   useEffect(() => {
     if (incomingImages.length > 0) {
-      let updatedLayers = [...layers];
-      let layersAdded = false;
-
-      incomingImages.forEach((img) => {
-        if (img.url) {
+      const active = { current: true };
+      
+      const processIncoming = async () => {
+        let updatedLayers = [...layersRef.current];
+        let layersAdded = false;
+        
+        for (const img of incomingImages) {
+          if (!img.url) continue;
           const hasImage = updatedLayers.some(l => l.imageUrl === img.url);
           if (!hasImage) {
-            const newId = `layer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-            const newLayer: PSLayer = {
-              id: newId,
-              name: img.name,
-              type: 'image',
-              visible: true,
-              opacity: 1,
-              blendMode: 'source-over',
-              imageUrl: img.url,
-              offsetX: 40,
-              offsetY: 40,
-              width: 320,
-              height: 320,
-              rotation: 0,
-              scaleX: 1,
-              scaleY: 1,
-              isClipped: false,
-              hasMask: false,
-              adjustments: {
-                curves: [[0, 0], [255, 255]],
-                exposure: 0,
-                temp: 0,
-                tint: 0,
-                contrast: 0,
-                highlights: 0,
-                shadows: 0,
-                clarity: 0,
-                saturation: 0,
-                hue: 0,
-                lightness: 0,
-                levels: { blackMin: 0, gamma: 1.0, whiteMin: 255 }
-              },
-              effects: {
-                dropShadow: { enabled: false, color: '#000000', blur: 10, distance: 5, angle: 45, opacity: 0.5 },
-                bevelEmboss: { enabled: false, depth: 100, size: 5, soften: 0 }
+            let w = 320;
+            let h = 320;
+            try {
+              const realUrl = await resolveDbBlob(img.url);
+              const naturalDim = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+                const tempImg = new Image();
+                tempImg.crossOrigin = 'anonymous';
+                tempImg.onload = () => resolve({ w: tempImg.naturalWidth, h: tempImg.naturalHeight });
+                tempImg.onerror = () => {
+                  const retryImg = new Image();
+                  retryImg.onload = () => resolve({ w: retryImg.naturalWidth, h: retryImg.naturalHeight });
+                  retryImg.onerror = () => reject();
+                  retryImg.src = realUrl;
+                };
+                tempImg.src = realUrl;
+              });
+              w = naturalDim.w;
+              h = naturalDim.h;
+            } catch (err) {
+              console.warn("Failed to pre-load incoming image resolution, using 320x320", err);
+            }
+
+            if (!active.current) return;
+
+            updatedLayers = [...layersRef.current];
+            const stillHasNoImage = !updatedLayers.some(l => l.imageUrl === img.url);
+            if (stillHasNoImage) {
+              const newId = `layer-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+              const isFirstImport = autoFitFirstImage && (
+                updatedLayers.length === 0 || 
+                (updatedLayers.length === 1 && updatedLayers[0].id === 'bg-layer' && !updatedLayers[0].imageUrl)
+              );
+              if (isFirstImport) {
+                setDocWidth(w);
+                setDocHeight(h);
               }
-            };
-            updatedLayers = [newLayer, ...updatedLayers];
-            layersAdded = true;
+
+              const newLayer: PSLayer = {
+                id: newId,
+                name: img.name,
+                type: 'image',
+                visible: true,
+                opacity: 1,
+                blendMode: 'source-over',
+                imageUrl: img.url,
+                offsetX: 0,
+                offsetY: 0,
+                width: w,
+                height: h,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                isClipped: false,
+                hasMask: false,
+                adjustments: {
+                  curves: [[0, 0], [255, 255]],
+                  exposure: 0,
+                  temp: 0,
+                  tint: 0,
+                  contrast: 0,
+                  highlights: 0,
+                  shadows: 0,
+                  clarity: 0,
+                  saturation: 0,
+                  hue: 0,
+                  lightness: 0,
+                  levels: { blackMin: 0, gamma: 1.0, whiteMin: 255 }
+                },
+                effects: {
+                  dropShadow: { enabled: false, color: '#000000', blur: 10, distance: 5, angle: 45, opacity: 0.5 },
+                  bevelEmboss: { enabled: false, depth: 100, size: 5, soften: 0 }
+                }
+              };
+              
+              if (isFirstImport) {
+                updatedLayers = [newLayer];
+              } else {
+                updatedLayers = [newLayer, ...updatedLayers];
+              }
+              layersAdded = true;
+              layersRef.current = updatedLayers;
+            }
           }
         }
-      });
 
-      if (layersAdded) {
-        syncNodeData(updatedLayers);
-        pushToHistory("导入外部画作", updatedLayers);
-        if (updatedLayers.length > 0) {
-          setActiveLayerId(updatedLayers[0].id);
+        if (layersAdded && active.current) {
+          syncNodeData(updatedLayers);
+          pushToHistory("导入外部画作", updatedLayers);
+          if (updatedLayers.length > 0) {
+            setActiveLayerId(updatedLayers[0].id);
+          }
         }
-      }
+      };
+
+      processIncoming();
+
+      return () => {
+        active.current = false;
+      };
     }
   }, [incomingImages]);
 
@@ -645,13 +821,157 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     setActiveLayerId(newId);
   };
 
+  // Duplicate selected layer with offset and image/mask cache cloning
+  const handleDuplicateLayer = (layerId: string) => {
+    const srcLayer = layers.find(l => l.id === layerId);
+    if (!srcLayer) return;
+
+    const newId = `layer-${Date.now()}`;
+    const copyLayer: PSLayer = JSON.parse(JSON.stringify(srcLayer));
+    copyLayer.id = newId;
+    copyLayer.name = `${srcLayer.name} 副本`;
+    copyLayer.offsetX = (srcLayer.offsetX || 0) + 20;
+    copyLayer.offsetY = (srcLayer.offsetY || 0) + 20;
+    // Ensure lock is cleared on duplicate
+    copyLayer.locked = false;
+
+    // Clone caches if present
+    const srcCanvas = layerCanvasCache[layerId];
+    if (srcCanvas) {
+      const copyCanvas = document.createElement('canvas');
+      copyCanvas.width = srcCanvas.width;
+      copyCanvas.height = srcCanvas.height;
+      copyCanvas.getContext('2d')?.drawImage(srcCanvas, 0, 0);
+      setLayerCanvasCache(prev => ({ ...prev, [newId]: copyCanvas }));
+    }
+
+    const srcMaskCanvas = maskCanvasCache[layerId];
+    if (srcMaskCanvas) {
+      const copyMaskCanvas = document.createElement('canvas');
+      copyMaskCanvas.width = srcMaskCanvas.width;
+      copyMaskCanvas.height = srcMaskCanvas.height;
+      copyMaskCanvas.getContext('2d')?.drawImage(srcMaskCanvas, 0, 0);
+      setMaskCanvasCache(prev => ({ ...prev, [newId]: copyMaskCanvas }));
+    }
+
+    // Insert new layer right above the source layer in the list representation
+    const idx = layers.findIndex(l => l.id === layerId);
+    const updated = [...layers];
+    updated.splice(idx, 0, copyLayer); // visually on top means index is lower or same
+
+    setLayers(updated);
+    syncNodeData(updated);
+    pushToHistory(`复制图层 ${srcLayer.name}`, updated);
+    setActiveLayerId(newId);
+    setSelectedLayerIds([newId]);
+    setAiLogs(prev => [...prev, `📋 成功复制图层 "${srcLayer.name}" 并在画布上向右下微移 20 像素。`]);
+  };
+
+  // Create real visual folder group, option to auto-group selected layers inside
+  const handleCreateFolder = () => {
+    const newId = `folder-${Date.now()}`;
+    const folderLayer: PSLayer = {
+      id: newId,
+      name: `新建组/文件夹 ${layers.filter(l => l.type === 'folder').length + 1}`,
+      type: 'folder',
+      visible: true,
+      opacity: 1,
+      blendMode: 'source-over',
+      offsetX: 0,
+      offsetY: 0,
+      width: 0,
+      height: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      isClipped: false,
+      hasMask: false,
+      collapsed: false,
+      adjustments: {
+        curves: [[0, 0], [255, 255]],
+        exposure: 0,
+        temp: 0,
+        tint: 0,
+        contrast: 0,
+        highlights: 0,
+        shadows: 0,
+        clarity: 0,
+        saturation: 0,
+        hue: 0,
+        lightness: 0,
+        levels: { blackMin: 0, gamma: 1.0, whiteMin: 255 }
+      },
+      effects: {
+        dropShadow: {
+          enabled: false,
+          color: '#000000',
+          blur: 10,
+          distance: 5,
+          angle: 120,
+          opacity: 0.5
+        },
+        bevelEmboss: {
+          enabled: false,
+          depth: 100,
+          size: 5,
+          soften: 0
+        }
+      }
+    };
+
+    let updated = [...layers];
+    if (selectedLayerIds.length > 0) {
+      // Find index of highest selected layer
+      let highestIdx = layers.length;
+      selectedLayerIds.forEach(id => {
+        const index = layers.findIndex(l => l.id === id);
+        if (index !== -1 && index < highestIdx) {
+          highestIdx = index;
+        }
+      });
+
+      // Update their parentId to the new folder
+      updated = layers.map(l => {
+        if (selectedLayerIds.includes(l.id)) {
+          return { ...l, parentId: newId };
+        }
+        return l;
+      });
+
+      // Insert folder right above the highest selected layer
+      updated.splice(highestIdx, 0, folderLayer);
+    } else {
+      // Just put folder at the very top of layers list
+      updated = [folderLayer, ...layers];
+    }
+
+    setLayers(updated);
+    syncNodeData(updated);
+    pushToHistory(`新建文件夹组`, updated);
+    setActiveLayerId(newId);
+    setSelectedLayerIds([newId]);
+    setAiLogs(prev => [...prev, `📁 已拉起新建文件夹组 "${folderLayer.name}" 并将当前选定图层编入。`]);
+  };
+
+  // Helper to recursively verify if a layer is visible (i.e. none of its ancestors are collapsed)
+  const isLayerVisibleInTree = (layer: PSLayer, currentLayersList: PSLayer[] = layers): boolean => {
+    if (!layer.parentId) return true;
+    const parent = currentLayersList.find(l => l.id === layer.parentId);
+    if (!parent) return true;
+    if (parent.collapsed) return false;
+    return isLayerVisibleInTree(parent, currentLayersList);
+  };
+
   // Add real offline local image layer via file uploader
   const handleAddLocalImageLayer = (dataUrl: string, fileName: string) => {
     const img = new Image();
     img.onload = () => {
       const w = img.naturalWidth || 300;
       const h = img.naturalHeight || 300;
-      const isFirstImport = layers.length === 1 && layers[0].id === 'bg-layer' && !layers[0].imageUrl;
+      const isFirstImport = autoFitFirstImage && (
+        layers.length === 0 || 
+        (layers.length === 1 && layers[0].id === 'bg-layer' && !layers[0].imageUrl)
+      );
       if (isFirstImport) {
         setDocWidth(w);
         setDocHeight(h);
@@ -723,6 +1043,11 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
 
   // Delete Layer
   const handleDeleteLayer = (layerId: string) => {
+    const target = layers.find(l => l.id === layerId);
+    if (target?.locked) {
+      alert(`⚠️ 图层 "${target.name}" 处于锁定状态，无法删除！请先解锁。`);
+      return;
+    }
     if (layers.length <= 1) {
       alert("⚠️ 必须保留至少一个基础图层！");
       return;
@@ -735,40 +1060,101 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     }
   };
 
+  // Reset Layer Transform back to original position, rotation and natural dimension size
+  const handleResetLayerTransform = (layerId: string) => {
+    const target = layers.find(l => l.id === layerId);
+    if (!target) return;
+    
+    let origW = target.width;
+    let origH = target.height;
+    
+    if (target.type === 'image' && target.imageUrl) {
+      const imgEl = imageElements[target.imageUrl];
+      if (imgEl) {
+        origW = imgEl.naturalWidth;
+        origH = imgEl.naturalHeight;
+      }
+    } else if (target.type === 'text') {
+      origW = 300;
+      origH = 100;
+    } else if (target.type === 'solid') {
+      origW = docWidth;
+      origH = docHeight;
+    }
+
+    const updated = layers.map(l => {
+      if (l.id === layerId) {
+        return {
+          ...l,
+          offsetX: 0,
+          offsetY: 0,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+          width: origW,
+          height: origH
+        };
+      }
+      return l;
+    });
+
+    setLayers(updated);
+    syncNodeData(updated);
+    pushToHistory(`重置图层变换 (${target.name})`, updated);
+    setAiLogs(prev => [...prev, `🔄 图层 "${target.name}" 的位移、旋转和尺寸已被一键还原到原厂规格尺寸。`]);
+  };
+
   // Dynamic Image loader with Cache to avoid canvas taint errors
   const [imageElements, setImageElements] = useState<Record<string, HTMLImageElement>>({});
 
+  const loadingRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    let active = true;
     layers.forEach(layer => {
-      if (layer.imageUrl && !imageElements[layer.imageUrl]) {
-        resolveDbBlob(layer.imageUrl).then((realUrl) => {
-          if (!active) return;
+      const url = layer.imageUrl;
+      if (url && !imageElements[url] && !loadingRef.current.has(url)) {
+        loadingRef.current.add(url);
+        resolveDbBlob(url).then((realUrl) => {
+          if (isUnmountedRef.current) {
+            loadingRef.current.delete(url);
+            return;
+          }
           const img = new Image();
           img.crossOrigin = 'anonymous';
-          img.src = realUrl;
           img.onload = () => {
-            if (active) {
-              setImageElements(prev => ({ ...prev, [layer.imageUrl!]: img }));
+            if (!isUnmountedRef.current) {
+              setImageElements(prev => {
+                if (prev[url]) return prev;
+                return { ...prev, [url]: img };
+              });
             }
           };
           img.onerror = () => {
-            // Retry loader without crossOrigin anonymous check if it fails due to CORS
+            if (isUnmountedRef.current) {
+              loadingRef.current.delete(url);
+              return;
+            }
             const retryImg = new Image();
-            retryImg.src = realUrl;
             retryImg.onload = () => {
-              if (active) {
-                setImageElements(prev => ({ ...prev, [layer.imageUrl!]: retryImg }));
+              if (!isUnmountedRef.current) {
+                setImageElements(prev => {
+                  if (prev[url]) return prev;
+                  return { ...prev, [url]: retryImg };
+                });
               }
             };
+            retryImg.onerror = () => {
+              loadingRef.current.delete(url);
+            };
+            retryImg.src = realUrl;
           };
+          img.src = realUrl;
+        }).catch(err => {
+          console.error("Resolve image blob failed", err);
+          loadingRef.current.delete(url);
         });
       }
     });
-
-    return () => {
-      active = false;
-    };
   }, [layers, imageElements]);
 
   // Triangle Mesh Warping implementation for Liquify tool
@@ -970,237 +1356,234 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     renderOrder.forEach((layer, index) => {
       if (!layer.visible) return;
 
-      // Realtime interactive resolution toggle - downsampling by 3x during dragging to guarantee buttery smooth 60fps!
-      const isCurrentlyDragging = isDraggingLiquify || (isDrawing && (activeTool === 'transform' || activeTool === 'move'));
-      const scaleFactor = (isCurrentlyDragging && (previewResolution === 'auto' || previewResolution === 'low')) ? 3 : 1;
-      const layerW = Math.max(16, Math.floor(layer.width / scaleFactor));
-      const layerH = Math.max(16, Math.floor(layer.height / scaleFactor));
+      // 1. Calculate Cache Hash
+      const baseCanvasVersion = layerCanvasCache[layer.id] ? (layerCanvasCache[layer.id].getAttribute('data-version') || '0') : '0';
+      const hash = JSON.stringify(layer.adjustments) + '_' 
+        + layer.width + '_' + layer.height + '_' 
+        + layer.type + '_' + layer.imageUrl + '_' 
+        + layer.color + '_' + layer.text + '_' + textVal + '_'
+        + layer.vectorType + '_' + shapeFillColor + '_' + shapeStrokeColor + '_' + shapeStrokeWidth + '_'
+        + baseCanvasVersion + '_'
+        + (layer.liquifyMesh ? JSON.stringify(layer.liquifyMesh.points.map(p => p.x+','+p.y)) : 'no_mesh') + '_'
+        + layer.hasMask;
 
-      // Create an offscreen buffer for compositing and applying adjustments non-destructively
-      const layerBuffer = document.createElement('canvas');
-      layerBuffer.width = layerW;
-      layerBuffer.height = layerH;
-      const bCtx = layerBuffer.getContext('2d');
-      if (!bCtx) return;
+      let layerBuffer: HTMLCanvasElement;
 
-      // 1. Draw base content (using cached mutable layer canvas if modified, otherwise load static content)
-      if (layerCanvasCache[layer.id]) {
-        // Draw cached destructive edits
-        if (layer.liquifyMesh) {
-          // Downsample the liquify points on the fly if needed
-          const meshObj = layer.liquifyMesh;
-          let pointsToUse = meshObj.points;
-          if (scaleFactor > 1) {
-            pointsToUse = meshObj.points.map(p => ({
-              ox: p.ox / scaleFactor,
-              oy: p.oy / scaleFactor,
-              x: p.x / scaleFactor,
-              y: p.y / scaleFactor
-            }));
-          }
-          renderLiquifyMeshWarp(
-            bCtx, 
-            layerCanvasCache[layer.id], 
-            { ...meshObj, points: pointsToUse }, 
-            layerW, 
-            layerH
-          );
-        } else {
-          bCtx.drawImage(layerCanvasCache[layer.id], 0, 0, layerW, layerH);
-        }
+      // 2. Try Cache
+      if (adjustedLayerCacheRef.current[layer.id] && adjustedLayerCacheRef.current[layer.id].hash === hash) {
+        layerBuffer = adjustedLayerCacheRef.current[layer.id].canvas;
       } else {
-        // Standard drawing paths
-        if (layer.type === 'image' && layer.imageUrl) {
-          const loadedImg = imageElements[layer.imageUrl];
-          if (loadedImg) {
-            if (layer.liquifyMesh) {
-              const meshObj = layer.liquifyMesh;
-              let pointsToUse = meshObj.points;
-              if (scaleFactor > 1) {
-                pointsToUse = meshObj.points.map(p => ({
-                  ox: p.ox / scaleFactor,
-                  oy: p.oy / scaleFactor,
-                  x: p.x / scaleFactor,
-                  y: p.y / scaleFactor
-                }));
-              }
-              renderLiquifyMeshWarp(bCtx, loadedImg, { ...meshObj, points: pointsToUse }, layerW, layerH);
-            } else {
-              bCtx.drawImage(loadedImg, 0, 0, layerW, layerH);
-            }
+        // 3. Rebuild and Cache Layer Raster
+        layerBuffer = document.createElement('canvas');
+        layerBuffer.width = Math.max(1, layer.width);
+        layerBuffer.height = Math.max(1, layer.height);
+        const bCtx = layerBuffer.getContext('2d');
+        if (!bCtx) return;
+
+        // Draw Base Content
+        if (layerCanvasCache[layer.id]) {
+          if (layer.liquifyMesh) {
+            renderLiquifyMeshWarp(bCtx, layerCanvasCache[layer.id], layer.liquifyMesh, Math.max(1, layer.width), Math.max(1, layer.height));
           } else {
-            bCtx.fillStyle = '#18181b';
-            bCtx.fillRect(0, 0, layerW, layerH);
-            bCtx.fillStyle = '#71717a';
-            bCtx.font = `${10 / scaleFactor}px monospace`;
-            bCtx.fillText('Loading Asset...', 10, layerH / 2);
+            bCtx.drawImage(layerCanvasCache[layer.id], 0, 0, layer.width, layer.height);
           }
-        } else if (layer.type === 'solid' && layer.color) {
-          bCtx.fillStyle = layer.color;
-          bCtx.fillRect(0, 0, layerW, layerH);
-        } else if (layer.type === 'text') {
-          bCtx.fillStyle = layer.textColor || '#ffffff';
-          bCtx.font = `${layer.fontWeight || 'bold'} ${Math.round((layer.fontSize || 32) / scaleFactor)}px Inter, sans-serif`;
-          bCtx.textBaseline = 'middle';
-          bCtx.textAlign = 'center';
-          bCtx.fillText(layer.text || textVal, layerW / 2, layerH / 2);
-        } else if (layer.type === 'vector') {
-          bCtx.fillStyle = layer.color || shapeFillColor;
-          bCtx.strokeStyle = layer.strokeColor || shapeStrokeColor;
-          bCtx.lineWidth = Math.max(1, (layer.strokeWidth || 2) / scaleFactor);
-          if (layer.vectorType === 'rect') {
-            bCtx.fillRect(10/scaleFactor, 10/scaleFactor, layerW - 20/scaleFactor, layerH - 20/scaleFactor);
-            bCtx.strokeRect(10/scaleFactor, 10/scaleFactor, layerW - 20/scaleFactor, layerH - 20/scaleFactor);
-          } else if (layer.vectorType === 'circle') {
-            bCtx.beginPath();
-            bCtx.arc(layerW / 2, layerH / 2, Math.min(layerW, layerH) / 2 - 10/scaleFactor, 0, Math.PI * 2);
-            bCtx.fill();
-            bCtx.stroke();
-          } else if (layer.vectorType === 'line') {
-            bCtx.beginPath();
-            bCtx.moveTo(20/scaleFactor, layerH / 2);
-            bCtx.lineTo(layerW - 20/scaleFactor, layerH / 2);
-            bCtx.stroke();
+        } else {
+          if (layer.type === 'image' && layer.imageUrl) {
+            const loadedImg = imageElements[layer.imageUrl];
+            if (loadedImg) {
+              if (layer.liquifyMesh) {
+                renderLiquifyMeshWarp(bCtx, loadedImg, layer.liquifyMesh, layer.width, layer.height);
+              } else {
+                bCtx.drawImage(loadedImg, 0, 0, layer.width, layer.height);
+              }
+            } else {
+              bCtx.fillStyle = '#18181b';
+              bCtx.fillRect(0, 0, layer.width, layer.height);
+              bCtx.fillStyle = '#71717a';
+              bCtx.font = `10px monospace`;
+              bCtx.fillText('Loading Asset...', 10, layer.height / 2);
+            }
+          } else if (layer.type === 'solid' && layer.color) {
+            bCtx.fillStyle = layer.color;
+            bCtx.fillRect(0, 0, layer.width, layer.height);
+          } else if (layer.type === 'text') {
+            bCtx.fillStyle = layer.textColor || '#ffffff';
+            bCtx.font = `${layer.fontWeight || 'bold'} ${Math.round(layer.fontSize || 32)}px Inter, sans-serif`;
+            bCtx.textBaseline = 'middle';
+            bCtx.textAlign = 'center';
+            bCtx.fillText(layer.text || textVal, layer.width / 2, layer.height / 2);
+          } else if (layer.type === 'vector') {
+            bCtx.fillStyle = layer.color || shapeFillColor;
+            bCtx.strokeStyle = layer.strokeColor || shapeStrokeColor;
+            bCtx.lineWidth = Math.max(1, layer.strokeWidth || 2);
+            if (layer.vectorType === 'rect') {
+              bCtx.fillRect(10, 10, layer.width - 20, layer.height - 20);
+              bCtx.strokeRect(10, 10, layer.width - 20, layer.height - 20);
+            } else if (layer.vectorType === 'circle') {
+              bCtx.beginPath();
+              bCtx.arc(layer.width / 2, layer.height / 2, Math.min(layer.width, layer.height) / 2 - 10, 0, Math.PI * 2);
+              bCtx.fill();
+              bCtx.stroke();
+            } else if (layer.vectorType === 'line') {
+              bCtx.beginPath();
+              bCtx.moveTo(20, layer.height / 2);
+              bCtx.lineTo(layer.width - 20, layer.height / 2);
+              bCtx.stroke();
+            }
           }
         }
-      }
 
-      // 2. Compute non-destructive pixel-by-pixel stack (Curves, Levels, HSL shift, Exposure, Temp, Tint)
-      const adj = layer.adjustments;
-      const hasAdjustment = adj.exposure !== 0 || adj.contrast !== 0 || adj.temp !== 0 || adj.tint !== 0 || adj.saturation !== 0 || adj.curves.length > 2 || adj.hue !== 0 || adj.lightness !== 0 || (adj.levels && (adj.levels.blackMin !== 0 || adj.levels.gamma !== 1.0 || adj.levels.whiteMin !== 255)) || adj.invert || (adj.threshold && adj.threshold > 0) || (adj.posterize && adj.posterize < 255);
-      
-      if (hasAdjustment) {
-        try {
-          const imgData = bCtx.getImageData(0, 0, layerW, layerH);
-          const pixels = imgData.data;
-
-          // Process Curves LUT (lookup tables math)
-          const curvesPoints = adj.curves;
-          const curveLUT = new Uint8Array(256);
-          for (let i = 0; i < 256; i++) {
-            const xVal = i;
-            let finalY = i;
-            if (curvesPoints.length >= 3) {
-              const closestPoint = curvesPoints.reduce((prev, curr) => 
-                Math.abs(curr[0] - xVal) < Math.abs(prev[0] - xVal) ? curr : prev
-              );
-              finalY = closestPoint[1];
-            }
-            curveLUT[i] = Math.max(0, Math.min(255, finalY));
-          }
-
-          const expFactor = 1 + (adj.exposure / 100);
-          const contr = 1 + (adj.contrast / 100);
-          const satFactor = 1 + (adj.saturation / 100);
-          const lightPercent = adj.lightness || 0; // -100 to 100
-          const hueShiftDegrees = adj.hue || 0;    // -180 to 180
-          
-          // Levels variables
-          const lBlack = adj.levels?.blackMin ?? 0;
-          const lWhite = adj.levels?.whiteMin ?? 255;
-          const lGamma = adj.levels?.gamma ?? 1.0;
-          const levelDiff = Math.max(1, lWhite - lBlack);
-
-          for (let i = 0; i < pixels.length; i += 4) {
-            let r = pixels[i];
-            let g = pixels[i + 1];
-            let b = pixels[i + 2];
-
-            // A. Curve LUT map
-            r = curveLUT[r];
-            g = curveLUT[g];
-            b = curveLUT[b];
-
-            // B. Levels adjust mapping
-            if (lBlack !== 0 || lWhite !== 255 || lGamma !== 1.0) {
-              r = Math.pow(Math.max(0, (r - lBlack) / levelDiff), 1 / lGamma) * 255;
-              g = Math.pow(Math.max(0, (g - lBlack) / levelDiff), 1 / lGamma) * 255;
-              b = Math.pow(Math.max(0, (b - lBlack) / levelDiff), 1 / lGamma) * 255;
-            }
-
-            // C. Exposure
-            r *= expFactor;
-            g *= expFactor;
-            b *= expFactor;
-
-            // D. Contrast adjustment around middle point (128)
-            r = ((r - 128) * contr) + 128;
-            g = ((g - 128) * contr) + 128;
-            b = ((b - 128) * contr) + 128;
-
-            // E. Temp & Tint balance
-            r += (adj.temp * 0.4);
-            b -= (adj.temp * 0.4);
-            g += (adj.tint * 0.2);
-
-            // F. Hue / Saturation / Lightness HSL conversion mapping
-            if (hueShiftDegrees !== 0 || lightPercent !== 0) {
-              const [h, s, l] = rgbToHsl(r, g, b);
-              let newH = h + (hueShiftDegrees / 360);
-              if (newH < 0) newH += 1.0;
-              if (newH > 1) newH -= 1.0;
-              let newL = l + (lightPercent / 100);
-              newL = Math.max(0, Math.min(1, newL));
-              const [nr, ng, nb] = hslToRgb(newH, s, newL);
-              r = nr; g = ng; b = nb;
-            }
-
-            // G. Saturation
-            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-            r = gray + (r - gray) * satFactor;
-            g = gray + (g - gray) * satFactor;
-            b = gray + (b - gray) * satFactor;
-
-            // H. Invert (反相)
-            if (adj.invert) {
-              r = 255 - r;
-              g = 255 - g;
-              b = 255 - b;
-            }
-
-            // I. Threshold (阈值)
-            if (adj.threshold && adj.threshold > 0) {
-              const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-              const val = lum >= adj.threshold ? 255 : 0;
-              r = val; g = val; b = val;
-            }
-
-            // J. Posterize (色调分离)
-            if (adj.posterize && adj.posterize < 255 && adj.posterize >= 2) {
-              const step = 255 / (adj.posterize - 1);
-              r = Math.round(r / step) * step;
-              g = Math.round(g / step) * step;
-              b = Math.round(b / step) * step;
-            }
-
-            pixels[i] = Math.max(0, Math.min(255, r));
-            pixels[i+1] = Math.max(0, Math.min(255, g));
-            pixels[i+2] = Math.max(0, Math.min(255, b));
-          }
-          bCtx.putImageData(imgData, 0, 0);
-        } catch (e) {
-          // If tainted canvas due to unsplash, handle gracefully
-        }
-      }
-
-      // 2.5 Apply Mask
-      if (layer.hasMask) {
-        try {
-          const maskCanvas = getOrCreateMaskCanvas(layer);
-          const maskCtx = maskCanvas.getContext('2d');
-          if (maskCtx) {
-            const mData = maskCtx.getImageData(0, 0, layerW, layerH).data;
-            const imgData = bCtx.getImageData(0, 0, layerW, layerH);
+        // Apply Adjustments (expensive pixel processing only when needed)
+        const adj = layer.adjustments;
+        const hasAdjustment = adj.exposure !== 0 || adj.contrast !== 0 || adj.temp !== 0 || adj.tint !== 0 || adj.saturation !== 0 || adj.curves.length > 2 || adj.hue !== 0 || adj.lightness !== 0 || (adj.levels && (adj.levels.blackMin !== 0 || adj.levels.gamma !== 1.0 || adj.levels.whiteMin !== 255)) || adj.invert || (adj.threshold && adj.threshold > 0) || (adj.posterize && adj.posterize < 255);
+        
+        if (hasAdjustment) {
+          try {
+            const imgData = bCtx.getImageData(0, 0, layer.width, layer.height);
             const pixels = imgData.data;
+
+            const curvesPoints = adj.curves;
+            const curveLUT = new Uint8Array(256);
+            for (let i = 0; i < 256; i++) {
+              const xVal = i;
+              let finalY = i;
+              if (curvesPoints.length >= 3) {
+                const closestPoint = curvesPoints.reduce((prev, curr) => 
+                  Math.abs(curr[0] - xVal) < Math.abs(prev[0] - xVal) ? curr : prev
+                );
+                finalY = closestPoint[1];
+              }
+              curveLUT[i] = Math.max(0, Math.min(255, finalY));
+            }
+
+            const expFactor = 1 + (adj.exposure / 100);
+            const contr = 1 + (adj.contrast / 100);
+            const satFactor = 1 + (adj.saturation / 100);
+            const lightPercent = adj.lightness || 0;
+            const hueShiftDegrees = adj.hue || 0;
+            
+            const lBlack = adj.levels?.blackMin ?? 0;
+            const lWhite = adj.levels?.whiteMin ?? 255;
+            const lGamma = adj.levels?.gamma ?? 1.0;
+            const levelDiff = Math.max(1, lWhite - lBlack);
+
             for (let i = 0; i < pixels.length; i += 4) {
-               // multiply original alpha by mask Red channel
-               pixels[i+3] = (pixels[i+3] * mData[i]) / 255; 
+              let r = pixels[i];
+              let g = pixels[i + 1];
+              let b = pixels[i + 2];
+
+              r = curveLUT[r];
+              g = curveLUT[g];
+              b = curveLUT[b];
+
+              if (lBlack !== 0 || lWhite !== 255 || lGamma !== 1.0) {
+                r = Math.pow(Math.max(0, (r - lBlack) / levelDiff), 1 / lGamma) * 255;
+                g = Math.pow(Math.max(0, (g - lBlack) / levelDiff), 1 / lGamma) * 255;
+                b = Math.pow(Math.max(0, (b - lBlack) / levelDiff), 1 / lGamma) * 255;
+              }
+
+              r *= expFactor;
+              g *= expFactor;
+              b *= expFactor;
+
+              r = ((r - 128) * contr) + 128;
+              g = ((g - 128) * contr) + 128;
+              b = ((b - 128) * contr) + 128;
+
+              r += (adj.temp * 0.4);
+              b -= (adj.temp * 0.4);
+              g += (adj.tint * 0.2);
+
+              if (hueShiftDegrees !== 0 || lightPercent !== 0) {
+                const [h, s, l] = rgbToHsl(r, g, b);
+                let newH = h + (hueShiftDegrees / 360);
+                if (newH < 0) newH += 1.0;
+                if (newH > 1) newH -= 1.0;
+                let newL = l + (lightPercent / 100);
+                newL = Math.max(0, Math.min(1, newL));
+                const [nr, ng, nb] = hslToRgb(newH, s, newL);
+                r = nr; g = ng; b = nb;
+              }
+
+              const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+              r = gray + (r - gray) * satFactor;
+              g = gray + (g - gray) * satFactor;
+              b = gray + (b - gray) * satFactor;
+
+              if (adj.invert) {
+                r = 255 - r;
+                g = 255 - g;
+                b = 255 - b;
+              }
+
+              if (adj.threshold && adj.threshold > 0) {
+                const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                const val = lum >= adj.threshold ? 255 : 0;
+                r = val; g = val; b = val;
+              }
+
+              if (adj.posterize && adj.posterize < 255 && adj.posterize >= 2) {
+                const step = 255 / (adj.posterize - 1);
+                r = Math.round(r / step) * step;
+                g = Math.round(g / step) * step;
+                b = Math.round(b / step) * step;
+              }
+
+              pixels[i] = Math.max(0, Math.min(255, r));
+              pixels[i+1] = Math.max(0, Math.min(255, g));
+              pixels[i+2] = Math.max(0, Math.min(255, b));
             }
             bCtx.putImageData(imgData, 0, 0);
+          } catch (e) {
+            console.warn('CORS prevented pixel adjustments on canvas', e);
           }
-        } catch (e) {
-           console.warn('Mask read failed due to CORS');
         }
+
+        // Apply Mask if needed (to the cached layerBuffer)
+        if (layer.hasMask) {
+          try {
+            const maskCanvas = getOrCreateMaskCanvas(layer);
+            
+            // Non-destructively apply feathering using native canvas blur filters if selected!
+            let activeMaskCanvas = maskCanvas;
+            const featherVal = layer.maskFeather || 0;
+            if (featherVal > 0) {
+              const blurredCanvas = document.createElement('canvas');
+              blurredCanvas.width = layer.width;
+              blurredCanvas.height = layer.height;
+              const blurredCtx = blurredCanvas.getContext('2d');
+              if (blurredCtx) {
+                blurredCtx.filter = `blur(${featherVal}px)`;
+                blurredCtx.drawImage(maskCanvas, 0, 0);
+                activeMaskCanvas = blurredCanvas;
+              }
+            }
+
+            const maskCtx = activeMaskCanvas.getContext('2d');
+            if (maskCtx) {
+              const mData = maskCtx.getImageData(0, 0, layer.width, layer.height).data;
+              const imgData = bCtx.getImageData(0, 0, layer.width, layer.height);
+              const pixels = imgData.data;
+              
+              // Non-destructively scale mask density setting
+              const densityVal = layer.maskDensity !== undefined ? layer.maskDensity : 1;
+              
+              for (let i = 0; i < pixels.length; i += 4) {
+                // Read red channel value (0 to 255)
+                let mVal = mData[i];
+                // Apply density transformation
+                mVal = 255 - Math.round(densityVal * (255 - mVal));
+                
+                pixels[i+3] = (pixels[i+3] * mVal) / 255; 
+              }
+              bCtx.putImageData(imgData, 0, 0);
+            }
+          } catch (e) {
+             console.warn('Mask read failed due to CORS or Canvas error', e);
+          }
+        }
+
+        adjustedLayerCacheRef.current[layer.id] = { canvas: layerBuffer, hash };
       }
 
       // 3. Render separate Layer Styles/Effects
@@ -1276,10 +1659,14 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
 
   // Execute render compositing upon layers changes
   useEffect(() => {
-    const t = setTimeout(() => {
+    if (renderReqRef.current) cancelAnimationFrame(renderReqRef.current);
+    renderReqRef.current = requestAnimationFrame(() => {
       renderComposite();
-    }, 45);
-    return () => clearTimeout(t);
+      renderReqRef.current = null;
+    });
+    return () => {
+      if (renderReqRef.current) cancelAnimationFrame(renderReqRef.current);
+    };
   }, [layers, imageElements, renderComposite, docWidth, docHeight, isFullscreen, isDraggingLiquify]);
 
   // --- COMMAND PATTERN IMPLEMENTATION FOR UNDO / REDO ---
@@ -1496,6 +1883,23 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
 
+  // Sync inputs with cropOverlay changes while drag-cropping (declared after isDrawing is available)
+  useEffect(() => {
+    if (cropOverlay) {
+      if (isDrawing) {
+        setCropInputX(String(Math.round(cropOverlay.x)));
+        setCropInputY(String(Math.round(cropOverlay.y)));
+        setCropInputW(String(Math.round(Math.abs(cropOverlay.w))));
+        setCropInputH(String(Math.round(Math.abs(cropOverlay.h))));
+      }
+    } else {
+      setCropInputX('0');
+      setCropInputY('0');
+      setCropInputW(String(docWidth));
+      setCropInputH(String(docHeight));
+    }
+  }, [cropOverlay, isDrawing, docWidth, docHeight]);
+
   // Global state for active transform dragging handle
   const [activeTransformAction, setActiveTransformAction] = useState<'none' | 'translate' | 'scale-tl' | 'scale-tr' | 'scale-bl' | 'scale-br' | 'scale-r'>('none');
   const transformStartRef = useRef<{ offsetX: number; offsetY: number; width: number; height: number; rotation: number; clientX: number; clientY: number; scaleX?: number; scaleY?: number } | null>(null);
@@ -1669,8 +2073,68 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   };
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isSpacePressed) return;
+
+    if (activeTool === 'crop') {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const cx = (e.clientX - rect.left) * (docWidth / rect.width);
+      const cy = (e.clientY - rect.top) * (docHeight / rect.height);
+      const x = cx;
+      const y = cy;
+
+      // Handle resize check
+      if (cropOverlay) {
+        const x1 = Math.min(cropOverlay.x, cropOverlay.x + cropOverlay.w);
+        const y1 = Math.min(cropOverlay.y, cropOverlay.y + cropOverlay.h);
+        const x2 = Math.max(cropOverlay.x, cropOverlay.x + cropOverlay.w);
+        const y2 = Math.max(cropOverlay.y, cropOverlay.y + cropOverlay.h);
+        const tol = 15;
+
+        let handle: string | null = null;
+        const x_mid = (x1 + x2) / 2;
+        const y_mid = (y1 + y2) / 2;
+
+        if (Math.abs(x - x1) < tol && Math.abs(y - y1) < tol) handle = 'tl';
+        else if (Math.abs(x - x2) < tol && Math.abs(y - y1) < tol) handle = 'tr';
+        else if (Math.abs(x - x1) < tol && Math.abs(y - y2) < tol) handle = 'bl';
+        else if (Math.abs(x - x2) < tol && Math.abs(y - y2) < tol) handle = 'br';
+        else if (Math.abs(x - x_mid) < tol && Math.abs(y - y1) < tol) handle = 't';
+        else if (Math.abs(x - x_mid) < tol && Math.abs(y - y2) < tol) handle = 'b';
+        else if (Math.abs(x - x1) < tol && Math.abs(y - y_mid) < tol) handle = 'l';
+        else if (Math.abs(x - x2) < tol && Math.abs(y - y_mid) < tol) handle = 'r';
+        else if (Math.abs(x - x1) < tol && y >= y1 && y <= y2) handle = 'l';
+        else if (Math.abs(x - x2) < tol && y >= y1 && y <= y2) handle = 'r';
+        else if (Math.abs(y - y1) < tol && x >= x1 && x <= x2) handle = 't';
+        else if (Math.abs(y - y2) < tol && x >= x1 && x <= x2) handle = 'b';
+        else if (x > x1 && x < x2 && y > y1 && y < y2) handle = 'move';
+
+        if (handle) {
+          setCropDragHandle(handle);
+          cropDragStartRef.current = { x, y, crop: { ...cropOverlay } };
+          setIsDrawing(true);
+          return;
+        }
+      }
+
+      // If no handle matched, start a new crop rectangle!
+      setCropDragHandle('new');
+      setCropOverlay({ x, y, w: 0, h: 0 });
+      cropDragStartRef.current = { x, y, crop: null };
+      setIsDrawing(true);
+      return;
+    }
+
     const coords = getLayerRelativeCoords(e);
     if (!coords) return;
+
+    // Locked active layer check for painting tools or liquify
+    const modifiesTextureOrShape = ['brush', 'eraser', 'clone-stamp', 'gradient', 'shape-rect', 'shape-circle', 'shape-line', 'liquify'].includes(activeTool);
+    if (modifiesTextureOrShape && activeLayer?.locked) {
+      setAiLogs(prev => [...prev, `⚠️ 图层 "${activeLayer.name}" 处于锁定状态，无法使用绘制、填充或液化工具编辑！`]);
+      return;
+    }
 
     // Alt key held for Clone Stamp anchor sample
     if (isAltPressed && activeTool === 'clone-stamp') {
@@ -1698,12 +2162,6 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
 
     if (activeTool === 'magic-wand') {
       runMagicWandBFS(coords.rotRx, coords.rotRy);
-      return;
-    }
-
-    if (activeTool === 'crop') {
-      setCropOverlay({ x: coords.cx, y: coords.cy, w: 0, h: 0 });
-      setIsDrawing(true);
       return;
     }
 
@@ -1809,6 +2267,11 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
 
       if (!targetLayer) return;
 
+      if (targetLayer.locked) {
+        setAiLogs(prev => [...prev, `⚠️ 图层 "${targetLayer!.name}" 处于锁定状态，无法移动、缩放或旋转。`]);
+        return;
+      }
+
       // Determine if clicked coordinate falls inside rotation or sizing handles
       let action: typeof activeTransformAction = 'translate';
       
@@ -1826,6 +2289,40 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
       }
 
       setActiveTransformAction(action);
+
+      // Store start positions for multi-layer/linked layer translation
+      const startPosMap: Record<string, { offsetX: number; offsetY: number }> = {};
+      const activeLinkGroupIds = new Set<string>();
+
+      selectedLayerIds.forEach(lId => {
+        const found = layers.find(l => l.id === lId);
+        if (found) {
+          startPosMap[lId] = { offsetX: found.offsetX, offsetY: found.offsetY };
+          if (found.linkGroupId) {
+            activeLinkGroupIds.add(found.linkGroupId);
+          }
+        }
+      });
+
+      if (targetLayer) {
+        if (!startPosMap[targetLayer.id]) {
+          startPosMap[targetLayer.id] = { offsetX: targetLayer.offsetX, offsetY: targetLayer.offsetY };
+        }
+        if (targetLayer.linkGroupId) {
+          activeLinkGroupIds.add(targetLayer.linkGroupId);
+        }
+      }
+
+      if (activeLinkGroupIds.size > 0) {
+        layers.forEach(l => {
+          if (l.linkGroupId && activeLinkGroupIds.has(l.linkGroupId)) {
+            if (!startPosMap[l.id]) {
+              startPosMap[l.id] = { offsetX: l.offsetX, offsetY: l.offsetY };
+            }
+          }
+        });
+      }
+      transformStartLayersRef.current = startPosMap;
 
       transformStartRef.current = {
         offsetX: targetLayer.offsetX,
@@ -1863,10 +2360,19 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
       const deltaY = e.clientY - snap.clientY;
 
       if (activeTransformAction === 'translate') {
-        updateActiveLayer(l => ({
-          offsetX: snap.offsetX + deltaX,
-          offsetY: snap.offsetY + deltaY
-        }));
+        const updated = layers.map(l => {
+          const startPose = transformStartLayersRef.current[l.id];
+          if (startPose) {
+            return {
+              ...l,
+              offsetX: startPose.offsetX + deltaX,
+              offsetY: startPose.offsetY + deltaY
+            };
+          }
+          return l;
+        });
+        setLayers(updated);
+        syncNodeData(updated);
       } else if (activeTransformAction === 'scale-r') {
         const cx = snap.offsetX + snap.width / 2;
         const cy = snap.offsetY + snap.height / 2;
@@ -1962,8 +2468,145 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
       return;
     }
 
-    if (activeTool === 'crop' && cropOverlay && isDrawing) {
-      setCropOverlay(prev => prev ? ({ ...prev, w: coords.cx - prev.x, h: coords.cy - prev.y }) : null);
+    if (activeTool === 'crop' && cropOverlay && isDrawing && cropDragHandle && cropDragStartRef.current) {
+      const startObj = cropDragStartRef.current;
+      const currentCrop = startObj.crop;
+
+      if (currentCrop) {
+        const ix1 = currentCrop.x;
+        const iy1 = currentCrop.y;
+        const ix2 = currentCrop.x + currentCrop.w;
+        const iy2 = currentCrop.y + currentCrop.h;
+
+        let x1 = Math.min(ix1, ix2);
+        let y1 = Math.min(iy1, iy2);
+        let x2 = Math.max(ix1, ix2);
+        let y2 = Math.max(iy1, iy2);
+
+        const dx = coords.cx - startObj.x;
+        const dy = coords.cy - startObj.y;
+
+        let ratio: number | null = null;
+        if (cropAspectRatio === 'original') {
+          ratio = docWidth / docHeight;
+        } else if (typeof cropAspectRatio === 'number') {
+          ratio = cropAspectRatio;
+        }
+
+        if (ratio) {
+          if (cropDragHandle === 'tl') {
+            x1 += dx;
+            const w = x2 - x1;
+            const h = w / ratio;
+            y1 = y2 - h;
+          } else if (cropDragHandle === 'tr') {
+            x2 += dx;
+            const w = x2 - x1;
+            const h = w / ratio;
+            y1 = y2 - h;
+          } else if (cropDragHandle === 'bl') {
+            x1 += dx;
+            const w = x2 - x1;
+            const h = w / ratio;
+            y2 = y1 + h;
+          } else if (cropDragHandle === 'br') {
+            x2 += dx;
+            const w = x2 - x1;
+            const h = w / ratio;
+            y2 = y1 + h;
+          } else if (cropDragHandle === 'l') {
+            x1 += dx;
+            const w = x2 - x1;
+            const h = w / ratio;
+            const cy_mid = (y1 + y2) / 2;
+            y1 = cy_mid - h / 2;
+            y2 = cy_mid + h / 2;
+          } else if (cropDragHandle === 'r') {
+            x2 += dx;
+            const w = x2 - x1;
+            const h = w / ratio;
+            const cy_mid = (y1 + y2) / 2;
+            y1 = cy_mid - h / 2;
+            y2 = cy_mid + h / 2;
+          } else if (cropDragHandle === 't') {
+            y1 += dy;
+            const h = y2 - y1;
+            const w = h * ratio;
+            const cx_mid = (x1 + x2) / 2;
+            x1 = cx_mid - w / 2;
+            x2 = cx_mid + w / 2;
+          } else if (cropDragHandle === 'b') {
+            y2 += dy;
+            const h = y2 - y1;
+            const w = h * ratio;
+            const cx_mid = (x1 + x2) / 2;
+            x1 = cx_mid - w / 2;
+            x2 = cx_mid + w / 2;
+          } else if (cropDragHandle === 'move') {
+            x1 += dx;
+            x2 += dx;
+            y1 += dy;
+            y2 += dy;
+          }
+        } else {
+          if (cropDragHandle === 'tl') {
+            x1 += dx;
+            y1 += dy;
+          } else if (cropDragHandle === 'tr') {
+            x2 += dx;
+            y1 += dy;
+          } else if (cropDragHandle === 'bl') {
+            x1 += dx;
+            y2 += dy;
+          } else if (cropDragHandle === 'br') {
+            x2 += dx;
+            y2 += dy;
+          } else if (cropDragHandle === 'l') {
+            x1 += dx;
+          } else if (cropDragHandle === 'r') {
+            x2 += dx;
+          } else if (cropDragHandle === 't') {
+            y1 += dy;
+          } else if (cropDragHandle === 'b') {
+            y2 += dy;
+          } else if (cropDragHandle === 'move') {
+            x1 += dx;
+            x2 += dx;
+            y1 += dy;
+            y2 += dy;
+          }
+        }
+
+        setCropOverlay({
+          x: x1,
+          y: y1,
+          w: x2 - x1,
+          h: y2 - y1
+        });
+      } else {
+        const x = startObj.x;
+        const y = startObj.y;
+        let w = coords.cx - x;
+        let h = coords.cy - y;
+        
+        let ratio: number | null = null;
+        if (cropAspectRatio === 'original') {
+          ratio = docWidth / docHeight;
+        } else if (typeof cropAspectRatio === 'number') {
+          ratio = cropAspectRatio;
+        }
+
+        if (ratio) {
+          h = (h >= 0 ? 1 : -1) * (Math.abs(w) / ratio);
+        }
+
+        setCropOverlay({
+          x: w >= 0 ? x : x + w,
+          y: h >= 0 ? y : y + h,
+          w: Math.abs(w),
+          h: Math.abs(h)
+        });
+      }
       return;
     }
 
@@ -2069,6 +2712,8 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     setIsDraggingLiquify(false);
     setActiveTransformAction('none');
     lastPosRef.current = null;
+    setCropDragHandle(null);
+    cropDragStartRef.current = null;
 
     if (activeTool === 'gradient' && gradientStartPos && activeLayer) {
       const coords = getLayerRelativeCoords(e);
@@ -2488,6 +3133,124 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
     }
   };
 
+  // Physical dynamic linking of selected layers
+  const handleLinkSelectedLayers = () => {
+    if (selectedLayerIds.length < 2) {
+      const actL = layers.find(l => l.id === activeLayerId);
+      if (actL?.linkGroupId) {
+        const gid = actL.linkGroupId;
+        const updated = layers.map(l => l.linkGroupId === gid ? { ...l, linkGroupId: undefined } : l);
+        setLayers(updated);
+        syncNodeData(updated);
+        pushToHistory('取消图层链接', updated);
+        return;
+      }
+      alert("⚠️ 请先按住 Ctrl/Shift 键选择 2 个 or 以上的图层，再执行链接。");
+      return;
+    }
+    
+    const hasExistingGroup = layers.some(l => selectedLayerIds.includes(l.id) && l.linkGroupId);
+    const updated = layers.map(l => {
+      if (selectedLayerIds.includes(l.id)) {
+        return { ...l, linkGroupId: hasExistingGroup ? undefined : `link-${id}-${Date.now()}` };
+      }
+      return l;
+    });
+    
+    setLayers(updated);
+    syncNodeData(updated);
+    pushToHistory(hasExistingGroup ? '取消图层链接' : '并联建立图层链接', updated);
+  };
+
+  // Group and merge selected layers on offscreen canvas
+  const handleGroupOrMergeSelectedLayers = () => {
+    if (selectedLayerIds.length < 2) {
+      alert("⚠️ 请先通过 Shift 键或 Ctrl 键选择至少 2 个要编组合并的图层！");
+      return;
+    }
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = docWidth;
+    canvas.height = docHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Render selected layers sequentially backwards (bottom-up in selection)
+    const reversedSelection = [...layers].filter(l => selectedLayerIds.includes(l.id)).reverse();
+    
+    reversedSelection.forEach(l => {
+      if (!l.visible) return;
+      ctx.save();
+      ctx.globalAlpha = l.opacity;
+      ctx.globalCompositeOperation = (l.blendMode || 'source-over') as GlobalCompositeOperation;
+      
+      const imgEl = imageElements[l.imageUrl || ''];
+      if (l.type === 'solid' && l.color) {
+        ctx.fillStyle = l.color;
+        ctx.fillRect(l.offsetX, l.offsetY, l.width, l.height);
+      } else if (imgEl) {
+        ctx.translate(l.offsetX + l.width / 2, l.offsetY + l.height / 2);
+        ctx.rotate((l.rotation || 0) * Math.PI / 180);
+        ctx.scale(l.scaleX || 1, l.scaleY || 1);
+        ctx.drawImage(imgEl, -l.width / 2, -l.height / 2, l.width, l.height);
+      }
+      ctx.restore();
+    });
+
+    try {
+      const mergedUrl = canvas.toDataURL('image/png');
+      const newId = `layer-${Date.now()}`;
+      const mergedLayer: PSLayer = {
+        id: newId,
+        name: `合并图层组 (Merged Group)`,
+        type: 'image',
+        visible: true,
+        opacity: 1,
+        blendMode: 'source-over',
+        imageUrl: mergedUrl,
+        offsetX: 0,
+        offsetY: 0,
+        width: docWidth,
+        height: docHeight,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        isClipped: false,
+        hasMask: false,
+        adjustments: {
+          curves: [[0, 0], [255, 255]],
+          exposure: 0,
+          temp: 0,
+          tint: 0,
+          contrast: 0,
+          highlights: 0,
+          shadows: 0,
+          clarity: 0,
+          saturation: 0,
+          hue: 0,
+          lightness: 0,
+          levels: { blackMin: 0, gamma: 1.0, whiteMin: 255 }
+        },
+        effects: {
+          dropShadow: { enabled: false, color: '#000000', blur: 10, distance: 5, angle: 45, opacity: 0.5 },
+          bevelEmboss: { enabled: false, depth: 100, size: 5, soften: 0 }
+        }
+      };
+
+      const firstSelectedIdx = layers.findIndex(l => selectedLayerIds.includes(l.id));
+      const nextLayers = layers.filter(l => !selectedLayerIds.includes(l.id));
+      nextLayers.splice(firstSelectedIdx, 0, mergedLayer);
+
+      setLayers(nextLayers);
+      syncNodeData(nextLayers);
+      pushToHistory('合并组图层', nextLayers);
+      setActiveLayerId(newId);
+      setSelectedLayerIds([newId]);
+    } catch (e) {
+      alert("⚠️ 合并失败 (部分高分辨率外部图片可能仍正在努力载入，或有安全跨域源限制。)");
+    }
+  };
+
   // Standard Download of flats PNG Image
   const handleDownloadOutput = () => {
     if (!canvasRef.current) return;
@@ -2547,7 +3310,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
         </div>
 
         {/* Workspace core container */}
-        <div className="flex flex-1 min-h-0 bg-[#0f0f11] relative">
+        <div className="flex flex-1 min-h-0 bg-[#0f0f11] relative nodrag">
           
           {/* LEFT SUB TOOLBAR (PS style tools choices) */}
           <div className="w-14 bg-[#18181b]/95 border-r border-[#27272a] flex flex-col items-center py-4 gap-2.5 shrink-0 nodrag relative">
@@ -2956,32 +3719,159 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
             )}
 
             {activeTool === 'crop' && (
-              <div className="absolute left-16 top-48 bg-[#1a1a1e]/95 border border-zinc-800 p-3 rounded-xl shadow-xl z-50 w-52 space-y-2 text-zinc-300">
-                <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider block">裁剪画布尺寸</span>
-                <p className="text-[9px] text-zinc-500 leading-tight">
-                  在画布上拖拽任意方形区域，然后按下 <strong className="text-zinc-300">Enter / 回车</strong> 键进行裁剪。
+              <div className="absolute left-16 top-48 bg-[#18181c]/95 border border-zinc-800 p-4 rounded-xl shadow-2xl z-50 w-64 space-y-4 text-zinc-300">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>
+                    裁切与比例属性 (Crop & Aspect)
+                  </span>
+                  <span className="text-[9px] text-zinc-500 font-mono uppercase bg-zinc-800/50 px-1.5 py-0.5 rounded">
+                    Crop Preset
+                  </span>
+                </div>
+
+                <p className="text-[10px] text-zinc-400 leading-normal">
+                  拖动中间区域可移动，拖动边缘8个控制点可精细调整。请选择预设比例或输入具体像素。
                 </p>
-                <div className="space-y-1.5 mt-2">
-                  <div>
-                    <span className="text-[8px] text-zinc-500 block">自定义宽度(Width)</span>
-                    <input 
-                      type="number" value={docWidth}
-                      onChange={(e) => setDocWidth(Math.max(100, Number(e.target.value)))}
-                      className="w-full bg-[#1c1c1f] p-1 border border-zinc-800 rounded text-[10px] text-white font-mono"
-                    />
+
+                {/* Crop Ratio Preset Dropdown */}
+                <div className="space-y-1">
+                  <span className="text-[9px] text-zinc-500 block font-sans">裁剪比例 preset</span>
+                  <select
+                    value={
+                      cropAspectRatio === 'free' ? 'free' :
+                      cropAspectRatio === 'original' ? 'original' :
+                      cropAspectRatio === 1 ? '1:1' :
+                      cropAspectRatio === 4/5 ? '4:5' :
+                      cropAspectRatio === 16/9 ? '16:9' :
+                      cropAspectRatio === 9/16 ? '9:16' : 'custom'
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      let aspectVal: number | 'free' | 'original' = 'free';
+                      if (val === 'free') aspectVal = 'free';
+                      else if (val === 'original') aspectVal = 'original';
+                      else if (val === '1:1') aspectVal = 1;
+                      else if (val === '4:5') aspectVal = 4/5;
+                      else if (val === '16:9') aspectVal = 16/9;
+                      else if (val === '9:16') aspectVal = 9/16;
+                      
+                      setCropAspectRatio(aspectVal);
+
+                      // Calculate target ratio
+                      let r: number | null = null;
+                      if (aspectVal === 'original') r = docWidth / docHeight;
+                      else if (typeof aspectVal === 'number') r = aspectVal;
+
+                      setCropOverlay(prev => {
+                        const base = prev || { x: 0, y: 0, w: docWidth, h: docHeight };
+                        if (r) {
+                          const nw = base.w || docWidth;
+                          return { ...base, w: nw, h: nw / r };
+                        }
+                        return base;
+                      });
+                    }}
+                    className="w-full p-2 bg-[#121214] border border-zinc-800 text-xs text-white rounded-lg outline-none font-bold font-sans cursor-pointer focus:border-indigo-500"
+                  >
+                    <option value="free">自由裁切 (Free Form)</option>
+                    <option value="original">原始比例 (Original Ratio)</option>
+                    <option value="1:1">正方形 (1:1 Square)</option>
+                    <option value="4:5">肖像照片 (4:5 Ratio)</option>
+                    <option value="16:9">高清晰度电影 (16:9 Wide)</option>
+                    <option value="9:16">移动短视频 (9:16 Drama)</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {/* X Input block */}
+                  <div className="bg-[#121214] border border-zinc-800/80 p-2 rounded-lg hover:border-zinc-700 transition-colors">
+                    <span className="text-[9px] text-zinc-500 block mb-0.5 font-sans">X (偏移)</span>
+                    <div className="flex items-center justify-between">
+                      <input 
+                        type="number" 
+                        value={cropInputX}
+                        onChange={(e) => handleCropInputChange('x', e.target.value)}
+                        className="w-full bg-transparent p-0 text-xs text-white font-mono outline-none border-none focus:ring-0"
+                      />
+                      <span className="text-[10px] text-zinc-600 font-mono ml-1">px</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[8px] text-zinc-500 block">高度(Height)</span>
-                    <input 
-                      type="number" value={docHeight}
-                      onChange={(e) => setDocHeight(Math.max(100, Number(e.target.value)))}
-                      className="w-full bg-[#1c1c1f] p-1 border border-zinc-800 rounded text-[10px] text-white font-mono"
-                    />
+
+                  {/* Y Input block */}
+                  <div className="bg-[#121214] border border-zinc-800/80 p-2 rounded-lg hover:border-zinc-700 transition-colors">
+                    <span className="text-[9px] text-zinc-500 block mb-0.5 font-sans">Y (偏移)</span>
+                    <div className="flex items-center justify-between">
+                      <input 
+                        type="number" 
+                        value={cropInputY}
+                        onChange={(e) => handleCropInputChange('y', e.target.value)}
+                        className="w-full bg-transparent p-0 text-xs text-white font-mono outline-none border-none focus:ring-0"
+                      />
+                      <span className="text-[10px] text-zinc-600 font-mono ml-1">px</span>
+                    </div>
+                  </div>
+
+                  {/* Width Input block */}
+                  <div className="bg-[#121214] border border-zinc-800/80 p-2 rounded-lg hover:border-zinc-700 transition-colors">
+                    <span className="text-[9px] text-zinc-400 block mb-0.5 font-bold font-sans">宽 (Width)</span>
+                    <div className="flex items-center justify-between">
+                      <input 
+                        type="number" 
+                        value={cropInputW}
+                        onChange={(e) => handleCropInputChange('w', e.target.value)}
+                        className="w-full bg-transparent p-0 text-xs text-white font-mono outline-none border-none focus:ring-0"
+                      />
+                      <span className="text-[10px] text-zinc-600 font-mono ml-1">px</span>
+                    </div>
+                  </div>
+
+                  {/* Height Input block */}
+                  <div className="bg-[#121214] border border-[#ff3b30]/30 p-2 rounded-lg hover:border-[#ff3b30]/50 transition-colors bg-[#ff3b30]/5">
+                    <span className="text-[9px] text-rose-450 block mb-0.5 font-bold font-sans">高 (Height)</span>
+                    <div className="flex items-center justify-between">
+                      <input 
+                        type="number" 
+                        value={cropInputH}
+                        onChange={(e) => handleCropInputChange('h', e.target.value)}
+                        className="w-full bg-transparent p-0 text-xs text-white font-mono outline-none border-none focus:ring-0"
+                      />
+                      <span className="text-[10px] text-zinc-600 font-mono ml-1">px</span>
+                    </div>
+                  </div>
+
+                  {/* Rotation block */}
+                  <div className="bg-[#121214] border border-zinc-800/80 p-2 rounded-lg">
+                    <span className="text-[9px] text-zinc-500 block mb-0.5 font-sans">方向 (Rotation)</span>
+                    <span className="text-xs text-zinc-400 font-mono block">0°</span>
+                  </div>
+
+                  {/* Resolution Base label block */}
+                  <div className="bg-[#121214] border border-zinc-800/80 p-2 rounded-lg">
+                    <span className="text-[9px] text-zinc-500 block mb-0.5 font-sans">输出基准</span>
+                    <span className="text-xs text-indigo-400 font-mono font-bold block truncate">
+                      {Math.round(Number(cropInputW) || 0)} × {Math.round(Number(cropInputH) || 0)}
+                    </span>
                   </div>
                 </div>
-                <p className="text-[8px] text-zinc-500 leading-normal">
-                  可在此处输入或者直接在画布上拖拽任意改变长宽。
-                </p>
+
+                <div className="space-y-2 pt-2">
+                  <button
+                    onClick={executeCrop}
+                    className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 border border-indigo-500/20 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all outline-none cursor-pointer shadow-lg shadow-indigo-950/45"
+                  >
+                    <span>确定 (Confirm Crop)</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCropOverlay(null);
+                      setActiveTool('move');
+                    }}
+                    className="w-full py-1.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-[10px] rounded-lg flex items-center justify-center transition-all outline-none cursor-pointer"
+                  >
+                    <span>取消 (Cancel)</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -3044,15 +3934,45 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
           </div>
 
           {/* MIDDLE CANVAS DESK AREA */}
-          <div ref={workspaceRef} className="flex-1 overflow-hidden relative flex flex-col items-center justify-center bg-[#09090b] p-4 font-sans">
+          <div ref={workspaceRef} 
+               className={`flex-1 overflow-hidden relative flex flex-col items-center justify-center bg-[#09090b] p-4 font-sans ${isSpacePressed ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+               onWheel={(e) => {
+                 if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+                 // Prevent host Node Canvas zooming when hovering over PS workspace
+                 e.stopPropagation();
+                 setZoom(prev => Math.min(Math.max(0.1, prev - e.deltaY * 0.001), 5.0));
+               }}
+               onMouseDown={(e) => {
+                 if (isSpacePressed) {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   setIsPanning(true);
+                   panStartRef.current = { x: e.clientX, y: e.clientY, startPanX: panOffset.x, startPanY: panOffset.y };
+                 }
+               }}
+               onMouseMove={(e) => {
+                 if (isPanning && panStartRef.current) {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   const dx = e.clientX - panStartRef.current.x;
+                   const dy = e.clientY - panStartRef.current.y;
+                   setPanOffset({ 
+                     x: panStartRef.current.startPanX + dx / zoom, 
+                     y: panStartRef.current.startPanY + dy / zoom
+                   });
+                 }
+               }}
+               onMouseUp={() => { setIsPanning(false); panStartRef.current = null; }}
+               onMouseLeave={() => { setIsPanning(false); panStartRef.current = null; }}
+          >
             <div 
-              className="relative shadow-[0_0_40px_rgba(0,0,0,0.6)] cursor-crosshair border border-[#1e1e24]"
+              className={`relative shadow-[0_0_40px_rgba(0,0,0,0.6)] border border-[#1e1e24] ${isSpacePressed ? 'pointer-events-none' : 'cursor-crosshair'}`}
               style={{ 
                 width: `${docWidth}px`, 
                 height: `${docHeight}px`,
-                transform: `scale(${zoom})`,
+                transform: `scale(${zoom}) translate(${panOffset.x}px, ${panOffset.y}px)`,
                 transformOrigin: 'center center',
-                transition: 'transform 0.1s ease-out'
+                transition: isPanning ? 'none' : 'transform 0.1s ease-out'
               }}
             >
               {/* Backboard Transparent checkerboard grid background */}
@@ -3225,31 +4145,88 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
               )}
 
               {/* Crop Tool Overlay */}
-              {activeTool === 'crop' && cropOverlay && (
-                <svg className="absolute inset-0 z-30 pointer-events-none w-full h-full bg-black/40">
-                  <mask id="crop-mask">
-                    <rect width="100%" height="100%" fill="white" />
+              {activeTool === 'crop' && cropOverlay && (() => {
+                const cx1 = Math.min(cropOverlay.x, cropOverlay.x + cropOverlay.w);
+                const cy1 = Math.min(cropOverlay.y, cropOverlay.y + cropOverlay.h);
+                const cx2 = Math.max(cropOverlay.x, cropOverlay.x + cropOverlay.w);
+                const cy2 = Math.max(cropOverlay.y, cropOverlay.y + cropOverlay.h);
+                const cw = cx2 - cx1;
+                const ch = cy2 - cy1;
+                return (
+                  <svg className="absolute inset-0 z-30 pointer-events-none w-full h-full">
+                    <mask id="crop-mask">
+                      <rect width="100%" height="100%" fill="white" />
+                      <rect 
+                        x={cx1} 
+                        y={cy1} 
+                        width={cw} 
+                        height={ch} 
+                        fill="black" 
+                      />
+                    </mask>
+                    <rect width="100%" height="100%" fill="black" opacity="0.65" mask="url(#crop-mask)" />
+                    
+                    {/* 3x3 Grid Lines */}
+                    {cw > 20 && ch > 20 && (
+                      <>
+                        {/* Horizontal guides */}
+                        <line x1={cx1} y1={cy1 + ch / 3} x2={cx2} y2={cy1 + ch / 3} stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+                        <line x1={cx1} y1={cy1 + (2 * ch) / 3} x2={cx2} y2={cy1 + (2 * ch) / 3} stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+                        
+                        {/* Vertical guides */}
+                        <line x1={cx1 + cw / 3} y1={cy1} x2={cx1 + cw / 3} y2={cy2} stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+                        <line x1={cx1 + (2 * cw) / 3} y1={cy1} x2={cx1 + (2 * cw) / 3} y2={cy2} stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+                      </>
+                    )}
+
+                    {/* Continuous solid crop boundary */}
                     <rect 
-                      x={Math.min(cropOverlay.x, cropOverlay.x + cropOverlay.w)} 
-                      y={Math.min(cropOverlay.y, cropOverlay.y + cropOverlay.h)} 
-                      width={Math.abs(cropOverlay.w)} 
-                      height={Math.abs(cropOverlay.h)} 
-                      fill="black" 
+                      x={cx1} 
+                      y={cy1} 
+                      width={cw} 
+                      height={ch} 
+                      fill="none"
+                      stroke="#ffffff"
+                      strokeWidth="2.5"
                     />
-                  </mask>
-                  <rect width="100%" height="100%" fill="black" opacity="0.6" mask="url(#crop-mask)" />
-                  <rect 
-                    x={Math.min(cropOverlay.x, cropOverlay.x + cropOverlay.w)} 
-                    y={Math.min(cropOverlay.y, cropOverlay.y + cropOverlay.h)} 
-                    width={Math.abs(cropOverlay.w)} 
-                    height={Math.abs(cropOverlay.h)} 
-                    fill="none"
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    strokeDasharray="4 4"
-                  />
-                </svg>
-              )}
+
+                    {/* Classic solid corner and midpoint handles */}
+                    {/* Top Left Corner */}
+                    <rect x={cx1 - 4} y={cy1 - 4} width="16" height="4" fill="#ffffff" />
+                    <rect x={cx1 - 4} y={cy1 - 4} width="4" height="16" fill="#ffffff" />
+
+                    {/* Top Right Corner */}
+                    <rect x={cx2 - 12} y={cy1 - 4} width="16" height="4" fill="#ffffff" />
+                    <rect x={cx2} y={cy1 - 4} width="4" height="16" fill="#ffffff" />
+
+                    {/* Bottom Left Corner */}
+                    <rect x={cx1 - 4} y={cy2} width="16" height="4" fill="#ffffff" />
+                    <rect x={cx1 - 4} y={cy2 - 12} width="4" height="16" fill="#ffffff" />
+
+                    {/* Bottom Right Corner */}
+                    <rect x={cx2 - 12} y={cy2} width="16" height="4" fill="#ffffff" />
+                    <rect x={cx2} y={cy2 - 12} width="4" height="16" fill="#ffffff" />
+
+                    {/* Center point handles for edges */}
+                    {cw > 40 && (
+                      <>
+                        {/* Top Edge Center */}
+                        <rect x={cx1 + cw / 2 - 8} y={cy1 - 3} width="16" height="5" fill="#ffffff" stroke="#333" strokeWidth="0.5" />
+                        {/* Bottom Edge Center */}
+                        <rect x={cx1 + cw / 2 - 8} y={cy2 - 2} width="16" height="5" fill="#ffffff" stroke="#333" strokeWidth="0.5" />
+                      </>
+                    )}
+                    {ch > 40 && (
+                      <>
+                        {/* Left Edge Center */}
+                        <rect x={cx1 - 3} y={cy1 + ch / 2 - 8} width="5" height="16" fill="#ffffff" stroke="#333" strokeWidth="0.5" />
+                        {/* Right Edge Center */}
+                        <rect x={cx2 - 2} y={cy1 + ch / 2 - 8} width="5" height="16" fill="#ffffff" stroke="#333" strokeWidth="0.5" />
+                      </>
+                    )}
+                  </svg>
+                );
+              })()}
             </div>
 
             {/* Quick floating Zoom control menu */}
@@ -3293,93 +4270,25 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
               {/* --- TAB 1: LAYERS MANAGER PANEL --- */}
               {activeTab === 'layers' && (
                 <div className="space-y-4">
-                  {/* Add Layer trigger actions */}
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => {
-                        const fileInput = document.createElement('input');
-                        fileInput.type = 'file';
-                        fileInput.accept = 'image/*';
-                        fileInput.onchange = (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (evt) => {
-                              const dataUrl = evt.target?.result as string;
-                              if (dataUrl) {
-                                handleAddLocalImageLayer(dataUrl, file.name);
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        };
-                        fileInput.click();
-                      }}
-                      className="flex-1 bg-indigo-500/10 hover:bg-indigo-500/15 border border-indigo-500/30 text-indigo-450 font-bold py-2 px-1.5 rounded-xl text-[10px] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <Plus size={10} />
-                      <span>添加图片</span>
-                    </button>
-                    <button 
-                      onClick={() => handleAddLayer('solid')}
-                      className="flex-1 bg-zinc-800 hover:bg-zinc-750 border border-zinc-700 text-zinc-350 font-bold py-2 px-1.5 rounded-xl text-[10px] flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <Plus size={10} />
-                      <span>纯色填充</span>
-                    </button>
-                  </div>
-
-                  {/* --- External Connected Images Section --- */}
-                  <div className="p-3 bg-[#111114] rounded-xl border border-dashed border-zinc-700/50 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block">外部接入图片 (Input Images)</span>
-                      <span className="text-[8px] bg-emerald-500/10 text-emerald-400 font-mono font-bold px-1.5 py-0.5 rounded-full">
-                        {resolvedIncomingImages.length} 个就绪
-                      </span>
+                  {/* Global Document Resolution / Auto Fit Settings */}
+                  <div className="p-3 bg-[#18181b] rounded-xl border border-zinc-800 space-y-2.5">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                      <span>画布尺寸</span>
+                      <span className="text-indigo-400 font-mono text-[10px] bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">{docWidth} × {docHeight} px</span>
                     </div>
                     
-                    {resolvedIncomingImages.length > 0 ? (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          {resolvedIncomingImages.map((item, idx) => (
-                            <div key={idx} className="relative group/input border border-zinc-800 rounded-lg overflow-hidden bg-black/40 p-1.5 flex flex-col gap-1.5">
-                              <div className="relative aspect-square w-full bg-zinc-900 rounded-md overflow-hidden">
-                                <img 
-                                  src={item.resolved} 
-                                  className="w-full h-full object-cover" 
-                                  alt={`Connected Input ${idx + 1}`}
-                                  referrerPolicy="no-referrer"
-                                />
-                                <div className="absolute top-1 left-1 bg-black/60 text-[8px] text-zinc-300 px-1 py-0.5 rounded font-mono">
-                                  图{idx + 1}
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <button
-                                  onClick={() => handleCreateLayerFromIncoming(item.raw, item.name)}
-                                  className="w-full py-1 bg-indigo-600/20 hover:bg-indigo-600/35 hover:text-white text-indigo-300 font-bold rounded text-[8px] cursor-pointer transition-all"
-                                >
-                                  创建为新图层
-                                </button>
-                                <button
-                                  onClick={() => handleReplaceActiveLayerImage(item.raw)}
-                                  disabled={!activeLayer || activeLayer.type !== 'image'}
-                                  className="w-full py-1 bg-emerald-600/15 hover:enabled:bg-emerald-600/30 hover:enabled:text-white disabled:opacity-30 disabled:hover:bg-transparent text-emerald-300 font-bold rounded text-[8px] cursor-pointer transition-all"
-                                >
-                                  替换当前图层
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                    <label className="flex items-center gap-2 cursor-pointer bg-[#0f0f11] p-2 rounded-lg hover:bg-zinc-900 border border-zinc-800/60 transition-all text-zinc-300">
+                      <input 
+                        type="checkbox" 
+                        checked={autoFitFirstImage} 
+                        onChange={(e) => setAutoFitFirstImage(e.target.checked)}
+                        className="rounded border-zinc-700 text-indigo-500 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer accent-indigo-500" 
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-zinc-100">首图自动调整画布</span>
+                        <span className="text-[8px] text-zinc-500">Auto Fit First Image (推荐)</span>
                       </div>
-                    ) : (
-                      <div className="text-center py-4 px-2">
-                        <p className="text-[10px] text-zinc-500 leading-normal font-sans">
-                          暂无上游图集传入。
-                        </p>
-                      </div>
-                    )}
+                    </label>
                   </div>
 
                   {/* Active layer parameters (opacity / blend mode) */}
@@ -3443,10 +4352,10 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                       )}
 
                       {/* Clipping Toggle & Mask toggle */}
-                      <div className="flex justify-between pt-1">
+                      <div className="flex flex-wrap gap-1.5 pt-1">
                         <button 
                           onClick={() => updateActiveLayer(l => ({ isClipped: !l.isClipped }))}
-                          className={`text-[9px] px-2 py-1 rounded-lg border font-bold transition-all ${
+                          className={`text-[9px] px-2 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
                             activeLayer.isClipped 
                               ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' 
                               : 'text-zinc-500 border-zinc-800'
@@ -3456,7 +4365,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                         </button>
                         <button 
                           onClick={() => updateActiveLayer(l => ({ hasMask: !l.hasMask }))}
-                          className={`text-[9px] px-2 py-1 rounded-lg border font-bold transition-all ${
+                          className={`text-[9px] px-2 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
                             activeLayer.hasMask 
                               ? 'bg-rose-500/10 text-rose-450 border-rose-500/30' 
                               : 'text-zinc-500 border-zinc-800'
@@ -3467,7 +4376,7 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                         {activeLayer.hasMask && (
                           <button 
                             onClick={() => setCurrentEditingMask(!currentEditingMask)}
-                            className={`text-[9px] px-2 py-1 rounded-lg border font-bold transition-all ${
+                            className={`text-[9px] px-2 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
                               currentEditingMask
                                 ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' 
                                 : 'text-zinc-500 border-zinc-800'
@@ -3476,7 +4385,130 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                             🖌️ 编辑蒙版
                           </button>
                         )}
+                        <button 
+                          onClick={() => handleResetLayerTransform(activeLayer.id)}
+                          className="text-[9px] px-2 py-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 font-bold hover:bg-indigo-500/25 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                          title="一键将选定外链/上传/固体图层恢复到其最初始分辨率、零位偏移(0,0)和无角旋转状态"
+                        >
+                          <RotateCcw size={10} />
+                          <span>重置变换</span>
+                        </button>
                       </div>
+
+                      {/* Photoshop Mask Properties Panel (density, feather, and invert) */}
+                      {activeLayer.hasMask && (
+                        <div className="space-y-2.5 pt-2 border-t border-zinc-800/60 bg-[#141416]/40 p-2 rounded-xl mt-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-black text-rose-400 tracking-wide uppercase flex items-center gap-1">
+                              🔳 图层蒙版属性 (Mask Panel)
+                            </span>
+                          </div>
+
+                          {/* Density Slider */}
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-[8px] font-mono text-zinc-400">
+                              <span>蒙版密度 (Density)</span>
+                              <span className="text-rose-450 font-bold">{Math.round((activeLayer.maskDensity !== undefined ? activeLayer.maskDensity : 1) * 100)}%</span>
+                            </div>
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="1" 
+                              step="0.01" 
+                              value={activeLayer.maskDensity !== undefined ? activeLayer.maskDensity : 1}
+                              onChange={(e) => {
+                                updateActiveLayer(l => ({ maskDensity: Number(e.target.value) }));
+                              }}
+                              className="w-full accent-rose-500 h-1 bg-zinc-855 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+
+                          {/* Feathering Slider */}
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-[8px] font-mono text-zinc-400">
+                              <span>羽化半径 (Feathering)</span>
+                              <span className="text-rose-455 font-bold">{activeLayer.maskFeather || 0} px</span>
+                            </div>
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="100" 
+                              step="0.5" 
+                              value={activeLayer.maskFeather || 0}
+                              onChange={(e) => {
+                                updateActiveLayer(l => ({ maskFeather: Number(e.target.value) }));
+                              }}
+                              className="w-full accent-rose-500 h-1 bg-zinc-855 rounded-lg appearance-none cursor-pointer"
+                            />
+                          </div>
+
+                          {/* Actions: Permanent Invert Mask */}
+                          <div className="flex gap-1.5 pt-1">
+                            <button
+                              onClick={() => {
+                                // Permanent Invert pixels on the mask canvas
+                                const mCanvas = getOrCreateMaskCanvas(activeLayer);
+                                const mCtx = mCanvas.getContext('2d');
+                                if (mCtx) {
+                                  let prevData: Uint8ClampedArray | undefined;
+                                  try {
+                                    const imgData = mCtx.getImageData(0, 0, activeLayer.width, activeLayer.height);
+                                    const pix = imgData.data;
+                                    for (let i = 0; i < pix.length; i += 4) {
+                                      pix[i] = 255 - pix[i];       // Invert Red
+                                      pix[i+1] = 255 - pix[i+1];   // Invert Green
+                                      pix[i+2] = 255 - pix[i+2];   // Invert Blue
+                                    }
+                                    mCtx.putImageData(imgData, 0, 0);
+                                    prevData = new Uint8ClampedArray(pix);
+                                  } catch (err) {
+                                    // Fallback if CORS block
+                                    console.warn(err);
+                                  }
+                                  
+                                  const updated = layers.map(l => l.id === activeLayer.id ? { ...l, maskData: prevData } : l);
+                                  setLayers(updated);
+                                  syncNodeData(updated);
+                                  pushToHistory('反转图层蒙版', updated);
+                                  setAiLogs(prev => [...prev, `🔳 已将图层 "${activeLayer.name}" 的蒙版颜色完全反转。`]);
+                                }
+                              }}
+                              className="text-[8px] flex-1 py-0.5 rounded bg-zinc-900 border border-zinc-805 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all font-bold cursor-pointer"
+                              title="对蒙版的所有黑白像素进行反向转换"
+                            >
+                              🌓 永久反转蒙版
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                // Full Reset Mask to white
+                                const mCanvas = getOrCreateMaskCanvas(activeLayer);
+                                const mCtx = mCanvas.getContext('2d');
+                                if (mCtx) {
+                                  mCtx.fillStyle = '#ffffff';
+                                  mCtx.fillRect(0, 0, activeLayer.width, activeLayer.height);
+                                  let prevData: Uint8ClampedArray | undefined;
+                                  try {
+                                    const pix = mCtx.getImageData(0, 0, activeLayer.width, activeLayer.height).data;
+                                    prevData = new Uint8ClampedArray(pix);
+                                  } catch (err) {
+                                    console.warn(err);
+                                  }
+                                  const updated = layers.map(l => l.id === activeLayer.id ? { ...l, maskData: prevData } : l);
+                                  setLayers(updated);
+                                  syncNodeData(updated);
+                                  pushToHistory('重置图层蒙版', updated);
+                                  setAiLogs(prev => [...prev, `🔳 已将图层 "${activeLayer.name}" 的蒙版完全重置为全白。`]);
+                                }
+                              }}
+                              className="text-[8px] px-2 py-0.5 rounded bg-zinc-900 border border-zinc-805 text-zinc-400 hover:text-white hover:bg-rose-500/10 hover:border-rose-500/20 transition-all font-bold cursor-pointer"
+                              title="重置蒙版"
+                            >
+                              重置
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -3495,8 +4527,26 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                     </div>
 
                     <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-                      {layers.map(layer => {
+                      {layers.filter(layer => isLayerVisibleInTree(layer)).map((layer) => {
                         const isActive = activeLayerId === layer.id;
+                        const absoluteIndex = layers.findIndex(l => l.id === layer.id);
+                        
+                        // Calculate folder nested depth
+                        const depth = (() => {
+                          let d = 0;
+                          let pId = layer.parentId;
+                          while (pId) {
+                            const p = layers.find(l => l.id === pId);
+                            if (p) {
+                              d++;
+                              pId = p.parentId;
+                            } else {
+                              break;
+                            }
+                          }
+                          return d;
+                        })();
+
                         return (
                           <div 
                             key={layer.id}
@@ -3507,10 +4557,12 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                             }}
                             onDragOver={(e) => {
                               e.preventDefault();
+                              e.stopPropagation();
                               e.dataTransfer.dropEffect = 'move';
                             }}
                             onDrop={(e) => {
                               e.preventDefault();
+                              e.stopPropagation();
                               const sourceId = e.dataTransfer.getData('text/plain');
                               if (sourceId && sourceId !== layer.id) {
                                 setLayers(prev => {
@@ -3518,10 +4570,19 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                                   const srcIdx = result.findIndex(l => l.id === sourceId);
                                   const tgtIdx = result.findIndex(l => l.id === layer.id);
                                   if (srcIdx >= 0 && tgtIdx >= 0) {
+                                    // Move item in order array
                                     const [moved] = result.splice(srcIdx, 1);
                                     result.splice(tgtIdx, 0, moved);
+
+                                    // Auto-nest inside folder
+                                    if (layer.type === 'folder') {
+                                      moved.parentId = layer.id;
+                                    } else {
+                                      moved.parentId = layer.parentId;
+                                    }
+
                                     syncNodeData(result);
-                                    pushToHistory('调整图层顺序', result);
+                                    pushToHistory('调整图层顺序与分组', result);
                                   }
                                   return result;
                                 });
@@ -3530,49 +4591,120 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                             }}
                             onDragEnd={() => setDraggedLayerId(null)}
                             onClick={(e) => handleLayerClick(e, layer.id)}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                            className={`group p-1.5 xs:p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
                               selectedLayerIds.includes(layer.id)
                                 ? 'bg-indigo-600/15 border-indigo-500/40' 
                                 : draggedLayerId === layer.id
                                 ? 'opacity-50 ring-2 ring-indigo-500 ring-dashed'
                                 : 'bg-[#18181b]/50 border-transparent hover:bg-[#18181b]'
                             }`}
+                            style={{ marginLeft: `${depth * 14}px` }}
                           >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              {/* Collapse/Expand toggle for Folder type layers */}
+                              {layer.type === 'folder' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updated = layers.map(l => l.id === layer.id ? { ...l, collapsed: !l.collapsed } : l);
+                                    setLayers(updated);
+                                    syncNodeData(updated);
+                                  }}
+                                  className="p-0.5 hover:bg-zinc-800 text-zinc-500 hover:text-white rounded transition-colors shrink-0"
+                                  title={layer.collapsed ? "展开文件夹组" : "收起文件夹组"}
+                                >
+                                  <span className="text-[8px] font-bold block transition-transform duration-200" style={{ transform: layer.collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>
+                                    ▶
+                                  </span>
+                                </button>
+                              )}
+
                               {/* Layer Visibility Toggle */}
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setLayers(prev => prev.map(l => l.id === layer.id ? { ...l, visible: !l.visible } : l));
                                 }}
-                                className="text-zinc-500 hover:text-zinc-300 shrink-0"
+                                className="text-zinc-500 hover:text-zinc-350 shrink-0"
+                                title={layer.visible ? "隐藏图层" : "显示图层"}
                               >
-                                {layer.visible ? <Eye size={13} /> : <EyeOff size={13} className="text-red-550" />}
+                                {layer.visible ? <Eye size={12} /> : <EyeOff size={12} className="text-red-550" />}
                               </button>
 
-                              {/* Tiny Layer Visual Thumbnail */}
-                              <div className="w-10 h-10 bg-black/40 rounded-lg overflow-hidden shrink-0 border border-zinc-800 flex items-center justify-center relative">
-                                {layer.imageUrl ? (
-                                  <img src={imageElements[layer.imageUrl]?.src || layer.imageUrl} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
-                                ) : (
-                                  <div className="w-5 h-5 rounded-sm" style={{ backgroundColor: layer.color || '#27272a' }} />
-                                )}
-                                {layer.isClipped && (
-                                  <div className="absolute left-0.5 top-0.5 text-[7px] text-amber-400 bg-black/80 px-0.5 rounded font-mono">CLIP</div>
-                                )}
-                              </div>
+                              {/* Layer Lock/Unlock Toggle */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const wasLocked = !!layer.locked;
+                                  const updated = layers.map(l => l.id === layer.id ? { ...l, locked: !wasLocked } : l);
+                                  setLayers(updated);
+                                  syncNodeData(updated);
+                                  pushToHistory(!wasLocked ? '锁定图层' : '解锁图层', updated);
+                                }}
+                                className={`shrink-0 transition-all p-0.5 rounded hover:bg-zinc-800 ${layer.locked ? 'text-amber-500 hover:text-amber-400 scale-110' : 'text-zinc-600 hover:text-zinc-300'}`}
+                                title={layer.locked ? "锁定中 - 点击解锁" : "未锁定 - 点击锁定图层"}
+                              >
+                                {layer.locked ? <Lock size={11} className="stroke-[2.5]" /> : <Unlock size={11} />}
+                              </button>
 
-                              <div className="min-w-0">
-                                <p className={`text-[11px] truncate leading-tight font-bold ${isActive ? 'text-indigo-400 font-extrabold' : 'text-zinc-200'}`}>
-                                  {layer.name}
-                                </p>
-                                <span className="text-[8.5px] font-mono text-zinc-500 block uppercase">
-                                  {layer.type} | Opacity: {Math.round(layer.opacity * 100)}%
-                                </span>
+                              {/* Layer type indicator or Folder icon */}
+                              {layer.type === 'folder' ? (
+                                <div className="shrink-0 text-amber-500 select-none mr-0.5">
+                                  {layer.collapsed ? <Folder size={14} className="fill-amber-550/10" /> : <FolderOpen size={14} className="fill-amber-550/10" />}
+                                </div>
+                              ) : (
+                                /* Tiny Layer Visual Thumbnail */
+                                <div className="w-8 h-8 xs:w-9 xs:h-9 bg-black/40 rounded-lg overflow-hidden shrink-0 border border-zinc-800 flex items-center justify-center relative select-none">
+                                  <LayerThumbnail layer={layer} adjustedLayerCacheRef={adjustedLayerCacheRef} imageElements={imageElements} />
+                                  {layer.isClipped && (
+                                    <div className="absolute left-0.5 top-0.5 text-[6px] text-amber-400 bg-black/80 px-0.5 rounded font-mono">CLIP</div>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1 space-y-0.5 xs:space-y-1">
+                                <div className="flex items-center gap-1 min-w-0">
+                                  {/* Z-Index Badge level */}
+                                  <span className="text-[7.5px] bg-zinc-900 border border-zinc-800 text-zinc-500 font-mono font-black px-0.5 rounded select-none shrink-0">
+                                    Z-{layers.length - absoluteIndex}
+                                  </span>
+                                  <p className={`text-[10px] xs:text-[11px] truncate leading-tight font-bold flex-1 ${isActive ? 'text-indigo-400 font-extrabold' : 'text-zinc-200'}`}>
+                                    {layer.name}
+                                  </p>
+                                </div>
+                                
+                                {/* Opacity slider */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[7.5px] font-mono text-zinc-500 block uppercase shrink-0">
+                                    {layer.type}
+                                  </span>
+                                  <input 
+                                    type="range" 
+                                    min="0" 
+                                    max="1" 
+                                    step="0.01" 
+                                    value={layer.opacity}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      const nextOpacity = Number(e.target.value);
+                                      const updated = layers.map(l => l.id === layer.id ? { ...l, opacity: nextOpacity } : l);
+                                      setLayers(updated);
+                                      syncNodeData(updated);
+                                    }}
+                                    className="w-12 xs:w-16 accent-indigo-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                                  />
+                                  <span className="text-[7.8px] font-mono text-indigo-400 font-bold shrink-0">
+                                    {Math.round(layer.opacity * 100)}%
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
-                            {/* Replace Image Action for image type layers */}
+                            {/* Replace image action */}
                             {layer.type === 'image' && (
                               <button 
                                 onClick={(e) => {
@@ -3598,26 +4730,168 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
                                   };
                                   fileInput.click();
                                 }}
-                                className="text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors shrink-0 px-2 py-0.5 rounded text-[9px] font-bold border border-indigo-500/20 mr-1.5 cursor-pointer"
-                                title="替换图层的图片内容"
+                                className="text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-colors shrink-0 px-1.5 py-0.5 rounded text-[8px] font-bold border border-indigo-500/10 mr-1 cursor-pointer"
+                                title="替换图层图片"
                               >
                                 替换图片
                               </button>
                             )}
 
-                            {/* Trash action */}
+                            {/* Move OUT button if nested */}
+                            {layer.parentId && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLayers(prev => {
+                                    const updated = prev.map(l => l.id === layer.id ? { ...l, parentId: undefined } : l);
+                                    syncNodeData(updated);
+                                    pushToHistory('从组移出图层', updated);
+                                    return updated;
+                                  });
+                                }}
+                                className="text-zinc-655 hover:text-rose-450 transition-colors shrink-0 p-1 hidden group-hover:block"
+                                title="移出当前文件夹组"
+                              >
+                                <PlusSquare size={11} className="rotate-45" />
+                              </button>
+                            )}
+
+                            {/* Folder Selector Dropdown */}
+                            {layers.some(l => l.type === 'folder' && l.id !== layer.id) && (
+                              <select
+                                value={layer.parentId || ''}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const parentId = e.target.value || undefined;
+                                  setLayers(prev => {
+                                    const updated = prev.map(l => l.id === layer.id ? { ...l, parentId } : l);
+                                    syncNodeData(updated);
+                                    pushToHistory(parentId ? '移动图层至组' : '移出组', updated);
+                                    return updated;
+                                  });
+                                }}
+                                className="bg-zinc-900 border border-zinc-800 text-zinc-400 text-[8px] px-1 py-0.5 rounded outline-none max-w-[65px] truncate cursor-pointer font-bold font-sans group-hover:block hidden shrink-0"
+                                title="选择此图层要归属的父级文件夹组"
+                              >
+                                <option value="">📁 (根级别)</option>
+                                {layers.filter(l => l.type === 'folder' && l.id !== layer.id).map(f => (
+                                  <option key={f.id} value={f.id}>{f.name}</option>
+                                ))}
+                              </select>
+                            )}
+
+                            {/* Duplicate Layer */}
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicateLayer(layer.id);
+                              }}
+                              className="text-zinc-650 hover:text-indigo-400 transition-colors shrink-0 p-1 hidden group-hover:block"
+                              title="复制图层"
+                            >
+                              <Copy size={11} />
+                            </button>
+
+                            {/* Delete Action */}
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteLayer(layer.id);
                               }}
-                              className="text-zinc-650 hover:text-red-400 transition-colors shrink-0 p-1"
+                              className="text-zinc-655 hover:text-red-450 transition-colors shrink-0 p-1 hidden group-hover:block"
+                              title="删除图层"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={11} />
                             </button>
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* PS-like Bottom Toolbar for Layers */}
+                    <div className="flex items-center justify-between px-1 pt-1.5 border-t border-zinc-800 text-zinc-400">
+                      <div className="flex gap-2">
+                        <button 
+                          title="链接图层" 
+                          onClick={handleLinkSelectedLayers}
+                          className="p-1 hover:text-white hover:bg-zinc-805 rounded transition-colors cursor-pointer"
+                        >
+                          <Link size={14} />
+                        </button>
+                        <button 
+                          title="添加文字图层" 
+                          onClick={() => handleAddLayer('text')}
+                          className="p-1 hover:text-white hover:bg-zinc-805 rounded transition-colors cursor-pointer"
+                        >
+                          <Type size={14} />
+                        </button>
+                        <button 
+                          title="建立/切换图层蒙版" 
+                          onClick={() => {
+                            if (activeLayer) {
+                              const nextMask = !activeLayer.hasMask;
+                              updateActiveLayer(l => ({ hasMask: nextMask }));
+                              setCurrentEditingMask(nextMask);
+                              pushToHistory(nextMask ? '建立图层蒙版' : '移除图层蒙版', layers.map(l => l.id === activeLayer.id ? { ...l, hasMask: nextMask } : l));
+                            }
+                          }}
+                          className={`p-1 rounded transition-colors cursor-pointer ${activeLayer?.hasMask ? 'text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20' : 'hover:text-white hover:bg-zinc-805'}`}
+                        >
+                          <Brush size={14} />
+                        </button>
+                        <button 
+                          title="建立调整图层" 
+                          onClick={() => setActiveTab('adjustments')}
+                          className="p-1 hover:text-white hover:bg-zinc-805 rounded transition-colors cursor-pointer"
+                        >
+                          <Sliders size={14} />
+                        </button>
+                        <button 
+                          title="选区图层合并编组" 
+                          onClick={handleGroupOrMergeSelectedLayers}
+                          className="p-1 hover:text-white hover:bg-zinc-805 rounded transition-colors cursor-pointer"
+                        >
+                          <Folder size={14} />
+                        </button>
+                        <button 
+                          title="创建文件夹组 / 新建图层文件夹" 
+                          onClick={handleCreateFolder}
+                          className="p-1 text-amber-500 hover:text-amber-400 hover:bg-zinc-805 rounded transition-colors cursor-pointer animate-pulse"
+                        >
+                          <FolderPlus size={14} />
+                        </button>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button 
+                          title="导入图片为新图层"
+                          onClick={() => {
+                            const fileInput = document.createElement('input');
+                            fileInput.type = 'file';
+                            fileInput.accept = 'image/*';
+                            fileInput.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (evt) => {
+                                  const dataUrl = evt.target?.result as string;
+                                  if (dataUrl) handleAddLocalImageLayer(dataUrl, file.name);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            };
+                            fileInput.click();
+                          }}
+                          className="p-1 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                        >
+                          <ImageIcon size={14} />
+                        </button>
+                        <button title="新建图层" onClick={() => handleAddLayer('solid')} className="p-1 hover:text-white hover:bg-zinc-800 rounded transition-colors">
+                          <Plus size={14} />
+                        </button>
+                        <button title="删除选中图层" onClick={() => activeLayerId && handleDeleteLayer(activeLayerId)} className="p-1 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3954,9 +5228,13 @@ export function AIPsEngineNode({ id, data, selected }: NodeProps) {
   };
 
   return (
-    <div className={`flex flex-col w-full h-full bg-[#121214] text-gray-200 rounded-[28px] border-2 transition-all relative overflow-hidden select-none font-sans shadow-[0_20px_50px_rgba(0,0,0,0.8)] ${
-      selected ? 'border-indigo-500 ring-[10px] ring-indigo-500/15' : 'border-[#27272a]'
-    }`}>
+    <div 
+      onMouseEnter={() => setActiveEditor('ps-' + id)}
+      onMouseLeave={() => setActiveEditor(null)}
+      className={`flex flex-col w-full h-full bg-[#121214] text-gray-200 rounded-[28px] border-2 transition-all relative overflow-hidden select-none font-sans shadow-[0_20px_50px_rgba(0,0,0,0.8)] ${
+        selected ? 'border-indigo-500 ring-[10px] ring-indigo-500/15' : 'border-[#27272a]'
+      }`}
+    >
       {/* Target and Source flow IO handles */}
       <Handle type="target" position={Position.Left} className="!bg-indigo-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#121214] shadow-sm hover:!scale-150 transition-all duration-200 z-50 ease-out" />
       <Handle type="source" position={Position.Right} className="!bg-violet-500 !w-4 !h-4 !rounded-full !border-[3px] !border-[#121214] shadow-sm hover:!scale-150 transition-all duration-200 z-50 ease-out" />

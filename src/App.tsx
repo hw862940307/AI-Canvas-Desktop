@@ -267,6 +267,7 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
     files,
     groupSelectedNodes,
     ungroupNode,
+    activeEditor,
   } = useStore();
 
   // Overwrite stale cached default settings in localStorage with latest full 30-node "Flux2+Klein单图编辑" preset configuration on startup
@@ -2473,9 +2474,9 @@ function FlowInner({ onOpenSettings }: { onOpenSettings: () => void }) {
             minZoom={0.05}
             maxZoom={4}
             panOnDrag={isZMode ? false : (activeOp === null ? [1] : false)}
-            zoomOnScroll={isZMode ? false : (activeOp === null)}
-            zoomOnPinch={isZMode ? false : (activeOp === null)}
-            zoomOnDoubleClick={isZMode ? false : (activeOp === null)}
+            zoomOnScroll={activeEditor ? false : (isZMode ? false : (activeOp === null))}
+            zoomOnPinch={activeEditor ? false : (isZMode ? false : (activeOp === null))}
+            zoomOnDoubleClick={activeEditor ? false : (isZMode ? false : (activeOp === null))}
             selectionOnDrag={isZMode ? false : true}
             selectionMode={SelectionMode.Partial}
             connectionRadius={60}

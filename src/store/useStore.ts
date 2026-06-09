@@ -257,6 +257,8 @@ export interface AppState {
   groupSelectedNodes: (name?: string) => void;
   ungroupNode: (groupNodeId: string) => void;
   setNodes: (nodes: Node[]) => void;
+  activeEditor: string | null;
+  setActiveEditor: (editorId: string | null) => void;
 }
 
 export const getFreshWf4Content = (): string => {
@@ -731,6 +733,7 @@ export const useStore = create<AppState>()(
       redoStack: [],
       isGridVisible: true,
       isMiniMapVisible: true,
+      activeEditor: null,
       showAssistant: true,
       showWebPreview: false,
       isTopVisible: false,
@@ -1419,6 +1422,9 @@ export const useStore = create<AppState>()(
       },
       setNodes: (nodes) => {
         set({ nodes });
+      },
+      setActiveEditor: (editorId) => {
+        set({ activeEditor: editorId });
       },
     }),
     {

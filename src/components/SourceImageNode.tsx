@@ -137,9 +137,8 @@ export const SourceImageNode = ({ id, data, selected }: { id: string; data: any;
 
     return () => {
       active = false;
-      if (localBlobUrl) {
-        URL.revokeObjectURL(localBlobUrl);
-      }
+      // Do not prematurely revoke the blobUrl here so connected downstream nodes 
+      // (like the AI PS Engine) can access and render the cached images reliably without CORS / HTTP issues.
     };
   }, [data.url, id, updateNodeData]);
 
